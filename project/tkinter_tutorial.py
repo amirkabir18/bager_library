@@ -1,0 +1,11 @@
+import tkinter as tk
+root = tk.Tk()  
+root.title('sign up panel')           
+root.geometry('600x450')
+label = tk.Label(root,text="be pansion bager alolom koshomadid")
+label.pack()
+btn = tk.Button(root, text = 'sign up',width=20, command = root.destroy)
+btn.pack()
+#page_2 = tk.Toplevel(root)
+#btn.place(x=100, y=20)
+root.mainloop() 
