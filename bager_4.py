@@ -1,9 +1,8 @@
 import sqlite3,os,sys,re
 import tkinter as tk
-import ttkbootstrap as tb
 from tkinter import ttk,messagebox
 import jdatetime
-from jdatetime import date
+import datetime
 
 db_p = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(__file__)), 'bager_library.db')
 
@@ -18,7 +17,6 @@ columns = [row[1] for row in cursor.fetchall()]
 
 root = tk.Tk()
 root.title("کتابخانه باقر العلوم")
-style = tb.Style(theme="darkly")
 st = ttk.Style()
 
 notebook = ttk.Notebook(root)
@@ -42,7 +40,8 @@ tree_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
 scrollbar = tk.Scrollbar(tree_frame)
 scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-tree = ttk.Treeview(tree_frame,yscrollcommand=scrollbar, columns=columns, show="headings", height=15)
+tree = ttk.Treeview(tree_frame,yscrollcommand=scrollbar.set, columns=columns, show="headings", height=15) 
+scrollbar.config(command=tree.yview)
 for col in columns: 
     tree.heading(col, text=col)
 cursor.execute(f"SELECT {', '.join(columns)} FROM {tabel_name}")
@@ -168,46 +167,70 @@ def on_double_click(event):
 
     def toggle_state():
         if var.get() == 1:
-            label_status.config(text="تاریخ ثبت شد")
             borrow_entry.insert(0, str(date_object))
 
         else:
-            label_status.config(text=" ")
             borrow_entry.delete(0, tk.END)
 
     var = tk.IntVar(value=0)
 
     def refresh_treeview():
-    
-            temp_conn = sqlite3.connect(db_p)
-            temp_cursor = temp_conn.cursor()
-            
-            for item in loans_tree.get_children():
-                loans_tree.delete(item)
-            
-            temp_cursor.execute(f"SELECT {', '.join(column)} FROM {new_tabel_name}")
-            new_rows = temp_cursor.fetchall()
-            
-            for row in new_rows:
-                loans_tree.insert("", tk.END, values=row)
-    
-            temp_conn.close()
+        temp_conn = sqlite3.connect(db_p)
+        temp_cursor = temp_conn.cursor()
+        
+        for item in loans_tree.get_children():
+            loans_tree.delete(item)
+        
+        temp_cursor.execute(f"SELECT {', '.join(loan_column)} FROM {new_tabel_name}")
+        new_rows = temp_cursor.fetchall()
+        
+        for row in new_rows:
+            loans_tree.insert("", tk.END, values=row)
+
+        for row in new_rows:
+                row_list = list(row)
+                if date_col_index != -1 and row_list[date_col_index]:
+                    try:
+                        miladi_date_str = str(row_list[date_col_index])
+                        g_date = datetime.datetime.strptime(miladi_date_str, '%Y-%m-%d').date()
+                        shamsi_date = jdatetime.date.fromgregorian(date=g_date)
+                        row_list[date_col_index] = shamsi_date.strftime('%Y/%m/%d')
+                    except ValueError:
+                        pass 
+                loans_tree.insert("", tk.END, values=tuple(row_list))
+
+        temp_conn.close()
 
     def insert_data():
+        shamsi_str = return_entry.get().strip()
+        
+        if not shamsi_str:
+            messagebox.showwarning("هشدار", "لطفاً تاریخی وارد کنید!")
+            return
+
+        try:
+            j_date = jdatetime.datetime.strptime(shamsi_str, '%Y-%m-%d')
+            
+            g_date = j_date.togregorian()
+            
+            return_date = g_date.strftime('%Y-%m-%d')
+            
+        except ValueError:
+            messagebox.showerror("خطا", "فرمت تاریخ وارد شده صحیح نیست!\nلطفاً به صورت YYYY/MM/DD وارد کنید.")
+
         borrow_date = borrow_entry.get()
-        return_date = return_entry.get()
         book_id = book_entry.get()
         member_name = member_entry.get()
         
         if not member_name:
             messagebox.showerror("خطا", "لطفاً نام را وارد کنید")
             return
-        
+
         try:
             temp_conn = sqlite3.connect(db_p)
             temp_cursor = temp_conn.cursor()
 
-            temp_cursor.execute('''INSERT INTO loans (member_name, book_id, return_date, borrow_date) VALUES (?, ?, ?, ?)''', (member_name, book_id if book_id else None, return_date, borrow_date))
+            temp_cursor.execute("INSERT INTO loans (member_name, book_id, return_date, borrow_date) VALUES (?, ?, ?, ?)", (member_name, book_id if book_id else None, return_date, borrow_date))
             temp_conn.commit()
             temp_conn.close()
 
@@ -222,9 +245,6 @@ def on_double_click(event):
             refresh_treeview()
             new_panel.destroy()
     new_panel.protocol("WM_DELETE_WINDOW", on_panel_close)
-
-    label_status = tk.Label(new_panel, font=("Arial", 12), fg="red")
-    label_status.pack(pady=3)
 
     tk.Label(new_panel,text="اسم کاربر",font=("B Nazanin", 11)).pack(pady=3)
     member_entry = tk.Entry(new_panel, width=50)
@@ -258,7 +278,7 @@ def on_double_click(event):
     book_entry.pack(pady=3)
 
     book_entry.insert(0, title_value)
-    book_entry.config(state="readonly", readonlybackground="#333333")
+    book_entry.config(state="readonly")
 
     tk.Label(new_panel,text="تاریخ امانت کتاب",font=("B Nazanin", 11)).pack(pady=3)
     borrow_entry = tk.Entry(new_panel, width=50)
@@ -324,24 +344,41 @@ new_cursor = new_conn.cursor()
 
 new_tabel_name = data[2][0]
 new_cursor.execute(f'PRAGMA table_info("{new_tabel_name}")')
-column = [row[1] for row in new_cursor.fetchall()]
+loan_column = [row[1] for row in new_cursor.fetchall()]
 
 today = jdatetime.date.today()
-loans_tree = ttk.Treeview(tabel_frame, yscrollcommand=scrollbar_2, columns=column, show="headings", height=15)
-for col in column: 
+loans_tree = ttk.Treeview(tabel_frame, yscrollcommand=scrollbar_2.set, columns=loan_column, show="headings", height=15)
+scrollbar_2.config(command=loans_tree.yview)
+for col in loan_column: 
     loans_tree.heading(col, text=col)
 loans_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
 st.configure("Treeview", font=(None, 13), rowheight=30)
 new_cursor.execute(f"SELECT * FROM {new_tabel_name}")
 loan_rows = new_cursor.fetchall()
-for row in loan_rows:
-    loans_tree.insert("", tk.END, values=row)
-new_conn.close()
 
+borrow_date = 'return_date' 
+date_col_index = loan_column.index(borrow_date)
+
+def gregorian():
+    for row in loan_rows:
+        row_list = list(row)
+        if date_col_index != -1 and row_list[date_col_index]:
+            try:
+                miladi_date_str = str(row_list[date_col_index])
+                g_date = datetime.datetime.strptime(miladi_date_str, '%Y-%m-%d').date()
+                shamsi_date = jdatetime.date.fromgregorian(date=g_date)
+                row_list[date_col_index] = shamsi_date.strftime('%Y/%m/%d')
+            except ValueError:
+                pass 
+        loans_tree.insert("", tk.END, values=tuple(row_list))
+
+query = "SELECT name, start_date, end_date,julianday(end_date) - julianday(start_date) AS days_diff FROM projects"
 root.bind('<Escape>',lambda event:root.destroy())
 entry_serch.bind('<KeyRelease>', on_key_release)
 tree.bind("<Double-Button-1>", on_double_click)
 
+new_conn.close()
 search()
+gregorian()
 root.mainloop()
