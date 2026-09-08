@@ -50,15 +50,14 @@ tree.pack(fill="both", expand=True, padx=10, pady=10)
 
 st.configure("Treeview", font=(None, 13), rowheight=30)
 conn.close()
-
 def search(event=None):
     column = combo_column.get()
     search_value = entry_serch.get()
 
     
-    if not column:
-        label_1.config(text="لطفاً همه فیلدها را پر کنید!")
-        return
+    # if not column:
+    #     label_1.config(text="لطفاً همه فیلدها را پر کنید!")
+    #     return
 
     tree.delete(*tree.get_children())
     
@@ -83,7 +82,9 @@ def search(event=None):
             tree.insert("", "end", values=("❌ نتیجه‌ای یافت نشد!",) + ("",) * (len(columns)-1))
         
     except Exception as e:
-        label_1.config(text=f"خطا: {str(e)}")
+        messagebox.showerror("خطا","اول فیلد را انتخاب کنید")
+        # label_1.config(text=f"خطا: {str(e)}")
+        pass
 
 def on_key_release(event):
     if hasattr(root, 'after_id'):
@@ -185,16 +186,13 @@ def on_double_click(event):
         new_rows = temp_cursor.fetchall()
         
         for row in new_rows:
-            loans_tree.insert("", tk.END, values=row)
-
-        for row in new_rows:
-                row_list = list(row)
-                if date_col_index != -1 and row_list[date_col_index]:
+                row_list = list(row) 
+                if return_index != -1 and row_list[return_index]:
                     try:
-                        miladi_date_str = str(row_list[date_col_index])
+                        miladi_date_str = str(row_list[return_index])
                         g_date = datetime.datetime.strptime(miladi_date_str, '%Y-%m-%d').date()
                         shamsi_date = jdatetime.date.fromgregorian(date=g_date)
-                        row_list[date_col_index] = shamsi_date.strftime('%Y/%m/%d')
+                        row_list[return_index] = shamsi_date.strftime('%Y-%m-%d')
                     except ValueError:
                         pass 
                 loans_tree.insert("", tk.END, values=tuple(row_list))
@@ -202,14 +200,14 @@ def on_double_click(event):
         temp_conn.close()
 
     def insert_data():
-        shamsi_str = return_entry.get().strip()
+        return_shamsi_str = return_entry.get().strip()
         
-        if not shamsi_str:
+        if not return_shamsi_str:
             messagebox.showwarning("هشدار", "لطفاً تاریخی وارد کنید!")
             return
 
         try:
-            j_date = jdatetime.datetime.strptime(shamsi_str, '%Y-%m-%d')
+            j_date = jdatetime.datetime.strptime(return_shamsi_str, '%Y-%m-%d')
             
             g_date = j_date.togregorian()
             
@@ -218,7 +216,22 @@ def on_double_click(event):
         except ValueError:
             messagebox.showerror("خطا", "فرمت تاریخ وارد شده صحیح نیست!\nلطفاً به صورت YYYY/MM/DD وارد کنید.")
 
-        borrow_date = borrow_entry.get()
+        borrow_shamsi_str = borrow_entry.get().strip()
+
+        if not borrow_shamsi_str:
+            messagebox.showwarning("هشدار", "لطفاً تاریخی وارد کنید!")
+            return
+
+        try:
+            j_date = jdatetime.datetime.strptime(borrow_shamsi_str, '%Y-%m-%d')
+            
+            g_date = j_date.togregorian()
+            
+            borrow_date = g_date.strftime('%Y-%m-%d')
+            
+        except ValueError:
+            messagebox.showerror("خطا", "فرمت تاریخ وارد شده صحیح نیست!\nلطفاً به صورت YYYY/MM/DD وارد کنید.")
+
         book_id = book_entry.get()
         member_name = member_entry.get()
         
@@ -316,7 +329,7 @@ def on_double_click(event):
     sub_button = tk.Button(new_panel, text="ثبت امانت", command=insert_data)
     sub_button.pack(pady=3)
 
-title_label = tk.Label(member_frame,text="ثبت عضو جدید",font=("B Titr", 14, "bold"),fg="#2c3e50")
+title_label = tk.Label(member_frame,text="ثبت عضو جدید",font=("B Titr", 14, "bold"))
 title_label.pack(pady=10)
 
 tk.Label(member_frame, text="اسم کاربر:", font=("B Nazanin", 11)).pack(pady=5)
@@ -327,7 +340,7 @@ tk.Label(member_frame, text="شماره تلفن:", font=("B Nazanin", 11)).pack
 entry_phone = tk.Entry(member_frame, width=25, font=("B Nazanin", 11))
 entry_phone.pack(pady=5)
 
-btn_register = tk.Button(member_frame,text="ثبت اطلاعات",command=insert_member_data,fg="white",font=("B Nazanin", 11, "bold"),width=15,height=1)
+btn_register = tk.Button(member_frame,text="ثبت اطلاعات",command=insert_member_data,font=("B Nazanin", 11, "bold"),width=15,height=1)
 btn_register.pack(pady=10)
 
 member_del = tk.Button(member_frame, text="حذف کاربر", )
@@ -354,26 +367,42 @@ for col in loan_column:
 loans_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
 st.configure("Treeview", font=(None, 13), rowheight=30)
-new_cursor.execute(f"SELECT * FROM {new_tabel_name}")
+new_cursor.execute(f"SELECT * FROM `{new_tabel_name}` ORDER BY julianday(`return_date`) - julianday(`borrow_date`) ASC")
 loan_rows = new_cursor.fetchall()
 
-borrow_date = 'return_date' 
-date_col_index = loan_column.index(borrow_date)
+borrow_date = 'borrow_date'
+borrow_index = loan_column.index(borrow_date)
+return_date = 'return_date' 
+return_index = loan_column.index(return_date)
 
 def gregorian():
+
     for row in loan_rows:
         row_list = list(row)
-        if date_col_index != -1 and row_list[date_col_index]:
+        if return_index != -1 and row_list[return_index]:
             try:
-                miladi_date_str = str(row_list[date_col_index])
+                miladi_date_str = str(row_list[return_index])
                 g_date = datetime.datetime.strptime(miladi_date_str, '%Y-%m-%d').date()
                 shamsi_date = jdatetime.date.fromgregorian(date=g_date)
-                row_list[date_col_index] = shamsi_date.strftime('%Y/%m/%d')
+                row_list[return_index] = shamsi_date.strftime('%Y-%m-%d')
             except ValueError:
                 pass 
+        if borrow_index != -1 and row_list[borrow_index]:
+            try:
+                miladi_date_str = str(row_list[borrow_index])
+                g_date = datetime.datetime.strptime(miladi_date_str, '%Y-%m-%d').date()
+                shamsi_date = jdatetime.date.fromgregorian(date=g_date)
+                row_list[borrow_index] = shamsi_date.strftime('%Y-%m-%d')
+            except ValueError:
+                pass 
+
         loans_tree.insert("", tk.END, values=tuple(row_list))
 
-query = "SELECT name, start_date, end_date,julianday(end_date) - julianday(start_date) AS days_diff FROM projects"
+query = "SELECT borrow_date, return_date,julianday(return_date) - julianday(borrow_date) AS days_diff FROM loans"
+new_cursor.execute(query)
+results = new_cursor.fetchall()
+print(results)
+
 root.bind('<Escape>',lambda event:root.destroy())
 entry_serch.bind('<KeyRelease>', on_key_release)
 tree.bind("<Double-Button-1>", on_double_click)
