@@ -144,6 +144,20 @@ def insert_member_data():
     except sqlite3.Error as e:
         messagebox.showerror("خطا", f"خطا در دیتابیس: {e}")
 
+title_label = tk.Label(member_frame,text="ثبت عضو جدید",font=("B Titr", 14, "bold"))
+title_label.pack(pady=10)
+
+tk.Label(member_frame, text="اسم کاربر:", font=("B Nazanin", 11)).pack(pady=5)
+entry_member_id = tk.Entry(member_frame, width=25, font=("B Nazanin", 11))
+entry_member_id.pack(pady=5)
+
+tk.Label(member_frame, text="شماره تلفن:", font=("B Nazanin", 11)).pack(pady=5)
+entry_phone = tk.Entry(member_frame, width=25, font=("B Nazanin", 11))
+entry_phone.pack(pady=5)
+
+btn_register = tk.Button(member_frame,text="ثبت اطلاعات",command=insert_member_data,font=("B Nazanin", 11, "bold"),width=15,height=1)
+btn_register.pack(pady=10)
+
 date_object = jdatetime.date.today()
 days_10 = date_object + jdatetime.timedelta(days=10)
 days_20 = date_object + jdatetime.timedelta(days=20)
@@ -329,22 +343,55 @@ def on_double_click(event):
     sub_button = tk.Button(new_panel, text="ثبت امانت", command=insert_data)
     sub_button.pack(pady=3)
 
-title_label = tk.Label(member_frame,text="ثبت عضو جدید",font=("B Titr", 14, "bold"))
-title_label.pack(pady=10)
+book_frame = ttk.Frame(notebook)
+notebook.add(book_frame, text="اضافه کردن کتاب")
 
-tk.Label(member_frame, text="اسم کاربر:", font=("B Nazanin", 11)).pack(pady=5)
-entry_member_id = tk.Entry(member_frame, width=25, font=("B Nazanin", 11))
-entry_member_id.pack(pady=5)
+title_label_book = tk.Label(book_frame, text="ثبت کتاب جدید", font=("B Titr", 14, "bold"))
+title_label_book.pack(pady=10)
 
-tk.Label(member_frame, text="شماره تلفن:", font=("B Nazanin", 11)).pack(pady=5)
-entry_phone = tk.Entry(member_frame, width=25, font=("B Nazanin", 11))
-entry_phone.pack(pady=5)
+book_entries = {}
+for col in columns:
+    tk.Label(book_frame, text=f"{col}:", font=("B Nazanin", 11)).pack(pady=5)
+    ent = tk.Entry(book_frame, width=25, font=("B Nazanin", 11))
+    ent.pack(pady=5)
+    book_entries[col] = ent
 
-btn_register = tk.Button(member_frame,text="ثبت اطلاعات",command=insert_member_data,font=("B Nazanin", 11, "bold"),width=15,height=1)
-btn_register.pack(pady=10)
+def insert_book_data():
+    vals = []
+    for col in columns:
+        v = book_entries[col].get().strip()
+        if not v:
+            messagebox.showwarning("خطا", f"لطفاً فیلد {col} را پر کنید!")
+            book_entries[col].focus()
+            return
+        vals.append(v)
 
-member_del = tk.Button(member_frame, text="حذف کاربر", )
-member_del.pack(pady=3)
+    try:
+        temp_conn = sqlite3.connect(db_p)
+        temp_cursor = temp_conn.cursor()
+
+        placeholders = ", ".join(["?"] * len(columns))
+        col_names = ", ".join(columns)
+        query = f"INSERT INTO {tabel_name} ({col_names}) VALUES ({placeholders})"
+        temp_cursor.execute(query, tuple(vals))
+
+        temp_conn.commit()
+        temp_conn.close()
+
+        messagebox.showinfo("موفق", "اطلاعات کتاب با موفقیت ثبت شد!")
+
+        for col in columns:
+            book_entries[col].delete(0, tk.END)
+        book_entries[columns[0]].focus()
+
+    except sqlite3.IntegrityError:
+        messagebox.showerror("خطا", "این کتاب قبلاً ثبت شده است!")
+
+    except sqlite3.Error as e:
+        messagebox.showerror("خطا", f"خطا در دیتابیس: {e}")
+
+btn_register_book = tk.Button(book_frame, text="ثبت اطلاعات", command=insert_book_data, font=("B Nazanin", 11, "bold"), width=15, height=1)
+btn_register_book.pack(pady=10)
 
 tabel_frame = tk.Frame(notebook)
 notebook.add(tabel_frame, text="جدول امانات")
@@ -401,7 +448,6 @@ def gregorian():
 query = "SELECT borrow_date, return_date,julianday(return_date) - julianday(borrow_date) AS days_diff FROM loans"
 new_cursor.execute(query)
 results = new_cursor.fetchall()
-print(results)
 
 root.bind('<Escape>',lambda event:root.destroy())
 entry_serch.bind('<KeyRelease>', on_key_release)
