@@ -802,6 +802,8 @@ entry_serch.bind('<KeyRelease>', on_key_release)
 entry_serch.bind('<Return>', search)
 tree.bind("<Double-Button-1>", on_double_click)
 
+root.geometry("800x600")
+
 new_conn.close()
 search()
 gregorian()
