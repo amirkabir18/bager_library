@@ -12,7 +12,6 @@ TRANSLATIONS: dict[str, str] = {
     'title': 'عنوان کتاب',
     'author': 'نویسنده',
     'isbn': 'شابک',
-    'location': 'محل قرارگیری',
     'member_id': 'نام کاربر',
     'phone_number': 'شماره تلفن',
     'borrow_date': 'تاریخ امانت',
