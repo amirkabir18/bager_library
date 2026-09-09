@@ -44,6 +44,7 @@ tree = ttk.Treeview(tree_frame,yscrollcommand=scrollbar.set, columns=columns, sh
 scrollbar.config(command=tree.yview)
 for col in columns: 
     tree.heading(col, text=col)
+    tree.column(col, anchor=tk.CENTER)
 cursor.execute(f"SELECT {', '.join(columns)} FROM {tabel_name}")
 rows = cursor.fetchall()
 tree.pack(fill="both", expand=True, padx=10, pady=10)
@@ -158,6 +159,32 @@ entry_phone.pack(pady=5)
 btn_register = tk.Button(member_frame,text="ثبت اطلاعات",command=insert_member_data,font=("B Nazanin", 11, "bold"),width=15,height=1)
 btn_register.pack(pady=10)
 
+member_conn = sqlite3.connect(db_p)
+member_cursor = member_conn.cursor()
+
+member_tabel_name = data[3][0]
+member_cursor.execute(f'PRAGMA table_info("{member_tabel_name}")')
+member_column = [row[1] for row in member_cursor.fetchall()]
+
+member_tree_frame = ttk.Frame(member_frame)
+member_tree_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+member_scrollbar = tk.Scrollbar(member_tree_frame)
+member_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+member_tree = ttk.Treeview(member_tree_frame,yscrollcommand=member_scrollbar.set, columns=member_column, show="headings", height=15) 
+member_scrollbar.config(command=member_tree.yview)
+for col in member_column: 
+    member_tree.heading(col, text=col)
+    member_tree.column(col, anchor=tk.CENTER)
+member_cursor.execute(f"SELECT {', '.join(member_column)} FROM {member_tabel_name}")
+member_row = member_cursor.fetchall()
+member_tree.pack(fill="both", expand=True, padx=10, pady=10)
+for row in member_row:
+    member_tree.insert("",tk.END, values=row)
+
+member_conn.commit()
+member_conn.close()
 date_object = jdatetime.date.today()
 days_10 = date_object + jdatetime.timedelta(days=10)
 days_20 = date_object + jdatetime.timedelta(days=20)
@@ -411,6 +438,7 @@ loans_tree = ttk.Treeview(tabel_frame, yscrollcommand=scrollbar_2.set, columns=l
 scrollbar_2.config(command=loans_tree.yview)
 for col in loan_column: 
     loans_tree.heading(col, text=col)
+    loans_tree.column(col, anchor=tk.CENTER)
 loans_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
 st.configure("Treeview", font=(None, 13), rowheight=30)
@@ -444,10 +472,6 @@ def gregorian():
                 pass 
 
         loans_tree.insert("", tk.END, values=tuple(row_list))
-
-query = "SELECT borrow_date, return_date,julianday(return_date) - julianday(borrow_date) AS days_diff FROM loans"
-new_cursor.execute(query)
-results = new_cursor.fetchall()
 
 root.bind('<Escape>',lambda event:root.destroy())
 entry_serch.bind('<KeyRelease>', on_key_release)
