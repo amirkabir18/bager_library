@@ -45,13 +45,47 @@ def rtl_display_order(cols: list[str], preferred_order: list[str]) -> list[str]:
     ordered = [c for c in preferred_order if c in cols] + [c for c in cols if c not in preferred_order]
     return list(reversed(ordered))
 
+def init_database(connection: sqlite3.Connection):
+    cur = connection.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS books (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            author VARCHAR(255),
+            isbn VARCHAR(255) UNIQUE,
+            title VARCHAR(255)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id VARCHAR(255) UNIQUE NOT NULL,
+            phone_number VARCHAR(255) NOT NULL
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS loans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            borrow_date DATE NOT NULL,
+            return_date DATE,
+            borrowed BOOLEAN DEFAULT 1,
+            book_id VARCHAR(255),
+            member_name VARCHAR(255)
+        )
+    """)
+    try:
+        cur.execute("ALTER TABLE books DROP COLUMN location")
+    except Exception:
+        pass
+    connection.commit()
+
 conn = sqlite3.connect(db_p)
+init_database(conn)
 cursor = conn.cursor()
 
 cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
 tables_data = cursor.fetchall()
 table_names = [str(r[0]) for r in tables_data]
-tabel_name = 'books' if 'books' in table_names else table_names[0]
+tabel_name = 'books'
 cursor.execute(f'PRAGMA table_info("{tabel_name}")')
 columns: list[str] = [str(row[1]) for row in cursor.fetchall()]
 
@@ -438,7 +472,7 @@ btn_register.pack(pady=10)
 member_conn = sqlite3.connect(db_p)
 member_cursor = member_conn.cursor()
 
-member_tabel_name = 'members' if 'members' in table_names else table_names[3]
+member_tabel_name = 'members'
 member_cursor.execute(f'PRAGMA table_info("{member_tabel_name}")')
 member_column: list[str] = [str(row[1]) for row in member_cursor.fetchall()]
 
@@ -709,7 +743,7 @@ scrollbar_2.pack(side=tk.LEFT, fill=tk.Y)
 new_conn = sqlite3.connect(db_p)
 new_cursor = new_conn.cursor()
 
-new_tabel_name = 'loans' if 'loans' in table_names else table_names[2]
+new_tabel_name = 'loans'
 new_cursor.execute(f'PRAGMA table_info("{new_tabel_name}")')
 loan_column: list[str] = [str(row[1]) for row in new_cursor.fetchall()]
 
