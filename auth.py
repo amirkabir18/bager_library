@@ -313,24 +313,19 @@ class TelegramBotClient:
     def token(self) -> str:
         if self._explicit_token:
             return self._explicit_token
-        db_token = get_setting('telegram_bot_token', default='', database_path=self.database_path)
-        if db_token:
-            return db_token.strip()
-        return os.environ.get('TELEGRAM_BOT_TOKEN', '').strip()
+        return get_setting('telegram_bot_token', default='', database_path=self.database_path).strip()
 
     @property
     def api_url(self) -> str:
         if self._api_url:
             return self._api_url.rstrip('/')
-        db_url = get_setting('telegram_api_url', default='https://api.telegram.org', database_path=self.database_path)
-        return db_url.rstrip('/')
+        return get_setting('telegram_api_url', default='https://api.telegram.org', database_path=self.database_path).rstrip('/')
 
     @property
     def proxy(self) -> str | None:
         if self._proxy:
             return self._proxy
-        db_proxy = get_setting('telegram_proxy', default='', database_path=self.database_path)
-        return db_proxy.strip() or None
+        return get_setting('telegram_proxy', default='', database_path=self.database_path).strip() or None
 
     def _make_request(self, method: str, data: dict[str, Any] | None = None, timeout: float = 10.0) -> dict[str, Any]:
         curr_token = self.token

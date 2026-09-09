@@ -5,6 +5,29 @@ import sqlite3
 base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
 db_p = os.path.join(base_dir, 'bager_library.db')
 
+def load_env_file(filepath: str | None = None):
+    p = filepath or os.path.join(base_dir, '.env')
+    if not os.path.exists(p):
+        return
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(p)
+    except Exception:
+        try:
+            with open(p, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        k, v = line.split('=', 1)
+                        k = k.strip()
+                        v = v.strip().strip('"').strip("'")
+                        if k not in os.environ:
+                            os.environ[k] = v
+        except Exception:
+            pass
+
+load_env_file()
+
 TRANSLATIONS: dict[str, str] = {
     'id': 'شناسه',
     'title': 'عنوان کتاب',
@@ -172,6 +195,12 @@ def init_database(connection: sqlite3.Connection | None = None):
             connection.close()
 
 def get_setting(key: str, default: str = "", database_path: str | None = None) -> str:
+    env_val = os.getenv(key.upper())
+    if env_val is None:
+        env_val = os.getenv(key)
+    if env_val is not None:
+        return env_val
+
     c = get_db_connection(database_path=database_path)
     try:
         cur = c.cursor()
@@ -183,7 +212,12 @@ def get_setting(key: str, default: str = "", database_path: str | None = None) -
     finally:
         c.close()
 
-def set_setting(key: str, value: str, database_path: str | None = None):
+def set_setting(key: str, value: str, database_path: str | None = None, sync_env: bool = True):
+    str_val = str(value)
+    if sync_env:
+        os.environ[key.upper()] = str_val
+        os.environ[key] = str_val
+
     c = get_db_connection(database_path=database_path)
     try:
         cur = c.cursor()
@@ -193,18 +227,29 @@ def set_setting(key: str, value: str, database_path: str | None = None):
             ON CONFLICT(key) DO UPDATE SET
                 value = excluded.value,
                 updated_at = CURRENT_TIMESTAMP
-        """, (key, str(value)))
+        """, (key, str_val))
         c.commit()
     finally:
         c.close()
 
 def get_all_settings(database_path: str | None = None) -> dict[str, str]:
+    settings = {}
     c = get_db_connection(database_path=database_path)
     try:
         cur = c.cursor()
         cur.execute("SELECT key, value FROM app_settings")
-        return {str(r[0]): str(r[1]) for r in cur.fetchall()}
+        for k, v in cur.fetchall():
+            settings[str(k)] = str(v)
     except Exception:
-        return {}
+        pass
     finally:
         c.close()
+
+    for k in list(settings.keys()):
+        env_val = os.getenv(k.upper())
+        if env_val is None:
+            env_val = os.getenv(k)
+        if env_val is not None:
+            settings[k] = env_val
+
+    return settings
