@@ -140,6 +140,7 @@ st = ttk.Style()
 st.configure(".", font=FONT_NORMAL)
 st.configure("Treeview", font=FONT_NORMAL, rowheight=30)
 st.configure("Treeview.Heading", font=FONT_BOLD)
+st.configure("TNotebook", tabposition="ne")
 st.configure("TNotebook.Tab", font=FONT_NORMAL)
 st.configure("TCombobox", font=FONT_NORMAL)
 st.configure("TRadiobutton", font=FONT_NORMAL)
@@ -157,11 +158,7 @@ filter_settings = {
 }
 
 books_frame = ttk.Frame(notebook)
-img_tab_books = get_icon('book-open')
-if img_tab_books:
-    notebook.add(books_frame, text=" جستجوی کتاب ", image=img_tab_books, compound=tk.RIGHT)
-else:
-    notebook.add(books_frame, text="جستجوی کتاب")
+notebook.add(books_frame, text=" جستجوی کتاب ")
 
 search_bar_frame = ttk.Frame(books_frame)
 search_bar_frame.pack(fill=tk.X, padx=10, pady=10)
@@ -402,11 +399,7 @@ def on_key_release(event):
     search_after_id = root.after(200, search)
 
 member_frame = ttk.Frame(notebook)
-img_tab_member = get_icon('user-plus')
-if img_tab_member:
-    notebook.add(member_frame, text=" اضافه کردن کاربر ", image=img_tab_member, compound=tk.RIGHT)
-else:
-    notebook.add(member_frame, text="اضافه کردن کاربر")
+notebook.add(member_frame, text=" اضافه کردن کاربر ")
 
 def validate_phone(phone):
     pattern = r'^09[0-9]{9}$'
@@ -674,11 +667,7 @@ def on_double_click(event):
     sub_button.pack(pady=10)
 
 book_frame = ttk.Frame(notebook)
-img_tab_book_add = get_icon('book-plus')
-if img_tab_book_add:
-    notebook.add(book_frame, text=" اضافه کردن کتاب ", image=img_tab_book_add, compound=tk.RIGHT)
-else:
-    notebook.add(book_frame, text="اضافه کردن کتاب")
+notebook.add(book_frame, text=" اضافه کردن کتاب ")
 
 title_label_book = tk.Label(book_frame, text="ثبت کتاب جدید", font=FONT_TITLE)
 title_label_book.pack(pady=10)
@@ -731,11 +720,7 @@ btn_register_book = create_icon_button(book_frame, text=" ثبت اطلاعات 
 btn_register_book.pack(pady=10)
 
 tabel_frame = tk.Frame(notebook)
-img_tab_loans = get_icon('bookmark')
-if img_tab_loans:
-    notebook.add(tabel_frame, text=" جدول امانات ", image=img_tab_loans, compound=tk.RIGHT)
-else:
-    notebook.add(tabel_frame, text="جدول امانات")
+notebook.add(tabel_frame, text=" جدول امانات ")
 
 scrollbar_2 = tk.Scrollbar(tabel_frame)
 scrollbar_2.pack(side=tk.LEFT, fill=tk.Y)
