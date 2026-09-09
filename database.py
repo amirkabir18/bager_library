@@ -49,10 +49,6 @@ def get_db_connection(database_path: str | None = None, enable_foreign_keys: boo
     return c
 
 def init_database(connection: sqlite3.Connection | None = None):
-    """
-    Initializes and migrates the database schema.
-    Supports backward-compatibility and schema evolution for auth, OTP, and notifications.
-    """
     should_close = False
     if connection is None:
         connection = get_db_connection()
@@ -61,7 +57,6 @@ def init_database(connection: sqlite3.Connection | None = None):
     try:
         cur = connection.cursor()
 
-        # Core tables
         cur.execute("""
             CREATE TABLE IF NOT EXISTS books (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,7 +85,6 @@ def init_database(connection: sqlite3.Connection | None = None):
             )
         """)
 
-        # Auth users table for RBAC, local offline fallback, and Telegram pairing
         cur.execute("""
             CREATE TABLE IF NOT EXISTS auth_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,7 +98,6 @@ def init_database(connection: sqlite3.Connection | None = None):
             )
         """)
 
-        # OTP sessions table for Telegram Bot one-time password verification
         cur.execute("""
             CREATE TABLE IF NOT EXISTS otp_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,7 +110,6 @@ def init_database(connection: sqlite3.Connection | None = None):
             )
         """)
 
-        # Notification logs table for offline desktop alerts de-duplication and auditing
         cur.execute("""
             CREATE TABLE IF NOT EXISTS notification_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -128,7 +120,6 @@ def init_database(connection: sqlite3.Connection | None = None):
             )
         """)
 
-        # Local application preferences table (offline-friendly)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS app_settings (
                 key VARCHAR(100) PRIMARY KEY,
@@ -137,7 +128,6 @@ def init_database(connection: sqlite3.Connection | None = None):
             )
         """)
 
-        # Default settings seed
         default_settings = [
             ('notifications_enabled', 'true'),
             ('notification_advance_days', '2'),
@@ -149,13 +139,11 @@ def init_database(connection: sqlite3.Connection | None = None):
             VALUES (?, ?)
         """, default_settings)
 
-        # Backward compatibility: handle deprecated location column in books
         try:
             cur.execute("ALTER TABLE books DROP COLUMN location")
         except Exception:
             pass
 
-        # Migration: Ensure all columns in auth_users exist if table was previously created with older schema
         cur.execute('PRAGMA table_info("auth_users")')
         existing_user_cols = {str(row[1]) for row in cur.fetchall()}
         user_col_defs = {
@@ -172,7 +160,6 @@ def init_database(connection: sqlite3.Connection | None = None):
                 except Exception:
                     pass
 
-        # Performance indexes for fast querying in desktop and background tasks
         cur.execute("CREATE INDEX IF NOT EXISTS idx_loans_return_borrowed ON loans(return_date, borrowed)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_notification_logs_lookup ON notification_logs(loan_id, sent_date, notification_type)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_otp_sessions_phone ON otp_sessions(phone_number, expires_at)")

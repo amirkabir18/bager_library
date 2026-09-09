@@ -117,13 +117,13 @@ class TestAuthWithDatabase(unittest.TestCase):
         )
         self.assertTrue(ok)
         self.assertTrue(has_admin_user(database_path=self.db_path))
+        self.assertIsNotNone(user)
+        assert user is not None
         self.assertEqual(user['role'], 'admin')
 
-        # Second bootstrap call is idempotent
         ok2, msg2, _ = bootstrap_admin_user(database_path=self.db_path)
         self.assertFalse(ok2)
 
-        # ensure_bootstrap_admin returns True
         ens_ok, _ = ensure_bootstrap_admin(database_path=self.db_path)
         self.assertTrue(ens_ok)
 
@@ -139,14 +139,19 @@ class TestAuthWithDatabase(unittest.TestCase):
 
         by_u = get_user_by_username("librarian1", database_path=self.db_path)
         self.assertIsNotNone(by_u)
+        assert by_u is not None
         self.assertEqual(by_u['phone_number'], "09191234567")
 
         by_p = get_user_by_phone("09191234567", database_path=self.db_path)
         self.assertIsNotNone(by_p)
+        assert by_p is not None
         self.assertEqual(by_p['username'], "librarian1")
 
         by_id1 = get_user_by_identifier("librarian1", database_path=self.db_path)
         by_id2 = get_user_by_identifier("+989191234567", database_path=self.db_path)
+        self.assertIsNotNone(by_id1)
+        self.assertIsNotNone(by_id2)
+        assert by_id1 is not None and by_id2 is not None
         self.assertEqual(by_id1['id'], by_id2['id'])
 
     def test_offline_password_authentication(self):
@@ -157,21 +162,19 @@ class TestAuthWithDatabase(unittest.TestCase):
             database_path=self.db_path
         )
 
-        # Successful auth
         ok, msg, user = authenticate_with_password("user_offline", "offlinePass123", database_path=self.db_path)
         self.assertTrue(ok)
+        self.assertIsNotNone(user)
+        assert user is not None
         self.assertEqual(user['username'], "user_offline")
 
-        # By phone number
         ok, _, _ = authenticate_with_password("09180001122", "offlinePass123", database_path=self.db_path)
         self.assertTrue(ok)
 
-        # Wrong password
         ok, msg, user = authenticate_with_password("user_offline", "wrong", database_path=self.db_path)
         self.assertFalse(ok)
         self.assertIsNone(user)
 
-        # Nonexistent user
         ok, msg, user = authenticate_with_password("nobody", "offlinePass123", database_path=self.db_path)
         self.assertFalse(ok)
 
@@ -188,15 +191,12 @@ class TestAuthWithDatabase(unittest.TestCase):
 
         otp_service = OTPService(database_path=self.db_path, bot_client=mock_bot)
 
-        # 1. Requesting OTP before pairing with telegram fails
         ok, msg, data = otp_service.request_otp("otp_user")
         self.assertFalse(ok)
         self.assertIn("متصل نشده است", msg)
 
-        # 2. Pair user with telegram chat id
         update_user_telegram_chat_id("09129998877", "987654321", database_path=self.db_path)
 
-        # 3. Request OTP now succeeds
         ok, msg, data = otp_service.request_otp("otp_user")
         self.assertTrue(ok)
         mock_bot.send_otp_message.assert_called_once()
@@ -204,17 +204,16 @@ class TestAuthWithDatabase(unittest.TestCase):
         sent_code = call_args['otp_code']
         self.assertEqual(len(sent_code), 6)
 
-        # 4. Verify with wrong code
         ok_v, msg_v, _ = otp_service.verify_otp("otp_user", "000000" if sent_code != "000000" else "111111")
         self.assertFalse(ok_v)
         self.assertIn("تلاش باقی مانده", msg_v)
 
-        # 5. Verify with correct code
         ok_v, msg_v, user = otp_service.verify_otp("otp_user", sent_code)
         self.assertTrue(ok_v)
+        self.assertIsNotNone(user)
+        assert user is not None
         self.assertEqual(user['username'], "otp_user")
 
-        # 6. Reusing code fails
         ok_reuse, _, _ = otp_service.verify_otp("otp_user", sent_code)
         self.assertFalse(ok_reuse)
 
@@ -230,14 +229,14 @@ class TestAuthWithDatabase(unittest.TestCase):
         )
         otp_service = OTPService(database_path=self.db_path, bot_client=mock_bot)
 
-        # First request succeeds
         ok1, _, _ = otp_service.request_otp("rate_user")
         self.assertTrue(ok1)
 
-        # Immediate second request is rate-limited
         ok2, msg2, info2 = otp_service.request_otp("rate_user")
         self.assertFalse(ok2)
         self.assertIn("شکیبا باشید", msg2)
+        self.assertIsNotNone(info2)
+        assert info2 is not None
         self.assertIn("retry_after_seconds", info2)
 
     def test_otp_max_attempts_exceeded(self):
@@ -255,18 +254,14 @@ class TestAuthWithDatabase(unittest.TestCase):
         sent_code = mock_bot.send_otp_message.call_args[1]['otp_code']
         wrong_code = "000000" if sent_code != "000000" else "111111"
 
-        # Attempt 1
         ok, _, _ = otp_service.verify_otp("attempts_user", wrong_code)
         self.assertFalse(ok)
-        # Attempt 2
         ok, _, _ = otp_service.verify_otp("attempts_user", wrong_code)
         self.assertFalse(ok)
-        # Attempt 3 (hits max attempts limit)
         ok, msg, _ = otp_service.verify_otp("attempts_user", wrong_code)
         self.assertFalse(ok)
         self.assertIn("حداکثر دفعات", msg)
 
-        # Subsequent attempt with even the correct code fails because session is consumed/locked
         ok, _, _ = otp_service.verify_otp("attempts_user", sent_code)
         self.assertFalse(ok)
 
@@ -284,14 +279,12 @@ class TestAuthWithDatabase(unittest.TestCase):
         otp_service.request_otp("expired_user")
         sent_code = mock_bot.send_otp_message.call_args[1]['otp_code']
 
-        # Manually backdate the expires_at in DB
         past_iso = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
         conn = sqlite3.connect(self.db_path)
         conn.execute("UPDATE otp_sessions SET expires_at = ? WHERE phone_number = '09126665544'", (past_iso,))
         conn.commit()
         conn.close()
 
-        # Attempt verification
         ok, msg, _ = otp_service.verify_otp("expired_user", sent_code)
         self.assertFalse(ok)
         self.assertIn("منقضی شده است", msg)
@@ -305,7 +298,6 @@ class TestAuthWithDatabase(unittest.TestCase):
 
         bot = TelegramBotClient(token="123:ABC", database_path=self.db_path)
 
-        # Mock get_updates with /start and contact share
         mock_updates = [
             {
                 'update_id': 101,
@@ -331,8 +323,9 @@ class TestAuthWithDatabase(unittest.TestCase):
             count = bot.process_updates()
             self.assertEqual(count, 2)
 
-            # Check that user in database was updated with chat_id
             user = get_user_by_phone("09125554433", database_path=self.db_path)
+            self.assertIsNotNone(user)
+            assert user is not None
             self.assertEqual(str(user['telegram_chat_id']), "777111")
             self.assertTrue(mock_send.called)
 
@@ -345,12 +338,12 @@ class TestAuthWithDatabase(unittest.TestCase):
             database_path=self.db_path
         )
 
-        # Mode password
         ok, _, user = authenticate("unified_user", "mySecurePassword", mode="password", database_path=self.db_path)
         self.assertTrue(ok)
+        self.assertIsNotNone(user)
+        assert user is not None
         self.assertEqual(user['username'], "unified_user")
 
-        # Mode auto with password credential
         ok, _, user = authenticate("unified_user", "mySecurePassword", mode="auto", database_path=self.db_path)
         self.assertTrue(ok)
 
