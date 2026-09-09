@@ -7,14 +7,34 @@ import datetime
 db_p = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(__file__)), 'bager_library.db')
 icon_p = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(__file__)), 'logo.ico')
 
+TRANSLATIONS: dict[str, str] = {
+    'id': 'شناسه',
+    'title': 'عنوان کتاب',
+    'author': 'نویسنده',
+    'isbn': 'شابک',
+    'location': 'محل قرارگیری',
+    'member_id': 'نام کاربر',
+    'phone_number': 'شماره تلفن',
+    'borrow_date': 'تاریخ امانت',
+    'return_date': 'تاریخ بازگشت',
+    'borrowed': 'وضعیت امانت',
+    'book_id': 'نام کتاب',
+    'member_name': 'نام کاربر',
+}
+
+def tr(key: object) -> str:
+    s = str(key) if key is not None else ""
+    return TRANSLATIONS.get(s, s)
+
 conn = sqlite3.connect(db_p)
 cursor = conn.cursor()
 
 cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-data = cursor.fetchall()
-tabel_name = data[0][0]
+tables_data = cursor.fetchall()
+table_names = [str(r[0]) for r in tables_data]
+tabel_name = 'books' if 'books' in table_names else table_names[0]
 cursor.execute(f'PRAGMA table_info("{tabel_name}")')
-columns = [row[1] for row in cursor.fetchall()]
+columns: list[str] = [str(row[1]) for row in cursor.fetchall()]
 
 root = tk.Tk()
 root.title("کتابخانه باقر العلوم")
@@ -31,13 +51,18 @@ notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 books_frame = ttk.Frame(notebook)
 notebook.add(books_frame, text="جستجوی کتاب")
 
-label_1 = tk.Label(books_frame, text="یک گزینه انتخاب کن",font=("B Titr", 14, "bold"))
+label_1 = tk.Label(books_frame, text="فیلد جستجو را انتخاب کنید:", font=("B Titr", 14, "bold"))
 label_1.pack(pady=8)
 
 entry_serch=tk.Entry(books_frame, font=('calibre',10,'normal'))
 entry_serch.pack(pady=5)
 
-combo_column = ttk.Combobox(books_frame,state="readonly",values=columns)
+column_display_names: list[str] = [tr(col) for col in columns]
+combo_column = ttk.Combobox(books_frame, state="readonly", values=column_display_names)
+if 'title' in columns:
+    combo_column.set(TRANSLATIONS['title'])
+elif column_display_names:
+    combo_column.current(0)
 combo_column.pack(pady=5)
 
 tree_frame = tk.Frame(books_frame)
@@ -49,7 +74,7 @@ scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 tree = ttk.Treeview(tree_frame,yscrollcommand=scrollbar.set, columns=columns, show="headings", height=15) 
 scrollbar.config(command=tree.yview)
 for col in columns: 
-    tree.heading(col, text=col)
+    tree.heading(col, text=tr(col))
     tree.column(col, anchor=tk.CENTER)
 cursor.execute(f"SELECT {', '.join(columns)} FROM {tabel_name}")
 rows = cursor.fetchall()
@@ -57,16 +82,15 @@ tree.pack(fill="both", expand=True, padx=10, pady=10)
 
 st.configure("Treeview", font=(None, 13), rowheight=30)
 conn.close()
-def search(event=None):
-    column = combo_column.get()
-    search_value = entry_serch.get()
 
-    
-    # if not column:
-    #     label_1.config(text="لطفاً همه فیلدها را پر کنید!")
-    #     return
+def search(event=None):
+    selected_display = combo_column.get()
+    search_value = entry_serch.get().strip()
 
     tree.delete(*tree.get_children())
+    
+    display_to_col = {TRANSLATIONS.get(c, c): c for c in columns}
+    column = display_to_col.get(selected_display, selected_display)
     
     try:
         temp_conn = sqlite3.connect(db_p)
@@ -76,6 +100,10 @@ def search(event=None):
             query = f"SELECT * FROM {tabel_name}"
             temp_cursor.execute(query)
         else:
+            if not column:
+                messagebox.showerror("خطا", "لطفاً ابتدا فیلد مورد نظر را انتخاب کنید")
+                temp_conn.close()
+                return
             query = f"SELECT * FROM {tabel_name} WHERE {column} LIKE ?"
             temp_cursor.execute(query, (f"%{search_value}%",))
             
@@ -89,16 +117,17 @@ def search(event=None):
             tree.insert("", "end", values=("❌ نتیجه‌ای یافت نشد!",) + ("",) * (len(columns)-1))
         
     except Exception as e:
-        messagebox.showerror("خطا","اول فیلد را انتخاب کنید")
-        # label_1.config(text=f"خطا: {str(e)}")
-        pass
+        messagebox.showerror("خطا", f"خطا در جستجو: {str(e)}")
+
+search_after_id = None
 
 def on_key_release(event):
-    if hasattr(root, 'after_id'):
-        root.after_cancel(root.after_id)
-    root.after_id = root.after(200, search)
+    global search_after_id
+    if search_after_id is not None:
+        root.after_cancel(search_after_id)
+    search_after_id = root.after(200, search)
     
-sub_btn = tk.Button(books_frame,text = 'تایید',width=50,command=search)
+sub_btn = tk.Button(books_frame, text='جستجو', font=("B Nazanin", 11, "bold"), width=50, command=search)
 sub_btn.pack(pady=12)
 
 member_frame = ttk.Frame(notebook)
@@ -113,7 +142,7 @@ def insert_member_data():
     phone_number = entry_phone.get().strip()
     
     if not member_id:
-        messagebox.showwarning("خطا", "لطفاً اسم کاربر را وارد کنید!")
+        messagebox.showwarning("خطا", "لطفاً نام کاربر را وارد کنید!")
         entry_member_id.focus()
         return
     
@@ -137,24 +166,24 @@ def insert_member_data():
         temp_conn.commit()
         temp_conn.close()
         
-        messagebox.showinfo("موفق", f"اطلاعات عضو با اسم {member_id} با موفقیت ثبت شد!")
+        messagebox.showinfo("موفق", f"اطلاعات عضو با نام {member_id} با موفقیت ثبت شد!")
         
         entry_member_id.delete(0, tk.END)
         entry_phone.delete(0, tk.END)
         entry_member_id.focus()
         
     except sqlite3.IntegrityError:
-        messagebox.showerror("خطا", f"اسم کاربر {member_id} قبلاً ثبت شده است!")
+        messagebox.showerror("خطا", f"نام کاربر {member_id} قبلاً ثبت شده است!")
         entry_member_id.delete(0, tk.END)
         entry_member_id.focus()
         
     except sqlite3.Error as e:
-        messagebox.showerror("خطا", f"خطا در دیتابیس: {e}")
+        messagebox.showerror("خطا", f"خطا در پایگاه داده: {e}")
 
 title_label = tk.Label(member_frame,text="ثبت عضو جدید",font=("B Titr", 14, "bold"))
 title_label.pack(pady=10)
 
-tk.Label(member_frame, text="اسم کاربر:", font=("B Nazanin", 11)).pack(pady=5)
+tk.Label(member_frame, text="نام کاربر:", font=("B Nazanin", 11)).pack(pady=5)
 entry_member_id = tk.Entry(member_frame, width=25, font=("B Nazanin", 11))
 entry_member_id.pack(pady=5)
 
@@ -168,9 +197,9 @@ btn_register.pack(pady=10)
 member_conn = sqlite3.connect(db_p)
 member_cursor = member_conn.cursor()
 
-member_tabel_name = data[3][0]
+member_tabel_name = 'members' if 'members' in table_names else table_names[3]
 member_cursor.execute(f'PRAGMA table_info("{member_tabel_name}")')
-member_column = [row[1] for row in member_cursor.fetchall()]
+member_column: list[str] = [str(row[1]) for row in member_cursor.fetchall()]
 
 member_tree_frame = ttk.Frame(member_frame)
 member_tree_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
@@ -181,7 +210,7 @@ member_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 member_tree = ttk.Treeview(member_tree_frame,yscrollcommand=member_scrollbar.set, columns=member_column, show="headings", height=15) 
 member_scrollbar.config(command=member_tree.yview)
 for col in member_column: 
-    member_tree.heading(col, text=col)
+    member_tree.heading(col, text=tr(col))
     member_tree.column(col, anchor=tk.CENTER)
 member_cursor.execute(f"SELECT {', '.join(member_column)} FROM {member_tabel_name}")
 member_row = member_cursor.fetchall()
@@ -221,7 +250,6 @@ def on_double_click(event):
     def toggle_state():
         if var.get() == 1:
             borrow_entry.insert(0, str(date_object))
-
         else:
             borrow_entry.delete(0, tk.END)
 
@@ -238,16 +266,7 @@ def on_double_click(event):
         new_rows = temp_cursor.fetchall()
         
         for row in new_rows:
-                row_list = list(row) 
-                if return_index != -1 and row_list[return_index]:
-                    try:
-                        miladi_date_str = str(row_list[return_index])
-                        g_date = datetime.datetime.strptime(miladi_date_str, '%Y-%m-%d').date()
-                        shamsi_date = jdatetime.date.fromgregorian(date=g_date)
-                        row_list[return_index] = shamsi_date.strftime('%Y-%m-%d')
-                    except ValueError:
-                        pass 
-                loans_tree.insert("", tk.END, values=tuple(row_list))
+            loans_tree.insert("", tk.END, values=format_loan_row(row))
 
         temp_conn.close()
 
@@ -255,77 +274,74 @@ def on_double_click(event):
         return_shamsi_str = return_entry.get().strip()
         
         if not return_shamsi_str:
-            messagebox.showwarning("هشدار", "لطفاً تاریخی وارد کنید!")
+            messagebox.showwarning("هشدار", "لطفاً تاریخ بازگشت را وارد کنید!")
             return
 
         try:
             j_date = jdatetime.datetime.strptime(return_shamsi_str, '%Y-%m-%d')
-            
             g_date = j_date.togregorian()
-            
-            return_date = g_date.strftime('%Y-%m-%d')
-            
+            return_date_val = g_date.strftime('%Y-%m-%d')
         except ValueError:
-            messagebox.showerror("خطا", "فرمت تاریخ وارد شده صحیح نیست!\nلطفاً به صورت YYYY/MM/DD وارد کنید.")
+            messagebox.showerror("خطا", "فرمت تاریخ بازگشت وارد شده صحیح نیست!\nلطفاً به صورت YYYY-MM-DD وارد کنید.")
+            return
 
         borrow_shamsi_str = borrow_entry.get().strip()
 
         if not borrow_shamsi_str:
-            messagebox.showwarning("هشدار", "لطفاً تاریخی وارد کنید!")
+            messagebox.showwarning("هشدار", "لطفاً تاریخ امانت را وارد کنید!")
             return
 
         try:
             j_date = jdatetime.datetime.strptime(borrow_shamsi_str, '%Y-%m-%d')
-            
             g_date = j_date.togregorian()
-            
-            borrow_date = g_date.strftime('%Y-%m-%d')
-            
+            borrow_date_val = g_date.strftime('%Y-%m-%d')
         except ValueError:
-            messagebox.showerror("خطا", "فرمت تاریخ وارد شده صحیح نیست!\nلطفاً به صورت YYYY/MM/DD وارد کنید.")
+            messagebox.showerror("خطا", "فرمت تاریخ امانت وارد شده صحیح نیست!\nلطفاً به صورت YYYY-MM-DD وارد کنید.")
+            return
 
         book_id = book_entry.get()
         member_name = member_entry.get()
         
         if not member_name:
-            messagebox.showerror("خطا", "لطفاً نام را وارد کنید")
+            messagebox.showerror("خطا", "لطفاً نام کاربر را وارد کنید")
             return
 
         try:
             temp_conn = sqlite3.connect(db_p)
             temp_cursor = temp_conn.cursor()
 
-            temp_cursor.execute("INSERT INTO loans (member_name, book_id, return_date, borrow_date) VALUES (?, ?, ?, ?)", (member_name, book_id if book_id else None, return_date, borrow_date))
+            temp_cursor.execute("INSERT INTO loans (member_name, book_id, return_date, borrow_date) VALUES (?, ?, ?, ?)", (member_name, book_id if book_id else None, return_date_val, borrow_date_val))
             temp_conn.commit()
             temp_conn.close()
 
-            messagebox.showinfo("موفقیت", "اطلاعات با موفقیت ذخیره شد")
+            messagebox.showinfo("موفقیت", "اطلاعات امانت با موفقیت ذخیره شد")
             refresh_treeview()
             new_panel.destroy()
             
         except sqlite3.Error as e:
-            messagebox.showerror("خطای دیتابیس", f"خطا در ذخیره اطلاعات: {e}")
+            messagebox.showerror("خطای پایگاه داده", f"خطا در ذخیره اطلاعات: {e}")
 
     def on_panel_close():
-            refresh_treeview()
-            new_panel.destroy()
+        refresh_treeview()
+        new_panel.destroy()
     new_panel.protocol("WM_DELETE_WINDOW", on_panel_close)
 
-    tk.Label(new_panel,text="اسم کاربر",font=("B Nazanin", 11)).pack(pady=3)
+    tk.Label(new_panel, text="نام کاربر:", font=("B Nazanin", 11)).pack(pady=3)
     member_entry = tk.Entry(new_panel, width=50)
     member_entry.pack(pady=3)
 
     temp_conn = sqlite3.connect(db_p)
     temp_cursor = temp_conn.cursor()
     temp_cursor.execute("SELECT member_id FROM members")
-    data = [row[0] for row in temp_cursor.fetchall()]
+    members_data = [row[0] for row in temp_cursor.fetchall()]
+    temp_conn.close()
 
     listbox = tk.Listbox(new_panel, width=50)
     listbox.pack(pady=3)
 
     def search_member(e):
         listbox.delete(0, tk.END)
-        for item in data:
+        for item in members_data:
             if member_entry.get().lower() in item.lower():
                 listbox.insert(tk.END, item)
 
@@ -338,21 +354,21 @@ def on_double_click(event):
     member_entry.bind('<KeyRelease>', search_member)
     listbox.bind('<Double-Button-1>', select_member)
     
-    tk.Label(new_panel,text="اسم کتاب",font=("B Nazanin", 11)).pack(pady=3)
+    tk.Label(new_panel, text="عنوان کتاب:", font=("B Nazanin", 11)).pack(pady=3)
     book_entry = tk.Entry(new_panel, width=50)
     book_entry.pack(pady=3)
 
     book_entry.insert(0, title_value)
     book_entry.config(state="readonly")
 
-    tk.Label(new_panel,text="تاریخ امانت کتاب",font=("B Nazanin", 11)).pack(pady=3)
+    tk.Label(new_panel, text="تاریخ امانت کتاب:", font=("B Nazanin", 11)).pack(pady=3)
     borrow_entry = tk.Entry(new_panel, width=50)
     borrow_entry.pack(pady=3)
 
-    toggle = tk.Checkbutton(new_panel, text="ثبت اتومایک تاریخ", variable=var, command=toggle_state, font=("Arial", 11), indicatoron=True, width=15, height=2)
+    toggle = tk.Checkbutton(new_panel, text="ثبت خودکار تاریخ", variable=var, command=toggle_state, font=("B Nazanin", 11), indicatoron=True, width=15, height=2)
     toggle.pack(pady=3)
 
-    tk.Label(new_panel,text="تاریخ بازگشت کتاب",font=("B Nazanin", 11)).pack(pady=3)
+    tk.Label(new_panel, text="تاریخ بازگشت کتاب:", font=("B Nazanin", 11)).pack(pady=3)
     return_entry = tk.Entry(new_panel, width=50)
     return_entry.pack(pady=3)
 
@@ -378,7 +394,7 @@ def on_double_click(event):
     rb2.pack(side=tk.LEFT, padx=20)
     rb3.pack(side=tk.LEFT, padx=20)
 
-    sub_button = tk.Button(new_panel, text="ثبت امانت", command=insert_data)
+    sub_button = tk.Button(new_panel, text="ثبت امانت", font=("B Nazanin", 11, "bold"), command=insert_data)
     sub_button.pack(pady=3)
 
 book_frame = ttk.Frame(notebook)
@@ -389,7 +405,8 @@ title_label_book.pack(pady=10)
 
 book_entries = {}
 for col in columns:
-    tk.Label(book_frame, text=f"{col}:", font=("B Nazanin", 11)).pack(pady=5)
+    col_fa = tr(col)
+    tk.Label(book_frame, text=f"{col_fa}:", font=("B Nazanin", 11)).pack(pady=5)
     ent = tk.Entry(book_frame, width=25, font=("B Nazanin", 11))
     ent.pack(pady=5)
     book_entries[col] = ent
@@ -399,7 +416,8 @@ def insert_book_data():
     for col in columns:
         v = book_entries[col].get().strip()
         if not v:
-            messagebox.showwarning("خطا", f"لطفاً فیلد {col} را پر کنید!")
+            col_fa = tr(col)
+            messagebox.showwarning("خطا", f"لطفاً فیلد {col_fa} را پر کنید!")
             book_entries[col].focus()
             return
         vals.append(v)
@@ -426,7 +444,7 @@ def insert_book_data():
         messagebox.showerror("خطا", "این کتاب قبلاً ثبت شده است!")
 
     except sqlite3.Error as e:
-        messagebox.showerror("خطا", f"خطا در دیتابیس: {e}")
+        messagebox.showerror("خطا", f"خطا در پایگاه داده: {e}")
 
 btn_register_book = tk.Button(book_frame, text="ثبت اطلاعات", command=insert_book_data, font=("B Nazanin", 11, "bold"), width=15, height=1)
 btn_register_book.pack(pady=10)
@@ -440,15 +458,15 @@ scrollbar_2.pack(side=tk.RIGHT, fill=tk.Y)
 new_conn = sqlite3.connect(db_p)
 new_cursor = new_conn.cursor()
 
-new_tabel_name = data[2][0]
+new_tabel_name = 'loans' if 'loans' in table_names else table_names[2]
 new_cursor.execute(f'PRAGMA table_info("{new_tabel_name}")')
-loan_column = [row[1] for row in new_cursor.fetchall()]
+loan_column: list[str] = [str(row[1]) for row in new_cursor.fetchall()]
 
 today = jdatetime.date.today()
 loans_tree = ttk.Treeview(tabel_frame, yscrollcommand=scrollbar_2.set, columns=loan_column, show="headings", height=15)
 scrollbar_2.config(command=loans_tree.yview)
 for col in loan_column: 
-    loans_tree.heading(col, text=col)
+    loans_tree.heading(col, text=tr(col))
     loans_tree.column(col, anchor=tk.CENTER)
 loans_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
@@ -457,32 +475,42 @@ new_cursor.execute(f"SELECT * FROM `{new_tabel_name}` ORDER BY julianday(`return
 loan_rows = new_cursor.fetchall()
 
 borrow_date = 'borrow_date'
-borrow_index = loan_column.index(borrow_date)
+borrow_index = loan_column.index(borrow_date) if borrow_date in loan_column else -1
 return_date = 'return_date' 
-return_index = loan_column.index(return_date)
+return_index = loan_column.index(return_date) if return_date in loan_column else -1
+borrowed_index = loan_column.index('borrowed') if 'borrowed' in loan_column else -1
+
+def format_loan_row(row):
+    row_list = list(row)
+    if return_index != -1 and return_index < len(row_list) and row_list[return_index]:
+        try:
+            miladi_date_str = str(row_list[return_index])
+            g_date = datetime.datetime.strptime(miladi_date_str, '%Y-%m-%d').date()
+            shamsi_date = jdatetime.date.fromgregorian(date=g_date)
+            row_list[return_index] = shamsi_date.strftime('%Y-%m-%d')
+        except ValueError:
+            pass 
+    if borrow_index != -1 and borrow_index < len(row_list) and row_list[borrow_index]:
+        try:
+            date_str = str(row_list[borrow_index])
+            if '-' in date_str:
+                parts = [int(p) for p in date_str.split('-')]
+                if parts[0] > 1900:
+                    g_date = datetime.date(parts[0], parts[1], parts[2])
+                    row_list[borrow_index] = jdatetime.date.fromgregorian(date=g_date).strftime('%Y-%m-%d')
+        except Exception:
+            pass
+    if borrowed_index != -1 and borrowed_index < len(row_list):
+        val = row_list[borrowed_index]
+        if val == 1 or val == '1' or val is True:
+            row_list[borrowed_index] = "در امانت"
+        elif val == 0 or val == '0' or val is False:
+            row_list[borrowed_index] = "بازگردانده شده"
+    return tuple(row_list)
 
 def gregorian():
-
     for row in loan_rows:
-        row_list = list(row)
-        if return_index != -1 and row_list[return_index]:
-            try:
-                miladi_date_str = str(row_list[return_index])
-                g_date = datetime.datetime.strptime(miladi_date_str, '%Y-%m-%d').date()
-                shamsi_date = jdatetime.date.fromgregorian(date=g_date)
-                row_list[return_index] = shamsi_date.strftime('%Y-%m-%d')
-            except ValueError:
-                pass 
-        if borrow_index != -1 and row_list[borrow_index]:
-            try:
-                miladi_date_str = str(row_list[borrow_index])
-                g_date = datetime.datetime.strptime(miladi_date_str, '%Y-%m-%d').date()
-                shamsi_date = jdatetime.date.fromgregorian(date=g_date)
-                row_list[borrow_index] = shamsi_date.strftime('%Y-%m-%d')
-            except ValueError:
-                pass 
-
-        loans_tree.insert("", tk.END, values=tuple(row_list))
+        loans_tree.insert("", tk.END, values=format_loan_row(row))
 
 root.bind('<Escape>',lambda event:root.destroy())
 entry_serch.bind('<KeyRelease>', on_key_release)
