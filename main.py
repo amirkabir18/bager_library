@@ -34,9 +34,11 @@ from database import (
     tr,
     rtl_display_order,
 )
+from auth import ensure_bootstrap_admin
 
 conn = sqlite3.connect(db_p)
 init_database(conn)
+ensure_bootstrap_admin(database_path=db_p)
 cursor = conn.cursor()
 
 cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")

@@ -105,6 +105,20 @@ class TestDatabaseMigration(unittest.TestCase):
         self.assertEqual(all_settings['custom_key'], 'custom_value')
         self.assertEqual(all_settings['notifications_enabled'], 'false')
 
+    def test_settings_env_vars(self):
+        database.init_database(self.conn)
+        os.environ['TEST_ENV_VAR'] = 'env_value'
+        try:
+            self.assertEqual(database.get_setting('test_env_var', database_path=self.temp_db_path), 'env_value')
+
+            database.set_setting('sync_key', 'sync_val', database_path=self.temp_db_path)
+            self.assertEqual(os.environ.get('SYNC_KEY'), 'sync_val')
+            self.assertEqual(database.get_setting('sync_key', database_path=self.temp_db_path), 'sync_val')
+        finally:
+            os.environ.pop('TEST_ENV_VAR', None)
+            os.environ.pop('SYNC_KEY', None)
+            os.environ.pop('sync_key', None)
+
     def test_foreign_key_enforcement(self):
         database.init_database(self.conn)
         cur = self.conn.cursor()
