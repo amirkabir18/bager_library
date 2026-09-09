@@ -76,6 +76,32 @@ FONT_TITLE = (FONT_FAMILY, 13, "bold")
 FONT_NORMAL = (FONT_FAMILY, 10)
 FONT_BOLD = (FONT_FAMILY, 10, "bold")
 
+icons_cache: dict[str, tk.PhotoImage] = {}
+
+def get_icon(name: str) -> tk.PhotoImage | None:
+    if name in icons_cache:
+        return icons_cache[name]
+    icon_path = os.path.join(base_dir, 'assets', 'icons', 'lucide', f"{name}.png")
+    if os.path.exists(icon_path):
+        try:
+            img = tk.PhotoImage(file=icon_path)
+            icons_cache[name] = img
+            return img
+        except Exception:
+            return None
+    return None
+
+def create_icon_button(parent, text: str, icon_name: str | None = None, command=None, font=None, **kwargs) -> tk.Button:
+    btn = tk.Button(parent, text=text, font=font or FONT_NORMAL, **kwargs)
+    if command is not None:
+        btn.config(command=command)
+    if icon_name:
+        img = get_icon(icon_name)
+        if img:
+            btn.config(image=img, compound=tk.RIGHT)
+            setattr(btn, 'image', img)
+    return btn
+
 st = ttk.Style()
 st.configure(".", font=FONT_NORMAL)
 st.configure("Treeview", font=FONT_NORMAL, rowheight=30)
@@ -97,16 +123,20 @@ filter_settings = {
 }
 
 books_frame = ttk.Frame(notebook)
-notebook.add(books_frame, text="جستجوی کتاب")
+img_tab_books = get_icon('book-open')
+if img_tab_books:
+    notebook.add(books_frame, text=" جستجوی کتاب ", image=img_tab_books, compound=tk.RIGHT)
+else:
+    notebook.add(books_frame, text="جستجوی کتاب")
 
 search_bar_frame = ttk.Frame(books_frame)
 search_bar_frame.pack(fill=tk.X, padx=10, pady=10)
 search_bar_frame.columnconfigure(2, weight=1)
 
-sub_btn = tk.Button(search_bar_frame, text='جستجو', font=FONT_BOLD, width=10)
+sub_btn = create_icon_button(search_bar_frame, text=' جستجو ', icon_name='search', font=FONT_BOLD, padx=6)
 sub_btn.grid(row=0, column=0, padx=(0, 6))
 
-filter_btn = tk.Button(search_bar_frame, text='⚙ فیلترها', font=FONT_NORMAL, width=11)
+filter_btn = create_icon_button(search_bar_frame, text=' فیلترها ', icon_name='filter', font=FONT_NORMAL, padx=6)
 filter_btn.grid(row=0, column=1, padx=(0, 6))
 
 entry_serch = tk.Entry(search_bar_frame, font=FONT_NORMAL, justify='right')
@@ -139,9 +169,9 @@ def update_filter_button_indicator():
         filter_settings['sort_dir'] != 'ASC'
     )
     if is_custom:
-        filter_btn.config(text='⚙ فیلترها (فعال)', fg='#0d6efd')
+        filter_btn.config(text=' فیلترها (فعال) ', fg='#0d6efd')
     else:
-        filter_btn.config(text='⚙ فیلترها', fg='black')
+        filter_btn.config(text=' فیلترها ', fg='black')
 
 def search(event=None):
     search_value = entry_serch.get().strip()
@@ -318,13 +348,13 @@ def open_filter_popup():
         popup.destroy()
         search()
 
-    btn_apply = tk.Button(action_frame, text="اعمال فیلتر", font=FONT_BOLD, width=12, command=apply_filters)
+    btn_apply = create_icon_button(action_frame, text=" اعمال فیلتر ", icon_name='check', font=FONT_BOLD, padx=6, pady=2, command=apply_filters)
     btn_apply.pack(side=tk.RIGHT, padx=4)
 
-    btn_reset = tk.Button(action_frame, text="تنظیم مجدد", font=FONT_NORMAL, width=12, command=reset_filters)
+    btn_reset = create_icon_button(action_frame, text=" تنظیم مجدد ", icon_name='rotate-ccw', font=FONT_NORMAL, padx=6, pady=2, command=reset_filters)
     btn_reset.pack(side=tk.RIGHT, padx=4)
 
-    btn_cancel = tk.Button(action_frame, text="انصراف", font=FONT_NORMAL, width=10, command=popup.destroy)
+    btn_cancel = create_icon_button(action_frame, text=" انصراف ", icon_name='x', font=FONT_NORMAL, padx=6, pady=2, command=popup.destroy)
     btn_cancel.pack(side=tk.LEFT, padx=4)
 
 filter_btn.config(command=open_filter_popup)
@@ -338,7 +368,11 @@ def on_key_release(event):
     search_after_id = root.after(200, search)
 
 member_frame = ttk.Frame(notebook)
-notebook.add(member_frame, text="اضافه کردن کاربر")
+img_tab_member = get_icon('user-plus')
+if img_tab_member:
+    notebook.add(member_frame, text=" اضافه کردن کاربر ", image=img_tab_member, compound=tk.RIGHT)
+else:
+    notebook.add(member_frame, text="اضافه کردن کاربر")
 
 def validate_phone(phone):
     pattern = r'^09[0-9]{9}$'
@@ -398,7 +432,7 @@ tk.Label(member_frame, text="شماره تلفن:", font=FONT_NORMAL).pack(pady=
 entry_phone = tk.Entry(member_frame, width=25, font=FONT_NORMAL, justify='right')
 entry_phone.pack(pady=5)
 
-btn_register = tk.Button(member_frame, text="ثبت اطلاعات", command=insert_member_data, font=FONT_BOLD, width=15, height=1)
+btn_register = create_icon_button(member_frame, text=" ثبت اطلاعات ", icon_name='check', command=insert_member_data, font=FONT_BOLD, padx=12, pady=4)
 btn_register.pack(pady=10)
 
 member_conn = sqlite3.connect(db_p)
@@ -602,11 +636,15 @@ def on_double_click(event):
     rb2.pack(side=tk.RIGHT, padx=20)
     rb3.pack(side=tk.RIGHT, padx=20)
 
-    sub_button = tk.Button(new_panel, text="ثبت امانت", font=FONT_BOLD, command=insert_data)
-    sub_button.pack(pady=3)
+    sub_button = create_icon_button(new_panel, text=" ثبت امانت ", icon_name='arrow-right-left', font=FONT_BOLD, padx=12, pady=4, command=insert_data)
+    sub_button.pack(pady=10)
 
 book_frame = ttk.Frame(notebook)
-notebook.add(book_frame, text="اضافه کردن کتاب")
+img_tab_book_add = get_icon('book-plus')
+if img_tab_book_add:
+    notebook.add(book_frame, text=" اضافه کردن کتاب ", image=img_tab_book_add, compound=tk.RIGHT)
+else:
+    notebook.add(book_frame, text="اضافه کردن کتاب")
 
 title_label_book = tk.Label(book_frame, text="ثبت کتاب جدید", font=FONT_TITLE)
 title_label_book.pack(pady=10)
@@ -655,11 +693,15 @@ def insert_book_data():
     except sqlite3.Error as e:
         messagebox.showerror("خطا", f"خطا در پایگاه داده: {e}")
 
-btn_register_book = tk.Button(book_frame, text="ثبت اطلاعات", command=insert_book_data, font=FONT_BOLD, width=15, height=1)
+btn_register_book = create_icon_button(book_frame, text=" ثبت اطلاعات ", icon_name='check', command=insert_book_data, font=FONT_BOLD, padx=12, pady=4)
 btn_register_book.pack(pady=10)
 
 tabel_frame = tk.Frame(notebook)
-notebook.add(tabel_frame, text="جدول امانات")
+img_tab_loans = get_icon('bookmark')
+if img_tab_loans:
+    notebook.add(tabel_frame, text=" جدول امانات ", image=img_tab_loans, compound=tk.RIGHT)
+else:
+    notebook.add(tabel_frame, text="جدول امانات")
 
 scrollbar_2 = tk.Scrollbar(tabel_frame)
 scrollbar_2.pack(side=tk.LEFT, fill=tk.Y)
