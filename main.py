@@ -91,23 +91,18 @@ notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 books_frame = ttk.Frame(notebook)
 notebook.add(books_frame, text="جستجوی کتاب")
 
-label_1 = tk.Label(books_frame, text="فیلد جستجو را انتخاب کنید:", font=FONT_TITLE)
-label_1.pack(pady=8)
+search_bar_frame = ttk.Frame(books_frame)
+search_bar_frame.pack(fill=tk.X, padx=10, pady=10)
+search_bar_frame.columnconfigure(1, weight=1)
 
-entry_serch = tk.Entry(books_frame, font=FONT_NORMAL, justify='right')
-entry_serch.pack(pady=5)
+sub_btn = tk.Button(search_bar_frame, text='جستجو', font=FONT_BOLD, width=12)
+sub_btn.grid(row=0, column=0, padx=(0, 8))
 
-search_col_order = [c for c in ['title', 'author', 'isbn', 'id'] if c in columns] + [c for c in columns if c not in ['title', 'author', 'isbn', 'id']]
-column_display_names: list[str] = [tr(col) for col in search_col_order]
-combo_column = ttk.Combobox(books_frame, state="readonly", values=column_display_names, font=FONT_NORMAL, justify='right')
-if 'title' in columns:
-    combo_column.set(tr('title'))
-elif column_display_names:
-    combo_column.current(0)
-combo_column.pack(pady=5)
+entry_serch = tk.Entry(search_bar_frame, font=FONT_NORMAL, justify='right')
+entry_serch.grid(row=0, column=1, sticky="ew")
 
 tree_frame = tk.Frame(books_frame)
-tree_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
 
 scrollbar = tk.Scrollbar(tree_frame)
 scrollbar.pack(side=tk.LEFT, fill=tk.Y)
@@ -125,14 +120,10 @@ tree.pack(side=tk.RIGHT, fill="both", expand=True, padx=10, pady=10)
 conn.close()
 
 def search(event=None):
-    selected_display = combo_column.get()
     search_value = entry_serch.get().strip()
 
     tree.delete(*tree.get_children())
-    
-    display_to_col = {TRANSLATIONS.get(c, c): c for c in columns}
-    column = display_to_col.get(selected_display, selected_display)
-    
+
     try:
         temp_conn = sqlite3.connect(db_p)
         temp_cursor = temp_conn.cursor()
@@ -141,13 +132,11 @@ def search(event=None):
             query = f"SELECT * FROM {tabel_name}"
             temp_cursor.execute(query)
         else:
-            if not column:
-                messagebox.showerror("خطا", "لطفاً ابتدا فیلد مورد نظر را انتخاب کنید")
-                temp_conn.close()
-                return
-            query = f"SELECT * FROM {tabel_name} WHERE {column} LIKE ?"
-            temp_cursor.execute(query, (f"%{search_value}%",))
-            
+            where_clauses = [f"{col} LIKE ?" for col in columns]
+            query = f"SELECT * FROM {tabel_name} WHERE " + " OR ".join(where_clauses)
+            params = tuple(f"%{search_value}%" for _ in columns)
+            temp_cursor.execute(query, params)
+
         results = temp_cursor.fetchall()
         temp_conn.close()
 
@@ -156,9 +145,11 @@ def search(event=None):
                 tree.insert("", "end", values=row)
         else:
             tree.insert("", "end", values=("❌ نتیجه‌ای یافت نشد!",) + ("",) * (len(columns)-1))
-        
+
     except Exception as e:
         messagebox.showerror("خطا", f"خطا در جستجو: {str(e)}")
+
+sub_btn.config(command=search)
 
 search_after_id = None
 
@@ -167,9 +158,6 @@ def on_key_release(event):
     if search_after_id is not None:
         root.after_cancel(search_after_id)
     search_after_id = root.after(200, search)
-    
-sub_btn = tk.Button(books_frame, text='جستجو', font=FONT_BOLD, width=50, command=search)
-sub_btn.pack(pady=12)
 
 member_frame = ttk.Frame(notebook)
 notebook.add(member_frame, text="اضافه کردن کاربر")
@@ -557,6 +545,7 @@ def gregorian():
 
 root.bind('<Escape>',lambda event:root.destroy())
 entry_serch.bind('<KeyRelease>', on_key_release)
+entry_serch.bind('<Return>', search)
 tree.bind("<Double-Button-1>", on_double_click)
 
 new_conn.close()
