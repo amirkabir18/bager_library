@@ -5,6 +5,7 @@ import jdatetime
 import datetime
 
 db_p = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(__file__)), 'bager_library.db')
+icon_p = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(__file__)), 'logo.ico')
 
 conn = sqlite3.connect(db_p)
 cursor = conn.cursor()
@@ -17,6 +18,11 @@ columns = [row[1] for row in cursor.fetchall()]
 
 root = tk.Tk()
 root.title("کتابخانه باقر العلوم")
+if os.path.exists(icon_p):
+    try:
+        root.iconbitmap(icon_p)
+    except Exception:
+        pass
 st = ttk.Style()
 
 notebook = ttk.Notebook(root)
@@ -206,6 +212,11 @@ def on_double_click(event):
     new_panel = tk.Toplevel(root)
     new_panel.geometry("600x600")
     new_panel.title("امانت دادن")
+    if os.path.exists(icon_p):
+        try:
+            new_panel.iconbitmap(icon_p)
+        except Exception:
+            pass
 
     def toggle_state():
         if var.get() == 1:
