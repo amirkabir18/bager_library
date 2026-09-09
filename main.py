@@ -23,60 +23,17 @@ def load_fonts():
 
 load_fonts()
 
-TRANSLATIONS: dict[str, str] = {
-    'id': 'شناسه',
-    'title': 'عنوان کتاب',
-    'author': 'نویسنده',
-    'isbn': 'شابک',
-    'member_id': 'نام کاربر',
-    'phone_number': 'شماره تلفن',
-    'borrow_date': 'تاریخ امانت',
-    'return_date': 'تاریخ بازگشت',
-    'borrowed': 'وضعیت امانت',
-    'book_id': 'نام کتاب',
-    'member_name': 'نام کاربر',
-}
-
-def tr(key: object) -> str:
-    s = str(key) if key is not None else ""
-    return TRANSLATIONS.get(s, s)
-
-def rtl_display_order(cols: list[str], preferred_order: list[str]) -> list[str]:
-    ordered = [c for c in preferred_order if c in cols] + [c for c in cols if c not in preferred_order]
-    return list(reversed(ordered))
-
-def init_database(connection: sqlite3.Connection):
-    cur = connection.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS books (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            author VARCHAR(255),
-            isbn VARCHAR(255) UNIQUE,
-            title VARCHAR(255)
-        )
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS members (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            member_id VARCHAR(255) UNIQUE NOT NULL,
-            phone_number VARCHAR(255) NOT NULL
-        )
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS loans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            borrow_date DATE NOT NULL,
-            return_date DATE,
-            borrowed BOOLEAN DEFAULT 1,
-            book_id VARCHAR(255),
-            member_name VARCHAR(255)
-        )
-    """)
-    try:
-        cur.execute("ALTER TABLE books DROP COLUMN location")
-    except Exception:
-        pass
-    connection.commit()
+from database import (
+    db_p,
+    init_database,
+    get_db_connection,
+    get_setting,
+    set_setting,
+    get_all_settings,
+    TRANSLATIONS,
+    tr,
+    rtl_display_order,
+)
 
 conn = sqlite3.connect(db_p)
 init_database(conn)
