@@ -1,11 +1,27 @@
 import sqlite3,os,sys,re
 import tkinter as tk
 from tkinter import ttk,messagebox
+import tkinter.font as tkfont
 import jdatetime
 import datetime
 
-db_p = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(__file__)), 'bager_library.db')
-icon_p = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(__file__)), 'logo.ico')
+base_dir = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
+db_p = os.path.join(base_dir, 'bager_library.db')
+icon_p = os.path.join(base_dir, 'logo.ico')
+fonts_dir = os.path.join(base_dir, 'assets', 'fonts', 'iransans', 'ttf')
+
+def load_fonts():
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            import glob
+            if os.path.exists(fonts_dir):
+                for font_file in glob.glob(os.path.join(fonts_dir, "*.ttf")):
+                    ctypes.windll.gdi32.AddFontResourceExW(os.path.abspath(font_file), 0x10, 0)
+        except Exception:
+            pass
+
+load_fonts()
 
 TRANSLATIONS: dict[str, str] = {
     'id': 'شناسه',
@@ -46,7 +62,28 @@ if os.path.exists(icon_p):
         root.iconbitmap(icon_p)
     except Exception:
         pass
+
+available_families = tkfont.families(root)
+FONT_FAMILY = "IRANSansWeb(FaNum)" if "IRANSansWeb(FaNum)" in available_families else "Tahoma"
+
+for font_name in ("TkDefaultFont", "TkTextFont", "TkFixedFont", "TkMenuFont", "TkHeadingFont", "TkCaptionFont", "TkSmallCaptionFont", "TkTooltipFont"):
+    try:
+        tkfont.nametofont(font_name).configure(family=FONT_FAMILY, size=10)
+    except Exception:
+        pass
+
+FONT_TITLE = (FONT_FAMILY, 13, "bold")
+FONT_NORMAL = (FONT_FAMILY, 10)
+FONT_BOLD = (FONT_FAMILY, 10, "bold")
+
 st = ttk.Style()
+st.configure(".", font=FONT_NORMAL)
+st.configure("Treeview", font=FONT_NORMAL, rowheight=30)
+st.configure("Treeview.Heading", font=FONT_BOLD)
+st.configure("TNotebook.Tab", font=FONT_NORMAL)
+st.configure("TCombobox", font=FONT_NORMAL)
+st.configure("TRadiobutton", font=FONT_NORMAL)
+st.configure("Modern.TRadiobutton", font=FONT_NORMAL)
 
 notebook = ttk.Notebook(root)
 notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -54,15 +91,15 @@ notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 books_frame = ttk.Frame(notebook)
 notebook.add(books_frame, text="جستجوی کتاب")
 
-label_1 = tk.Label(books_frame, text="فیلد جستجو را انتخاب کنید:", font=("B Titr", 14, "bold"))
+label_1 = tk.Label(books_frame, text="فیلد جستجو را انتخاب کنید:", font=FONT_TITLE)
 label_1.pack(pady=8)
 
-entry_serch = tk.Entry(books_frame, font=('calibre', 10, 'normal'), justify='right')
+entry_serch = tk.Entry(books_frame, font=FONT_NORMAL, justify='right')
 entry_serch.pack(pady=5)
 
 search_col_order = [c for c in ['title', 'author', 'isbn', 'id'] if c in columns] + [c for c in columns if c not in ['title', 'author', 'isbn', 'id']]
 column_display_names: list[str] = [tr(col) for col in search_col_order]
-combo_column = ttk.Combobox(books_frame, state="readonly", values=column_display_names, justify='right')
+combo_column = ttk.Combobox(books_frame, state="readonly", values=column_display_names, font=FONT_NORMAL, justify='right')
 if 'title' in columns:
     combo_column.set(tr('title'))
 elif column_display_names:
@@ -85,7 +122,6 @@ cursor.execute(f"SELECT {', '.join(columns)} FROM {tabel_name}")
 rows = cursor.fetchall()
 tree.pack(side=tk.RIGHT, fill="both", expand=True, padx=10, pady=10)
 
-st.configure("Treeview", font=(None, 13), rowheight=30)
 conn.close()
 
 def search(event=None):
@@ -132,7 +168,7 @@ def on_key_release(event):
         root.after_cancel(search_after_id)
     search_after_id = root.after(200, search)
     
-sub_btn = tk.Button(books_frame, text='جستجو', font=("B Nazanin", 11, "bold"), width=50, command=search)
+sub_btn = tk.Button(books_frame, text='جستجو', font=FONT_BOLD, width=50, command=search)
 sub_btn.pack(pady=12)
 
 member_frame = ttk.Frame(notebook)
@@ -185,18 +221,18 @@ def insert_member_data():
     except sqlite3.Error as e:
         messagebox.showerror("خطا", f"خطا در پایگاه داده: {e}")
 
-title_label = tk.Label(member_frame, text="ثبت عضو جدید", font=("B Titr", 14, "bold"))
+title_label = tk.Label(member_frame, text="ثبت عضو جدید", font=FONT_TITLE)
 title_label.pack(pady=10)
 
-tk.Label(member_frame, text="نام کاربر:", font=("B Nazanin", 11)).pack(pady=5)
-entry_member_id = tk.Entry(member_frame, width=25, font=("B Nazanin", 11), justify='right')
+tk.Label(member_frame, text="نام کاربر:", font=FONT_NORMAL).pack(pady=5)
+entry_member_id = tk.Entry(member_frame, width=25, font=FONT_NORMAL, justify='right')
 entry_member_id.pack(pady=5)
 
-tk.Label(member_frame, text="شماره تلفن:", font=("B Nazanin", 11)).pack(pady=5)
-entry_phone = tk.Entry(member_frame, width=25, font=("B Nazanin", 11), justify='right')
+tk.Label(member_frame, text="شماره تلفن:", font=FONT_NORMAL).pack(pady=5)
+entry_phone = tk.Entry(member_frame, width=25, font=FONT_NORMAL, justify='right')
 entry_phone.pack(pady=5)
 
-btn_register = tk.Button(member_frame, text="ثبت اطلاعات", command=insert_member_data, font=("B Nazanin", 11, "bold"), width=15, height=1)
+btn_register = tk.Button(member_frame, text="ثبت اطلاعات", command=insert_member_data, font=FONT_BOLD, width=15, height=1)
 btn_register.pack(pady=10)
 
 member_conn = sqlite3.connect(db_p)
@@ -332,8 +368,8 @@ def on_double_click(event):
         new_panel.destroy()
     new_panel.protocol("WM_DELETE_WINDOW", on_panel_close)
 
-    tk.Label(new_panel, text="نام کاربر:", font=("B Nazanin", 11)).pack(pady=3)
-    member_entry = tk.Entry(new_panel, width=50, justify='right')
+    tk.Label(new_panel, text="نام کاربر:", font=FONT_NORMAL).pack(pady=3)
+    member_entry = tk.Entry(new_panel, width=50, font=FONT_NORMAL, justify='right')
     member_entry.pack(pady=3)
 
     temp_conn = sqlite3.connect(db_p)
@@ -342,7 +378,7 @@ def on_double_click(event):
     members_data = [row[0] for row in temp_cursor.fetchall()]
     temp_conn.close()
 
-    listbox = tk.Listbox(new_panel, width=50, justify='right')
+    listbox = tk.Listbox(new_panel, width=50, font=FONT_NORMAL, justify='right')
     listbox.pack(pady=3)
 
     def search_member(e):
@@ -360,22 +396,22 @@ def on_double_click(event):
     member_entry.bind('<KeyRelease>', search_member)
     listbox.bind('<Double-Button-1>', select_member)
     
-    tk.Label(new_panel, text="عنوان کتاب:", font=("B Nazanin", 11)).pack(pady=3)
-    book_entry = tk.Entry(new_panel, width=50, justify='right')
+    tk.Label(new_panel, text="عنوان کتاب:", font=FONT_NORMAL).pack(pady=3)
+    book_entry = tk.Entry(new_panel, width=50, font=FONT_NORMAL, justify='right')
     book_entry.pack(pady=3)
 
     book_entry.insert(0, title_value)
     book_entry.config(state="readonly")
 
-    tk.Label(new_panel, text="تاریخ امانت کتاب:", font=("B Nazanin", 11)).pack(pady=3)
-    borrow_entry = tk.Entry(new_panel, width=50, justify='right')
+    tk.Label(new_panel, text="تاریخ امانت کتاب:", font=FONT_NORMAL).pack(pady=3)
+    borrow_entry = tk.Entry(new_panel, width=50, font=FONT_NORMAL, justify='right')
     borrow_entry.pack(pady=3)
 
-    toggle = tk.Checkbutton(new_panel, text="ثبت خودکار تاریخ", variable=var, command=toggle_state, font=("B Nazanin", 11), indicatoron=True, width=15, height=2)
+    toggle = tk.Checkbutton(new_panel, text="ثبت خودکار تاریخ", variable=var, command=toggle_state, font=FONT_NORMAL, indicatoron=True, width=15, height=2)
     toggle.pack(pady=3)
 
-    tk.Label(new_panel, text="تاریخ بازگشت کتاب:", font=("B Nazanin", 11)).pack(pady=3)
-    return_entry = tk.Entry(new_panel, width=50, justify='right')
+    tk.Label(new_panel, text="تاریخ بازگشت کتاب:", font=FONT_NORMAL).pack(pady=3)
+    return_entry = tk.Entry(new_panel, width=50, font=FONT_NORMAL, justify='right')
     return_entry.pack(pady=3)
 
     selected = tk.StringVar(value="none")
@@ -400,21 +436,21 @@ def on_double_click(event):
     rb2.pack(side=tk.RIGHT, padx=20)
     rb3.pack(side=tk.RIGHT, padx=20)
 
-    sub_button = tk.Button(new_panel, text="ثبت امانت", font=("B Nazanin", 11, "bold"), command=insert_data)
+    sub_button = tk.Button(new_panel, text="ثبت امانت", font=FONT_BOLD, command=insert_data)
     sub_button.pack(pady=3)
 
 book_frame = ttk.Frame(notebook)
 notebook.add(book_frame, text="اضافه کردن کتاب")
 
-title_label_book = tk.Label(book_frame, text="ثبت کتاب جدید", font=("B Titr", 14, "bold"))
+title_label_book = tk.Label(book_frame, text="ثبت کتاب جدید", font=FONT_TITLE)
 title_label_book.pack(pady=10)
 
 form_cols = [c for c in ['id', 'title', 'author', 'isbn'] if c in columns] + [c for c in columns if c not in ['id', 'title', 'author', 'isbn']]
 book_entries = {}
 for col in form_cols:
     col_fa = tr(col)
-    tk.Label(book_frame, text=f"{col_fa}:", font=("B Nazanin", 11)).pack(pady=5)
-    ent = tk.Entry(book_frame, width=25, font=("B Nazanin", 11), justify='right')
+    tk.Label(book_frame, text=f"{col_fa}:", font=FONT_NORMAL).pack(pady=5)
+    ent = tk.Entry(book_frame, width=25, font=FONT_NORMAL, justify='right')
     ent.pack(pady=5)
     book_entries[col] = ent
 
@@ -453,7 +489,7 @@ def insert_book_data():
     except sqlite3.Error as e:
         messagebox.showerror("خطا", f"خطا در پایگاه داده: {e}")
 
-btn_register_book = tk.Button(book_frame, text="ثبت اطلاعات", command=insert_book_data, font=("B Nazanin", 11, "bold"), width=15, height=1)
+btn_register_book = tk.Button(book_frame, text="ثبت اطلاعات", command=insert_book_data, font=FONT_BOLD, width=15, height=1)
 btn_register_book.pack(pady=10)
 
 tabel_frame = tk.Frame(notebook)
@@ -478,7 +514,6 @@ for col in loan_column:
 loans_tree['displaycolumns'] = rtl_display_order(loan_column, ['id', 'member_name', 'book_id', 'borrow_date', 'return_date', 'borrowed'])
 loans_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-st.configure("Treeview", font=(None, 13), rowheight=30)
 new_cursor.execute(f"SELECT * FROM `{new_tabel_name}` ORDER BY julianday(`return_date`) - julianday(`borrow_date`) ASC")
 loan_rows = new_cursor.fetchall()
 
