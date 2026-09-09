@@ -26,6 +26,7 @@ from auth import (
     authenticate_with_password,
     authenticate,
     get_network_status,
+    get_telegram_api_url,
     TelegramBotClient,
     OTPService,
     OTP_EXPIRY_SECONDS,
@@ -346,6 +347,26 @@ class TestAuthWithDatabase(unittest.TestCase):
 
         ok, _, user = authenticate("unified_user", "mySecurePassword", mode="auto", database_path=self.db_path)
         self.assertTrue(ok)
+
+    def test_relay_configuration_and_headers(self):
+        from database import set_setting
+
+        set_setting('cloudflare_relay_url', 'https://cf-relay.workers.dev', database_path=self.db_path)
+        set_setting('telegram_relay_secret', 'secret123', database_path=self.db_path)
+
+        url = get_telegram_api_url(database_path=self.db_path)
+        self.assertEqual(url, 'https://cf-relay.workers.dev')
+
+        client = TelegramBotClient(token='123:TOKEN', database_path=self.db_path)
+        self.assertEqual(client.api_url, 'https://cf-relay.workers.dev')
+        self.assertEqual(client.relay_secret, 'secret123')
+        self.assertEqual(client._build_endpoint('sendMessage'), 'https://cf-relay.workers.dev/bot123:TOKEN/sendMessage')
+
+        # Vercel relay priority test
+        set_setting('vercel_relay_url', 'https://vercel-relay.vercel.app', database_path=self.db_path)
+        # telegram_relay_url takes highest precedence
+        set_setting('telegram_relay_url', 'https://custom-relay.example.com/', database_path=self.db_path)
+        self.assertEqual(get_telegram_api_url(database_path=self.db_path), 'https://custom-relay.example.com')
 
 
 if __name__ == "__main__":

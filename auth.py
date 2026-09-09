@@ -282,17 +282,43 @@ def is_telegram_reachable(
         return False
 
 
+def get_telegram_api_url(database_path: str | None = None) -> str:
+    url = (
+        get_setting('telegram_relay_url', database_path=database_path)
+        or get_setting('cloudflare_relay_url', database_path=database_path)
+        or get_setting('vercel_relay_url', database_path=database_path)
+        or get_setting('telegram_api_url', default='https://api.telegram.org', database_path=database_path)
+    ).strip()
+
+    if not url:
+        url = 'https://api.telegram.org'
+
+    if not url.startswith('http://') and not url.startswith('https://'):
+        url = f"https://{url}"
+
+    return url.rstrip('/')
+
+
 def get_network_status(database_path: str | None = None) -> dict[str, Any]:
     proxy = get_setting('telegram_proxy', default='', database_path=database_path) or None
-    api_url = get_setting('telegram_api_url', default='https://api.telegram.org', database_path=database_path)
+    api_url = get_telegram_api_url(database_path=database_path)
     reachable = is_telegram_reachable(timeout=2.0, proxy=proxy, api_url=api_url)
+    is_relay = not api_url.startswith("https://api.telegram.org")
+
+    msg = "اتصال به تلگرام برقرار است."
+    if reachable and is_relay:
+        msg = f"اتصال به تلگرام از طریق رله برقرار است ({api_url})."
+    elif not reachable:
+        msg = "عدم دسترسی به تلگرام (حالت آفلاین فعال است)."
 
     return {
         'online': reachable,
         'telegram_reachable': reachable,
         'checked_at': datetime.now(timezone.utc).isoformat(),
         'mode': 'online' if reachable else 'offline',
-        'message': 'اتصال به تلگرام برقرار است.' if reachable else 'عدم دسترسی به تلگرام (حالت آفلاین فعال است).'
+        'is_relay': is_relay,
+        'relay_url': api_url if is_relay else None,
+        'message': msg
     }
 
 
@@ -302,12 +328,14 @@ class TelegramBotClient:
         token: str | None = None,
         database_path: str | None = None,
         proxy: str | None = None,
-        api_url: str | None = None
+        api_url: str | None = None,
+        relay_secret: str | None = None
     ):
         self.database_path = database_path
         self._explicit_token = token
         self._proxy = proxy
         self._api_url = api_url
+        self._relay_secret = relay_secret
 
     @property
     def token(self) -> str:
@@ -318,8 +346,11 @@ class TelegramBotClient:
     @property
     def api_url(self) -> str:
         if self._api_url:
-            return self._api_url.rstrip('/')
-        return get_setting('telegram_api_url', default='https://api.telegram.org', database_path=self.database_path).rstrip('/')
+            url = self._api_url
+            if not url.startswith('http://') and not url.startswith('https://'):
+                url = f"https://{url}"
+            return url.rstrip('/')
+        return get_telegram_api_url(database_path=self.database_path)
 
     @property
     def proxy(self) -> str | None:
@@ -327,13 +358,31 @@ class TelegramBotClient:
             return self._proxy
         return get_setting('telegram_proxy', default='', database_path=self.database_path).strip() or None
 
+    @property
+    def relay_secret(self) -> str | None:
+        if self._relay_secret:
+            return self._relay_secret
+        return get_setting('telegram_relay_secret', default='', database_path=self.database_path).strip() or None
+
+    def _build_endpoint(self, method: str) -> str:
+        base = self.api_url
+        token = self.token
+        if base.endswith(f"/bot{token}"):
+            return f"{base}/{method}"
+        if base.endswith("/bot"):
+            return f"{base}{token}/{method}"
+        return f"{base}/bot{token}/{method}"
+
     def _make_request(self, method: str, data: dict[str, Any] | None = None, timeout: float = 10.0) -> dict[str, Any]:
         curr_token = self.token
         if not curr_token:
             raise ValueError("توکن ربات تلگرام تنظیم نشده است.")
 
-        endpoint = f"{self.api_url}/bot{curr_token}/{method}"
+        endpoint = self._build_endpoint(method)
         headers = {'User-Agent': 'BagerLibrary/1.0', 'Content-Type': 'application/json'}
+        if self.relay_secret:
+            headers['X-Relay-Secret'] = self.relay_secret
+
         post_bytes = json.dumps(data).encode('utf-8') if data is not None else None
         req = urllib.request.Request(endpoint, data=post_bytes, headers=headers)
 

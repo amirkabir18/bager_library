@@ -43,6 +43,8 @@ TRANSLATIONS: dict[str, str] = {
     'username': 'نام کاربری',
     'role': 'نقش',
     'telegram_chat_id': 'شناسه تلگرام',
+    'telegram_relay_url': 'آدرس رله تلگرام',
+    'telegram_relay_secret': 'کلید امنیتی رله',
     'is_active': 'وضعیت فعال',
     'created_at': 'تاریخ ثبت',
     'password_hash': 'هش رمز عبور',
