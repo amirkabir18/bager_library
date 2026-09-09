@@ -25,6 +25,10 @@ def tr(key: object) -> str:
     s = str(key) if key is not None else ""
     return TRANSLATIONS.get(s, s)
 
+def rtl_display_order(cols: list[str], preferred_order: list[str]) -> list[str]:
+    ordered = [c for c in preferred_order if c in cols] + [c for c in cols if c not in preferred_order]
+    return list(reversed(ordered))
+
 conn = sqlite3.connect(db_p)
 cursor = conn.cursor()
 
@@ -53,13 +57,14 @@ notebook.add(books_frame, text="جستجوی کتاب")
 label_1 = tk.Label(books_frame, text="فیلد جستجو را انتخاب کنید:", font=("B Titr", 14, "bold"))
 label_1.pack(pady=8)
 
-entry_serch=tk.Entry(books_frame, font=('calibre',10,'normal'))
+entry_serch = tk.Entry(books_frame, font=('calibre', 10, 'normal'), justify='right')
 entry_serch.pack(pady=5)
 
-column_display_names: list[str] = [tr(col) for col in columns]
-combo_column = ttk.Combobox(books_frame, state="readonly", values=column_display_names)
+search_col_order = [c for c in ['title', 'author', 'isbn', 'id'] if c in columns] + [c for c in columns if c not in ['title', 'author', 'isbn', 'id']]
+column_display_names: list[str] = [tr(col) for col in search_col_order]
+combo_column = ttk.Combobox(books_frame, state="readonly", values=column_display_names, justify='right')
 if 'title' in columns:
-    combo_column.set(TRANSLATIONS['title'])
+    combo_column.set(tr('title'))
 elif column_display_names:
     combo_column.current(0)
 combo_column.pack(pady=5)
@@ -68,16 +73,17 @@ tree_frame = tk.Frame(books_frame)
 tree_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
 
 scrollbar = tk.Scrollbar(tree_frame)
-scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+scrollbar.pack(side=tk.LEFT, fill=tk.Y)
 
-tree = ttk.Treeview(tree_frame,yscrollcommand=scrollbar.set, columns=columns, show="headings", height=15) 
+tree = ttk.Treeview(tree_frame, yscrollcommand=scrollbar.set, columns=columns, show="headings", height=15) 
 scrollbar.config(command=tree.yview)
 for col in columns: 
-    tree.heading(col, text=tr(col))
+    tree.heading(col, text=tr(col), anchor=tk.CENTER)
     tree.column(col, anchor=tk.CENTER)
+tree['displaycolumns'] = rtl_display_order(columns, ['id', 'title', 'author', 'isbn'])
 cursor.execute(f"SELECT {', '.join(columns)} FROM {tabel_name}")
 rows = cursor.fetchall()
-tree.pack(fill="both", expand=True, padx=10, pady=10)
+tree.pack(side=tk.RIGHT, fill="both", expand=True, padx=10, pady=10)
 
 st.configure("Treeview", font=(None, 13), rowheight=30)
 conn.close()
@@ -179,18 +185,18 @@ def insert_member_data():
     except sqlite3.Error as e:
         messagebox.showerror("خطا", f"خطا در پایگاه داده: {e}")
 
-title_label = tk.Label(member_frame,text="ثبت عضو جدید",font=("B Titr", 14, "bold"))
+title_label = tk.Label(member_frame, text="ثبت عضو جدید", font=("B Titr", 14, "bold"))
 title_label.pack(pady=10)
 
 tk.Label(member_frame, text="نام کاربر:", font=("B Nazanin", 11)).pack(pady=5)
-entry_member_id = tk.Entry(member_frame, width=25, font=("B Nazanin", 11))
+entry_member_id = tk.Entry(member_frame, width=25, font=("B Nazanin", 11), justify='right')
 entry_member_id.pack(pady=5)
 
 tk.Label(member_frame, text="شماره تلفن:", font=("B Nazanin", 11)).pack(pady=5)
-entry_phone = tk.Entry(member_frame, width=25, font=("B Nazanin", 11))
+entry_phone = tk.Entry(member_frame, width=25, font=("B Nazanin", 11), justify='right')
 entry_phone.pack(pady=5)
 
-btn_register = tk.Button(member_frame,text="ثبت اطلاعات",command=insert_member_data,font=("B Nazanin", 11, "bold"),width=15,height=1)
+btn_register = tk.Button(member_frame, text="ثبت اطلاعات", command=insert_member_data, font=("B Nazanin", 11, "bold"), width=15, height=1)
 btn_register.pack(pady=10)
 
 member_conn = sqlite3.connect(db_p)
@@ -204,16 +210,17 @@ member_tree_frame = ttk.Frame(member_frame)
 member_tree_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
 
 member_scrollbar = tk.Scrollbar(member_tree_frame)
-member_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+member_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
 
-member_tree = ttk.Treeview(member_tree_frame,yscrollcommand=member_scrollbar.set, columns=member_column, show="headings", height=15) 
+member_tree = ttk.Treeview(member_tree_frame, yscrollcommand=member_scrollbar.set, columns=member_column, show="headings", height=15) 
 member_scrollbar.config(command=member_tree.yview)
 for col in member_column: 
-    member_tree.heading(col, text=tr(col))
+    member_tree.heading(col, text=tr(col), anchor=tk.CENTER)
     member_tree.column(col, anchor=tk.CENTER)
+member_tree['displaycolumns'] = rtl_display_order(member_column, ['id', 'member_id', 'phone_number'])
 member_cursor.execute(f"SELECT {', '.join(member_column)} FROM {member_tabel_name}")
 member_row = member_cursor.fetchall()
-member_tree.pack(fill="both", expand=True, padx=10, pady=10)
+member_tree.pack(side=tk.RIGHT, fill="both", expand=True, padx=10, pady=10)
 for row in member_row:
     member_tree.insert("",tk.END, values=row)
 
@@ -326,7 +333,7 @@ def on_double_click(event):
     new_panel.protocol("WM_DELETE_WINDOW", on_panel_close)
 
     tk.Label(new_panel, text="نام کاربر:", font=("B Nazanin", 11)).pack(pady=3)
-    member_entry = tk.Entry(new_panel, width=50)
+    member_entry = tk.Entry(new_panel, width=50, justify='right')
     member_entry.pack(pady=3)
 
     temp_conn = sqlite3.connect(db_p)
@@ -335,7 +342,7 @@ def on_double_click(event):
     members_data = [row[0] for row in temp_cursor.fetchall()]
     temp_conn.close()
 
-    listbox = tk.Listbox(new_panel, width=50)
+    listbox = tk.Listbox(new_panel, width=50, justify='right')
     listbox.pack(pady=3)
 
     def search_member(e):
@@ -354,21 +361,21 @@ def on_double_click(event):
     listbox.bind('<Double-Button-1>', select_member)
     
     tk.Label(new_panel, text="عنوان کتاب:", font=("B Nazanin", 11)).pack(pady=3)
-    book_entry = tk.Entry(new_panel, width=50)
+    book_entry = tk.Entry(new_panel, width=50, justify='right')
     book_entry.pack(pady=3)
 
     book_entry.insert(0, title_value)
     book_entry.config(state="readonly")
 
     tk.Label(new_panel, text="تاریخ امانت کتاب:", font=("B Nazanin", 11)).pack(pady=3)
-    borrow_entry = tk.Entry(new_panel, width=50)
+    borrow_entry = tk.Entry(new_panel, width=50, justify='right')
     borrow_entry.pack(pady=3)
 
     toggle = tk.Checkbutton(new_panel, text="ثبت خودکار تاریخ", variable=var, command=toggle_state, font=("B Nazanin", 11), indicatoron=True, width=15, height=2)
     toggle.pack(pady=3)
 
     tk.Label(new_panel, text="تاریخ بازگشت کتاب:", font=("B Nazanin", 11)).pack(pady=3)
-    return_entry = tk.Entry(new_panel, width=50)
+    return_entry = tk.Entry(new_panel, width=50, justify='right')
     return_entry.pack(pady=3)
 
     selected = tk.StringVar(value="none")
@@ -387,11 +394,11 @@ def on_double_click(event):
     btn_frame.pack(pady=10)
 
     rb1 = ttk.Radiobutton(btn_frame, text="10 روز", variable=selected, value="option1", command=on_select, style="Modern.TRadiobutton")
-    rb2 = ttk.Radiobutton(btn_frame, text="20 روز", variable=selected, value="option2", command=on_select,style="Modern.TRadiobutton")
-    rb3 = ttk.Radiobutton(btn_frame, text="30 روز", variable=selected, value="option3", command=on_select,style="Modern.TRadiobutton")
-    rb1.pack(side=tk.LEFT, padx=20)
-    rb2.pack(side=tk.LEFT, padx=20)
-    rb3.pack(side=tk.LEFT, padx=20)
+    rb2 = ttk.Radiobutton(btn_frame, text="20 روز", variable=selected, value="option2", command=on_select, style="Modern.TRadiobutton")
+    rb3 = ttk.Radiobutton(btn_frame, text="30 روز", variable=selected, value="option3", command=on_select, style="Modern.TRadiobutton")
+    rb1.pack(side=tk.RIGHT, padx=20)
+    rb2.pack(side=tk.RIGHT, padx=20)
+    rb3.pack(side=tk.RIGHT, padx=20)
 
     sub_button = tk.Button(new_panel, text="ثبت امانت", font=("B Nazanin", 11, "bold"), command=insert_data)
     sub_button.pack(pady=3)
@@ -402,11 +409,12 @@ notebook.add(book_frame, text="اضافه کردن کتاب")
 title_label_book = tk.Label(book_frame, text="ثبت کتاب جدید", font=("B Titr", 14, "bold"))
 title_label_book.pack(pady=10)
 
+form_cols = [c for c in ['id', 'title', 'author', 'isbn'] if c in columns] + [c for c in columns if c not in ['id', 'title', 'author', 'isbn']]
 book_entries = {}
-for col in columns:
+for col in form_cols:
     col_fa = tr(col)
     tk.Label(book_frame, text=f"{col_fa}:", font=("B Nazanin", 11)).pack(pady=5)
-    ent = tk.Entry(book_frame, width=25, font=("B Nazanin", 11))
+    ent = tk.Entry(book_frame, width=25, font=("B Nazanin", 11), justify='right')
     ent.pack(pady=5)
     book_entries[col] = ent
 
@@ -452,7 +460,7 @@ tabel_frame = tk.Frame(notebook)
 notebook.add(tabel_frame, text="جدول امانات")
 
 scrollbar_2 = tk.Scrollbar(tabel_frame)
-scrollbar_2.pack(side=tk.RIGHT, fill=tk.Y)
+scrollbar_2.pack(side=tk.LEFT, fill=tk.Y)
 
 new_conn = sqlite3.connect(db_p)
 new_cursor = new_conn.cursor()
@@ -465,9 +473,10 @@ today = jdatetime.date.today()
 loans_tree = ttk.Treeview(tabel_frame, yscrollcommand=scrollbar_2.set, columns=loan_column, show="headings", height=15)
 scrollbar_2.config(command=loans_tree.yview)
 for col in loan_column: 
-    loans_tree.heading(col, text=tr(col))
+    loans_tree.heading(col, text=tr(col), anchor=tk.CENTER)
     loans_tree.column(col, anchor=tk.CENTER)
-loans_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+loans_tree['displaycolumns'] = rtl_display_order(loan_column, ['id', 'member_name', 'book_id', 'borrow_date', 'return_date', 'borrowed'])
+loans_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
 st.configure("Treeview", font=(None, 13), rowheight=30)
 new_cursor.execute(f"SELECT * FROM `{new_tabel_name}` ORDER BY julianday(`return_date`) - julianday(`borrow_date`) ASC")
