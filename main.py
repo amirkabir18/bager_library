@@ -88,18 +88,29 @@ st.configure("Modern.TRadiobutton", font=FONT_NORMAL)
 notebook = ttk.Notebook(root)
 notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+filter_settings = {
+    'column': 'all',
+    'match_mode': 'contains',
+    'availability': 'all',
+    'sort_col': 'id',
+    'sort_dir': 'ASC',
+}
+
 books_frame = ttk.Frame(notebook)
 notebook.add(books_frame, text="جستجوی کتاب")
 
 search_bar_frame = ttk.Frame(books_frame)
 search_bar_frame.pack(fill=tk.X, padx=10, pady=10)
-search_bar_frame.columnconfigure(1, weight=1)
+search_bar_frame.columnconfigure(2, weight=1)
 
-sub_btn = tk.Button(search_bar_frame, text='جستجو', font=FONT_BOLD, width=12)
-sub_btn.grid(row=0, column=0, padx=(0, 8))
+sub_btn = tk.Button(search_bar_frame, text='جستجو', font=FONT_BOLD, width=10)
+sub_btn.grid(row=0, column=0, padx=(0, 6))
+
+filter_btn = tk.Button(search_bar_frame, text='⚙ فیلترها', font=FONT_NORMAL, width=11)
+filter_btn.grid(row=0, column=1, padx=(0, 6))
 
 entry_serch = tk.Entry(search_bar_frame, font=FONT_NORMAL, justify='right')
-entry_serch.grid(row=0, column=1, sticky="ew")
+entry_serch.grid(row=0, column=2, sticky="ew")
 
 tree_frame = tk.Frame(books_frame)
 tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
@@ -119,6 +130,19 @@ tree.pack(side=tk.RIGHT, fill="both", expand=True, padx=10, pady=10)
 
 conn.close()
 
+def update_filter_button_indicator():
+    is_custom = (
+        filter_settings['column'] != 'all' or
+        filter_settings['match_mode'] != 'contains' or
+        filter_settings['availability'] != 'all' or
+        filter_settings['sort_col'] != 'id' or
+        filter_settings['sort_dir'] != 'ASC'
+    )
+    if is_custom:
+        filter_btn.config(text='⚙ فیلترها (فعال)', fg='#0d6efd')
+    else:
+        filter_btn.config(text='⚙ فیلترها', fg='black')
+
 def search(event=None):
     search_value = entry_serch.get().strip()
 
@@ -128,15 +152,50 @@ def search(event=None):
         temp_conn = sqlite3.connect(db_p)
         temp_cursor = temp_conn.cursor()
 
-        if not search_value:
-            query = f"SELECT * FROM {tabel_name}"
-            temp_cursor.execute(query)
-        else:
-            where_clauses = [f"{col} LIKE ?" for col in columns]
-            query = f"SELECT * FROM {tabel_name} WHERE " + " OR ".join(where_clauses)
-            params = tuple(f"%{search_value}%" for _ in columns)
-            temp_cursor.execute(query, params)
+        where_conditions: list[str] = []
+        params: list[str] = []
 
+        if search_value:
+            selected_col = filter_settings.get('column', 'all')
+            match_mode = filter_settings.get('match_mode', 'contains')
+
+            if match_mode == 'exact':
+                pattern = search_value
+                op = "="
+            elif match_mode == 'startswith':
+                pattern = f"{search_value}%"
+                op = "LIKE"
+            else:
+                pattern = f"%{search_value}%"
+                op = "LIKE"
+
+            if selected_col == 'all':
+                sub_conds = [f"{col} {op} ?" for col in columns]
+                where_conditions.append("(" + " OR ".join(sub_conds) + ")")
+                params.extend([pattern] * len(columns))
+            elif selected_col in columns:
+                where_conditions.append(f"{selected_col} {op} ?")
+                params.append(pattern)
+
+        avail = filter_settings.get('availability', 'all')
+        if avail == 'borrowed':
+            where_conditions.append("title IN (SELECT book_id FROM loans WHERE borrowed = 1)")
+        elif avail == 'available':
+            where_conditions.append("title NOT IN (SELECT book_id FROM loans WHERE borrowed = 1)")
+
+        query = f"SELECT {', '.join(columns)} FROM {tabel_name}"
+        if where_conditions:
+            query += " WHERE " + " AND ".join(where_conditions)
+
+        sort_col = filter_settings.get('sort_col', 'id')
+        if sort_col not in columns:
+            sort_col = 'id'
+        sort_dir = filter_settings.get('sort_dir', 'ASC')
+        if sort_dir not in ('ASC', 'DESC'):
+            sort_dir = 'ASC'
+        query += f" ORDER BY {sort_col} {sort_dir}"
+
+        temp_cursor.execute(query, tuple(params))
         results = temp_cursor.fetchall()
         temp_conn.close()
 
@@ -150,6 +209,125 @@ def search(event=None):
         messagebox.showerror("خطا", f"خطا در جستجو: {str(e)}")
 
 sub_btn.config(command=search)
+
+def open_filter_popup():
+    popup = tk.Toplevel(root)
+    popup.title("فیلترهای پیشرفته جستجو")
+    popup.geometry("440x510")
+    popup.resizable(False, False)
+    if os.path.exists(icon_p):
+        try:
+            popup.iconbitmap(icon_p)
+        except Exception:
+            pass
+
+    popup.transient(root)
+    popup.grab_set()
+
+    root.update_idletasks()
+    rx = root.winfo_rootx()
+    ry = root.winfo_rooty()
+    rw = root.winfo_width()
+    rh = root.winfo_height()
+    px = max(50, rx + (rw - 440) // 2)
+    py = max(50, ry + (rh - 510) // 2)
+    popup.geometry(f"+{px}+{py}")
+
+    col_var = tk.StringVar(value=filter_settings['column'])
+    match_var = tk.StringVar(value=filter_settings['match_mode'])
+    avail_var = tk.StringVar(value=filter_settings['availability'])
+    sort_col_var = tk.StringVar(value=filter_settings['sort_col'])
+    sort_dir_var = tk.StringVar(value=filter_settings['sort_dir'])
+
+    group_col = tk.LabelFrame(popup, text="جستجو در ستون", font=FONT_BOLD, padx=10, pady=5)
+    group_col.pack(fill=tk.X, padx=15, pady=(10, 5))
+    col_frame = tk.Frame(group_col)
+    col_frame.pack(fill=tk.X)
+    rb_all = tk.Radiobutton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL, anchor='e')
+    rb_all.pack(side=tk.RIGHT, padx=4)
+    for col in ['title', 'author', 'isbn', 'id']:
+        if col in columns:
+            rb = tk.Radiobutton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL, anchor='e')
+            rb.pack(side=tk.RIGHT, padx=4)
+
+    group_mode = tk.LabelFrame(popup, text="نوع تطابق جستجو", font=FONT_BOLD, padx=10, pady=5)
+    group_mode.pack(fill=tk.X, padx=15, pady=5)
+    mode_frame = tk.Frame(group_mode)
+    mode_frame.pack(fill=tk.X)
+    rb_contains = tk.Radiobutton(mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL, anchor='e')
+    rb_contains.pack(side=tk.RIGHT, padx=8)
+    rb_starts = tk.Radiobutton(mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL, anchor='e')
+    rb_starts.pack(side=tk.RIGHT, padx=8)
+    rb_exact = tk.Radiobutton(mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL, anchor='e')
+    rb_exact.pack(side=tk.RIGHT, padx=8)
+
+    group_avail = tk.LabelFrame(popup, text="وضعیت امانت کتاب", font=FONT_BOLD, padx=10, pady=5)
+    group_avail.pack(fill=tk.X, padx=15, pady=5)
+    avail_frame = tk.Frame(group_avail)
+    avail_frame.pack(fill=tk.X)
+    rb_av_all = tk.Radiobutton(avail_frame, text="همه کتاب‌ها", variable=avail_var, value="all", font=FONT_NORMAL, anchor='e')
+    rb_av_all.pack(side=tk.RIGHT, padx=8)
+    rb_av_avail = tk.Radiobutton(avail_frame, text="فقط کتاب‌های موجود", variable=avail_var, value="available", font=FONT_NORMAL, anchor='e')
+    rb_av_avail.pack(side=tk.RIGHT, padx=8)
+    rb_av_borrowed = tk.Radiobutton(avail_frame, text="فقط در امانت", variable=avail_var, value="borrowed", font=FONT_NORMAL, anchor='e')
+    rb_av_borrowed.pack(side=tk.RIGHT, padx=8)
+
+    group_sort = tk.LabelFrame(popup, text="مرتب‌سازی نتایج", font=FONT_BOLD, padx=10, pady=5)
+    group_sort.pack(fill=tk.X, padx=15, pady=5)
+    sort_frame = tk.Frame(group_sort)
+    sort_frame.pack(fill=tk.X, pady=3)
+
+    tk.Label(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
+    sort_cols_available = [c for c in ['title', 'author', 'id'] if c in columns]
+    sort_col_cb = ttk.Combobox(sort_frame, state="readonly", width=12, font=FONT_NORMAL, justify='right',
+                               values=[tr(c) for c in sort_cols_available])
+    sort_col_cb.set(tr(sort_col_var.get()))
+    sort_col_cb.pack(side=tk.RIGHT, padx=5)
+
+    tk.Label(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
+    sort_dir_cb = ttk.Combobox(sort_frame, state="readonly", width=9, font=FONT_NORMAL, justify='right',
+                               values=["صعودی", "نزولی"])
+    sort_dir_cb.set("صعودی" if sort_dir_var.get() == "ASC" else "نزولی")
+    sort_dir_cb.pack(side=tk.RIGHT, padx=5)
+
+    action_frame = tk.Frame(popup)
+    action_frame.pack(fill=tk.X, padx=15, pady=(15, 10))
+
+    def apply_filters():
+        filter_settings['column'] = col_var.get()
+        filter_settings['match_mode'] = match_var.get()
+        filter_settings['availability'] = avail_var.get()
+
+        disp_col = sort_col_cb.get()
+        disp_map = {tr(c): c for c in columns}
+        filter_settings['sort_col'] = disp_map.get(disp_col, 'id')
+        filter_settings['sort_dir'] = 'ASC' if sort_dir_cb.get() == "صعودی" else 'DESC'
+
+        update_filter_button_indicator()
+        popup.destroy()
+        search()
+
+    def reset_filters():
+        filter_settings['column'] = 'all'
+        filter_settings['match_mode'] = 'contains'
+        filter_settings['availability'] = 'all'
+        filter_settings['sort_col'] = 'id'
+        filter_settings['sort_dir'] = 'ASC'
+
+        update_filter_button_indicator()
+        popup.destroy()
+        search()
+
+    btn_apply = tk.Button(action_frame, text="اعمال فیلتر", font=FONT_BOLD, width=12, command=apply_filters)
+    btn_apply.pack(side=tk.RIGHT, padx=4)
+
+    btn_reset = tk.Button(action_frame, text="تنظیم مجدد", font=FONT_NORMAL, width=12, command=reset_filters)
+    btn_reset.pack(side=tk.RIGHT, padx=4)
+
+    btn_cancel = tk.Button(action_frame, text="انصراف", font=FONT_NORMAL, width=10, command=popup.destroy)
+    btn_cancel.pack(side=tk.LEFT, padx=4)
+
+filter_btn.config(command=open_filter_popup)
 
 search_after_id = None
 
