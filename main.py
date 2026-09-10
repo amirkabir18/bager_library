@@ -116,6 +116,49 @@ filter_settings = {
     'sort_dir': 'ASC',
 }
 
+
+login_frame = ttk.Frame(notebook)
+notebook.add(login_frame, text=" ورود ")
+# user_name_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right')
+# user_name_entry.pack(pady=10)
+# phon_number_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right')
+# phon_number_entry.pack(pady=10)
+# telegram_chat_id_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right')
+# telegram_chat_id_entry.pack(pady=10)
+# role_combo = ttk.Combobox(login_frame, font=FONT_NORMAL, justify='right', state="readonly", values=["admin", "user"])
+# role_combo.pack(pady=10)
+# password_hash_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right', show="*")
+# password_hash_entry.pack(pady=10)
+
+login_label = tk.Label(login_frame, text="ورود به کتابخانه", font=FONT_TITLE)
+login_label.pack(pady=10)
+phon_label = tk.Label(login_frame, text="شماره تلفن:", font=FONT_NORMAL)
+phon_label.pack(pady=5)
+phon_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right')
+phon_entry.pack(pady=10)
+
+
+from auth import get_user_by_phone
+
+def login():
+
+    if get_user_by_phone(phon_entry.get()) is True:
+        phon_label.config(text="شماره تلفن ثبت شده", fg="green")
+        phon_entry.config(state="disabled")
+        otp_label = tk.Label(login_frame, text="لطفاً کد OTP را وارد کنید:", font=FONT_NORMAL)
+        otp_label.pack(pady=10)
+        otp_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right')
+        otp_entry.pack(pady=10)
+        if len(phon_entry.get()) > 6:
+            otp_label.config(text="کد otp نا معتبر است", fg="red")
+        otp_button = tk.Button(login_frame, text="ورود", font=FONT_BOLD)
+        otp_button.pack(pady=10)
+    else:
+        phon_label.config(text="شماره تلفن ثبت نشده", fg="red")        
+
+check_button = tk.Button(login_frame, text="بررسی", font=FONT_BOLD, command=login)
+check_button.pack(pady=10)
+
 books_frame = ttk.Frame(notebook)
 notebook.add(books_frame, text=" جستجوی کتاب ")
 
