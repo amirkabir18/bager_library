@@ -100,6 +100,7 @@ jobs:
             --icon "logo.ico" `
             --add-data "assets;assets" `
             --add-data "logo.ico;." `
+            --add-data "app_info.json;." `
             --hidden-import jdatetime `
             --hidden-import dotenv `
             main.py
@@ -120,3 +121,59 @@ jobs:
           name: bager-library-windows-x64
           path: dist/bager_library.exe
           if-no-files-found: error
+
+  release:
+    name: Automatic GitHub Release
+    needs: [build-exe]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version from app_info.json
+        id: get_version
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('app_info.json'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Target release version: $VERSION (tag: v$VERSION)"
+
+      - name: Check if tag exists on remote
+        id: check_tag
+        run: |
+          TAG="${{ steps.get_version.outputs.tag }}"
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists on remote. Skipping release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG does not exist on remote. New release will be created."
+          fi
+
+      - name: Download Windows binary artifact
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: actions/download-artifact@v4
+        with:
+          name: bager-library-windows-x64
+          path: release-assets
+
+      - name: Create Git Tag and GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.tag }}
+          name: Release ${{ steps.get_version.outputs.tag }}
+          body: |
+            ## نسخه جدید کتابخانه باقر العلوم (${{ steps.get_version.outputs.tag }})
+            
+            این انتشار به‌صورت خودکار پس از بروزرسانی نسخه در شاخه `main` ایجاد شده است.
+            
+            ### فایل‌های اجرایی:
+            - **bager_library.exe**: نسخه بدون نیاز به نصب برای ویندوز
+          files: |
+            release-assets/bager_library.exe
+          generate_release_notes: true
+
