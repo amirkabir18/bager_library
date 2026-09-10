@@ -5,6 +5,7 @@ import sqlite3
 import sys
 import tkinter as tk
 import tkinter.font as tkfont
+import webbrowser
 from tkinter import messagebox, ttk
 
 import jdatetime
@@ -1011,6 +1012,132 @@ def on_loan_double_click(event):
         except sqlite3.Error as e:
             messagebox.showerror("خطا", f"خطا در ثبت بازگشت کتاب: {e}")
 
+
+help_frame = ttk.Frame(notebook)
+notebook.add(help_frame, text=" راهنما ")
+
+title_label_help = tk.Label(help_frame, text="راهنما و درباره نرم‌افزار", font=FONT_TITLE)
+title_label_help.pack(pady=(15, 4))
+
+subtitle_label_help = tk.Label(
+    help_frame,
+    text="سیستم مدیریت کتابخانه باقرالعلوم",
+    font=FONT_NORMAL,
+    fg="#666666",
+)
+subtitle_label_help.pack(pady=(0, 10))
+
+help_content = ttk.Frame(help_frame)
+help_content.pack(fill=tk.BOTH, expand=True, padx=25, pady=5)
+
+
+def open_url(url: str):
+    try:
+        webbrowser.open(url)
+    except Exception as e:
+        messagebox.showerror("خطا", f"امکان باز کردن پیوند در مرورگر وجود ندارد:\n{e}")
+
+
+dev_group = tk.LabelFrame(help_content, text=" توسعه‌دهندگان ", font=FONT_BOLD, padx=15, pady=8)
+dev_group.pack(fill=tk.X, pady=(0, 8))
+
+developers_info = [
+    ("امیرحسین اسدی", "@amirkabir18", "https://github.com/amirkabir18"),
+    ("سید محمد حسن موسوی", "@Aliomosavi", "https://github.com/Aliomosavi"),
+    ("امیررضا یونس‌زاده شیرازی", "@ARUSH221617", "https://github.com/ARUSH221617"),
+]
+
+for name, handle, profile_url in developers_info:
+    row = tk.Frame(dev_group)
+    row.pack(fill=tk.X, pady=2)
+
+    lbl_name = tk.Label(row, text=f"• {name}", font=FONT_NORMAL, anchor="e")
+    lbl_name.pack(side=tk.RIGHT, padx=5)
+
+    lbl_handle = tk.Label(
+        row,
+        text=handle,
+        font=FONT_NORMAL,
+        fg="#0d6efd",
+        cursor="hand2",
+        anchor="w",
+    )
+    lbl_handle.pack(side=tk.LEFT, padx=5)
+    lbl_handle.bind("<Button-1>", lambda event, u=profile_url: open_url(u))
+
+repo_url = "https://github.com/amirkabir18/bager_library"
+repo_group = tk.LabelFrame(help_content, text=" مخزن گیت‌هاب پروژه ", font=FONT_BOLD, padx=15, pady=8)
+repo_group.pack(fill=tk.X, pady=(0, 8))
+
+repo_desc = tk.Label(
+    repo_group,
+    text="سورس‌کد و مستندات پروژه در گیت‌هاب:",
+    font=FONT_NORMAL,
+    anchor="e",
+)
+repo_desc.pack(anchor="e", pady=(0, 4))
+
+repo_row = tk.Frame(repo_group)
+repo_row.pack(fill=tk.X, pady=2)
+
+btn_repo = create_icon_button(
+    repo_row,
+    text=" مشاهده مخزن در گیت‌هاب ",
+    font=FONT_NORMAL,
+    command=lambda: open_url(repo_url),
+    padx=10,
+    pady=3,
+)
+btn_repo.pack(side=tk.RIGHT, padx=5)
+
+lbl_repo_url = tk.Label(
+    repo_row,
+    text=repo_url,
+    font=FONT_NORMAL,
+    fg="#0d6efd",
+    cursor="hand2",
+    anchor="w",
+)
+lbl_repo_url.pack(side=tk.LEFT, padx=5)
+lbl_repo_url.bind("<Button-1>", lambda event: open_url(repo_url))
+
+issue_url = "https://github.com/amirkabir18/bager_library/issues/new"
+issue_group = tk.LabelFrame(
+    help_content, text=" ثبت گزارش خطا یا پیشنهاد (New Issue) ", font=FONT_BOLD, padx=15, pady=8
+)
+issue_group.pack(fill=tk.X, pady=(0, 8))
+
+issue_desc = tk.Label(
+    issue_group,
+    text="برای گزارش باگ‌ها، مشکلات یا ثبت پیشنهادات، یک Issue جدید در گیت‌هاب باز کنید:",
+    font=FONT_NORMAL,
+    anchor="e",
+)
+issue_desc.pack(anchor="e", pady=(0, 4))
+
+issue_row = tk.Frame(issue_group)
+issue_row.pack(fill=tk.X, pady=2)
+
+btn_issue = create_icon_button(
+    issue_row,
+    text=" ثبت Issue جدید در گیت‌هاب ",
+    font=FONT_BOLD,
+    command=lambda: open_url(issue_url),
+    padx=10,
+    pady=3,
+)
+btn_issue.pack(side=tk.RIGHT, padx=5)
+
+lbl_issue_url = tk.Label(
+    issue_row,
+    text=issue_url,
+    font=FONT_NORMAL,
+    fg="#0d6efd",
+    cursor="hand2",
+    anchor="w",
+)
+lbl_issue_url.pack(side=tk.LEFT, padx=5)
+lbl_issue_url.bind("<Button-1>", lambda event: open_url(issue_url))
 
 root.bind("<Escape>", lambda event: root.destroy())
 entry_serch.bind("<KeyRelease>", on_key_release)
