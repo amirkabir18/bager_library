@@ -4,10 +4,10 @@ Supports native Windows 10/11 Action Center toast notifications via winotify (10
 with sound and custom logo icon, plus an offline Tkinter non-blocking floating popup fallback.
 """
 
-import sys
+import datetime
 import os
 import sqlite3
-import datetime
+import sys
 import tkinter as tk
 from typing import Optional
 

@@ -36,8 +36,7 @@ from database import (
     rtl_display_order,
     tr,
 )
-from auth import ensure_bootstrap_admin
-from notifications import NotificationEngine, LoanReminderManager
+from notifications import LoanReminderManager, NotificationEngine
 
 conn = sqlite3.connect(db_p)
 init_database(conn)
