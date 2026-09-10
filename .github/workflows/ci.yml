@@ -1,0 +1,122 @@
+name: CI & Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linter
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run Ruff Linter
+        run: ruff check --output-format=github .
+
+  format:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install formatter
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run Ruff Format Check
+        run: ruff format --check .
+
+  test:
+    name: Run Tests
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Run Pytest
+        run: pytest -v
+
+  build-exe:
+    name: Build Executable
+    needs: [lint, format, test]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build Windows Executable with PyInstaller
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --onefile --windowed `
+            --name "bager_library" `
+            --icon "logo.ico" `
+            --add-data "assets;assets" `
+            --add-data "logo.ico;." `
+            --hidden-import jdatetime `
+            --hidden-import dotenv `
+            main.py
+
+      - name: Verify Executable Creation
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist/bager_library.exe")) {
+            Write-Error "dist/bager_library.exe does not exist!"
+            exit 1
+          }
+          $item = Get-Item "dist/bager_library.exe"
+          Write-Host "Created binary: $($item.FullName) ($([math]::Round($item.Length / 1MB, 2)) MB)"
+
+      - name: Upload EXE Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bager-library-windows-x64
+          path: dist/bager_library.exe
+          if-no-files-found: error

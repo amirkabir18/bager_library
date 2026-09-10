@@ -1,0 +1,63 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "lint",
+      "type": "shell",
+      "command": "${command:python.interpreterPath} -m ruff check .",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "format",
+      "type": "shell",
+      "command": "${command:python.interpreterPath} -m ruff format .",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "format:check",
+      "type": "shell",
+      "command": "${command:python.interpreterPath} -m ruff format --check .",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "run tests",
+      "type": "shell",
+      "command": "${command:python.interpreterPath} -m pytest -v",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "build exe",
+      "type": "shell",
+      "command": "${command:python.interpreterPath} -m PyInstaller --noconfirm --onefile --windowed --name \"bager_library\" --icon \"logo.ico\" --add-data \"assets;assets\" --add-data \"logo.ico;.\" --hidden-import jdatetime --hidden-import dotenv main.py",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}
