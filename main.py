@@ -963,15 +963,19 @@ def gregorian():
     for row in loan_rows:
         loans_tree.insert("", tk.END, values=format_loan_row(row))
 
+
 def refresh_loans_tree():
     temp_conn = sqlite3.connect(db_p)
     temp_cursor = temp_conn.cursor()
     for item in loans_tree.get_children():
         loans_tree.delete(item)
-    temp_cursor.execute(f"SELECT * FROM `{new_tabel_name}` ORDER BY julianday(`return_date`) - julianday(`borrow_date`) ASC")
+    temp_cursor.execute(
+        f"SELECT * FROM `{new_tabel_name}` ORDER BY julianday(`return_date`) - julianday(`borrow_date`) ASC"
+    )
     for row in temp_cursor.fetchall():
         loans_tree.insert("", tk.END, values=format_loan_row(row))
     temp_conn.close()
+
 
 def on_loan_double_click(event):
     selected = loans_tree.selection()
@@ -1007,9 +1011,10 @@ def on_loan_double_click(event):
         except sqlite3.Error as e:
             messagebox.showerror("خطا", f"خطا در ثبت بازگشت کتاب: {e}")
 
-root.bind('<Escape>',lambda event:root.destroy())
-entry_serch.bind('<KeyRelease>', on_key_release)
-entry_serch.bind('<Return>', search)
+
+root.bind("<Escape>", lambda event: root.destroy())
+entry_serch.bind("<KeyRelease>", on_key_release)
+entry_serch.bind("<Return>", search)
 tree.bind("<Double-Button-1>", on_double_click)
 loans_tree.bind("<Double-Button-1>", on_loan_double_click)
 

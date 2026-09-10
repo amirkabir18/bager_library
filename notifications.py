@@ -18,7 +18,9 @@ class NotificationEngine:
     via winotify with sound and custom logo icon, and a graceful Tkinter floating toast fallback.
     """
 
-    def __init__(self, root: Optional[tk.Tk] = None, app_id: str = "کتابخانه باقر العلوم", icon_path: Optional[str] = None):
+    def __init__(
+        self, root: Optional[tk.Tk] = None, app_id: str = "کتابخانه باقر العلوم", icon_path: Optional[str] = None
+    ):
         self.root = root
         self.app_id = app_id
         self.icon_path = icon_path if (icon_path and os.path.exists(icon_path)) else None
@@ -40,11 +42,9 @@ class NotificationEngine:
 
     def _show_windows_toast(self, title: str, message: str):
         from winotify import Notification, audio
+
         toast = Notification(
-            app_id=self.app_id,
-            title=title,
-            msg=message,
-            icon=self.icon_path if self.icon_path else ""
+            app_id=self.app_id, title=title, msg=message, icon=self.icon_path if self.icon_path else ""
         )
         toast.set_audio(audio.Default, loop=False)
         toast.show()
@@ -68,20 +68,35 @@ class NotificationEngine:
             y = screen_h - height - 60
             popup.geometry(f"{width}x{height}+{x}+{y}")
 
-            frame = tk.Frame(popup, bg="#1e293b", relief="flat", bd=0, highlightthickness=1, highlightbackground="#475569")
+            frame = tk.Frame(
+                popup, bg="#1e293b", relief="flat", bd=0, highlightthickness=1, highlightbackground="#475569"
+            )
             frame.pack(fill=tk.BOTH, expand=True)
 
             header = tk.Frame(frame, bg="#1e293b")
             header.pack(fill=tk.X, padx=10, pady=(8, 2))
 
-            close_btn = tk.Label(header, text="✕", font=("Tahoma", 9, "bold"), fg="#94a3b8", bg="#1e293b", cursor="hand2")
+            close_btn = tk.Label(
+                header, text="✕", font=("Tahoma", 9, "bold"), fg="#94a3b8", bg="#1e293b", cursor="hand2"
+            )
             close_btn.pack(side=tk.LEFT)
             close_btn.bind("<Button-1>", lambda e: popup.destroy())
 
-            title_lbl = tk.Label(header, text=title, font=("Tahoma", 10, "bold"), fg="#38bdf8", bg="#1e293b", anchor="e")
+            title_lbl = tk.Label(
+                header, text=title, font=("Tahoma", 10, "bold"), fg="#38bdf8", bg="#1e293b", anchor="e"
+            )
             title_lbl.pack(side=tk.RIGHT, fill=tk.X)
 
-            msg_lbl = tk.Label(frame, text=message, font=("Tahoma", 9), fg="#f1f5f9", bg="#1e293b", wraplength=310, justify="right", anchor="e")
+            msg_lbl = tk.Label(
+                frame,
+                text=message,
+                font=("Tahoma", 9),
+                fg="#f1f5f9",
+                bg="#1e293b",
+                wraplength=310,
+                justify="right",
+                anchor="e",
+            )
             msg_lbl.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 8))
 
             popup.after(6000, lambda: popup.destroy() if popup.winfo_exists() else None)
@@ -95,7 +110,9 @@ class LoanReminderManager:
     detect due soon, due today, and overdue loans, and send de-duplicated notifications.
     """
 
-    def __init__(self, root: tk.Tk, db_path: str, notification_engine: NotificationEngine, check_interval_ms: int = 60000):
+    def __init__(
+        self, root: tk.Tk, db_path: str, notification_engine: NotificationEngine, check_interval_ms: int = 60000
+    ):
         self.root = root
         self.db_path = db_path
         self.notification_engine = notification_engine
@@ -142,7 +159,7 @@ class LoanReminderManager:
             try:
                 cursor.execute("SELECT value FROM app_settings WHERE key = 'notifications_enabled'")
                 row = cursor.fetchone()
-                if row and str(row[0]).strip().lower() == 'false':
+                if row and str(row[0]).strip().lower() == "false":
                     conn.close()
                     return 0
             except sqlite3.Error:
@@ -217,10 +234,13 @@ class LoanReminderManager:
                     continue
 
                 # De-duplication check for today
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT id FROM notification_logs
                     WHERE loan_id = ? AND notification_type = ? AND sent_date = ?
-                """, (loan_id, notification_type, today_str))
+                """,
+                    (loan_id, notification_type, today_str),
+                )
 
                 if cursor.fetchone():
                     # Already sent today
@@ -231,10 +251,13 @@ class LoanReminderManager:
                 notifications_sent += 1
 
                 # Log notification
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO notification_logs (loan_id, notification_type, sent_date)
                     VALUES (?, ?, ?)
-                """, (loan_id, notification_type, today_str))
+                """,
+                    (loan_id, notification_type, today_str),
+                )
                 conn.commit()
 
             conn.close()

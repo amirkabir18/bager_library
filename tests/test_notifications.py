@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 # Add project root to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import database
 from notifications import LoanReminderManager, NotificationEngine
@@ -28,7 +28,7 @@ class TestNotificationEngine(unittest.TestCase):
 
 class TestLoanReminderManager(unittest.TestCase):
     def setUp(self):
-        self.temp_db_fd, self.temp_db_path = tempfile.mkstemp(suffix='.db')
+        self.temp_db_fd, self.temp_db_path = tempfile.mkstemp(suffix=".db")
         os.close(self.temp_db_fd)
         self.conn = sqlite3.connect(self.temp_db_path)
         database.init_database(self.conn)
@@ -39,7 +39,7 @@ class TestLoanReminderManager(unittest.TestCase):
             root=self.mock_root,
             db_path=self.temp_db_path,
             notification_engine=self.mock_engine,
-            check_interval_ms=10000
+            check_interval_ms=10000,
         )
 
     def tearDown(self):
@@ -59,17 +59,25 @@ class TestLoanReminderManager(unittest.TestCase):
         returned_overdue_str = (today - datetime.timedelta(days=5)).strftime("%Y-%m-%d")
 
         # 1. Due today
-        cur.execute("INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
-                    ("کتاب امروز", "علی", today_str, today_str))
+        cur.execute(
+            "INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
+            ("کتاب امروز", "علی", today_str, today_str),
+        )
         # 2. Due soon (tomorrow)
-        cur.execute("INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
-                    ("کتاب فردا", "رضا", due_tomorrow_str, today_str))
+        cur.execute(
+            "INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
+            ("کتاب فردا", "رضا", due_tomorrow_str, today_str),
+        )
         # 3. Overdue (3 days late)
-        cur.execute("INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
-                    ("کتاب تاخیر خورده", "سارا", overdue_str, today_str))
+        cur.execute(
+            "INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
+            ("کتاب تاخیر خورده", "سارا", overdue_str, today_str),
+        )
         # 4. Returned loan (should be ignored)
-        cur.execute("INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 0)",
-                    ("کتاب برگشتی", "مهدی", returned_overdue_str, today_str))
+        cur.execute(
+            "INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 0)",
+            ("کتاب برگشتی", "مهدی", returned_overdue_str, today_str),
+        )
         self.conn.commit()
 
         sent = self.reminder_manager.check_loans()
@@ -84,8 +92,10 @@ class TestLoanReminderManager(unittest.TestCase):
     def test_notifications_disabled_in_settings(self):
         cur = self.conn.cursor()
         today_str = datetime.date.today().strftime("%Y-%m-%d")
-        cur.execute("INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
-                    ("کتاب تست", "علی", today_str, today_str))
+        cur.execute(
+            "INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
+            ("کتاب تست", "علی", today_str, today_str),
+        )
         cur.execute("UPDATE app_settings SET value = 'false' WHERE key = 'notifications_enabled'")
         self.conn.commit()
 
@@ -102,5 +112,5 @@ class TestLoanReminderManager(unittest.TestCase):
         self.assertFalse(self.reminder_manager._running)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
