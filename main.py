@@ -36,6 +36,7 @@ from database import (
     rtl_display_order,
     tr,
 )
+from notifications import LoanReminderManager, NotificationEngine
 
 conn = sqlite3.connect(db_p)
 init_database(conn)
@@ -51,6 +52,10 @@ columns: list[str] = [str(row[1]) for row in cursor.fetchall()]
 
 root = tk.Tk()
 root.title("کتابخانه باقر العلوم")
+notification_engine = NotificationEngine(root, icon_path=icon_p)
+reminder_manager = LoanReminderManager(root, db_p, notification_engine)
+reminder_manager.start()
+
 if os.path.exists(icon_p):
     try:
         root.iconbitmap(icon_p)
@@ -696,6 +701,7 @@ def on_double_click(event):
             temp_conn.close()
 
             messagebox.showinfo("موفقیت", "اطلاعات امانت با موفقیت ذخیره شد")
+            notification_engine.show("ثبت موفق امانت", f"کتاب «{book_id}» با موفقیت برای {member_name} ثبت شد.")
             refresh_treeview()
             new_panel.destroy()
 
@@ -958,10 +964,59 @@ def gregorian():
         loans_tree.insert("", tk.END, values=format_loan_row(row))
 
 
+def refresh_loans_tree():
+    temp_conn = sqlite3.connect(db_p)
+    temp_cursor = temp_conn.cursor()
+    for item in loans_tree.get_children():
+        loans_tree.delete(item)
+    temp_cursor.execute(
+        f"SELECT * FROM `{new_tabel_name}` ORDER BY julianday(`return_date`) - julianday(`borrow_date`) ASC"
+    )
+    for row in temp_cursor.fetchall():
+        loans_tree.insert("", tk.END, values=format_loan_row(row))
+    temp_conn.close()
+
+
+def on_loan_double_click(event):
+    selected = loans_tree.selection()
+    if not selected:
+        return
+    values = loans_tree.item(selected[0], "values")
+    id_idx = loan_column.index("id") if "id" in loan_column else -1
+    borrowed_idx = loan_column.index("borrowed") if "borrowed" in loan_column else -1
+    book_idx = loan_column.index("book_id") if "book_id" in loan_column else -1
+    member_idx = loan_column.index("member_name") if "member_name" in loan_column else -1
+
+    if id_idx == -1:
+        return
+    loan_id = values[id_idx]
+    book_name = values[book_idx] if book_idx != -1 else "کتاب"
+    member_name = values[member_idx] if member_idx != -1 else "کاربر"
+    borrowed_val = values[borrowed_idx] if borrowed_idx != -1 else ""
+
+    if borrowed_val == "بازگردانده شده":
+        messagebox.showinfo("اطلاع", "این کتاب قبلاً بازگردانده شده است.")
+        return
+
+    confirm = messagebox.askyesno("ثبت بازگشت کتاب", f"آیا بازگشت کتاب «{book_name}» توسط {member_name} تایید می‌شود؟")
+    if confirm:
+        try:
+            conn_ret = sqlite3.connect(db_p)
+            c_ret = conn_ret.cursor()
+            c_ret.execute("UPDATE loans SET borrowed = 0 WHERE id = ?", (loan_id,))
+            conn_ret.commit()
+            conn_ret.close()
+            refresh_loans_tree()
+            notification_engine.show("ثبت بازگشت کتاب", f"کتاب «{book_name}» با موفقیت بازگردانده شد.")
+        except sqlite3.Error as e:
+            messagebox.showerror("خطا", f"خطا در ثبت بازگشت کتاب: {e}")
+
+
 root.bind("<Escape>", lambda event: root.destroy())
 entry_serch.bind("<KeyRelease>", on_key_release)
 entry_serch.bind("<Return>", search)
 tree.bind("<Double-Button-1>", on_double_click)
+loans_tree.bind("<Double-Button-1>", on_loan_double_click)
 
 root.geometry("800x600")
 
