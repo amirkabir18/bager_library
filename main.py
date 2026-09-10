@@ -3,12 +3,23 @@ import os
 import re
 import sqlite3
 import sys
+import tempfile
+import threading
 import tkinter as tk
 import tkinter.font as tkfont
 import webbrowser
 from tkinter import messagebox, ttk
 
 import jdatetime
+
+from updater import (
+    DownloadManager,
+    UpdateChecker,
+    apply_update,
+    format_size,
+    format_speed,
+    load_app_info,
+)
 
 base_dir = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
 db_p = os.path.join(base_dir, "bager_library.db")
@@ -1138,6 +1149,244 @@ lbl_issue_url = tk.Label(
 )
 lbl_issue_url.pack(side=tk.LEFT, padx=5)
 lbl_issue_url.bind("<Button-1>", lambda event: open_url(issue_url))
+
+app_info = load_app_info()
+app_version = app_info.get("version", "0.1.0")
+update_checker = UpdateChecker(
+    repo=app_info.get("github_repo", "amirkabir18/bager_library"),
+    current_version=app_version,
+)
+download_manager = DownloadManager()
+
+update_group = tk.LabelFrame(help_content, text=" بروزرسانی نرم‌افزار ", font=FONT_BOLD, padx=15, pady=8)
+update_group.pack(fill=tk.X, pady=(0, 8))
+
+info_row = tk.Frame(update_group)
+info_row.pack(fill=tk.X, pady=2)
+
+lbl_current_ver = tk.Label(info_row, text=f"نسخه فعلی: {app_version}", font=FONT_NORMAL, anchor="e")
+lbl_current_ver.pack(side=tk.RIGHT, padx=(0, 15))
+
+lbl_update_status = tk.Label(
+    info_row,
+    text="وضعیت: در حال بررسی...",
+    font=FONT_NORMAL,
+    fg="#0d6efd",
+    anchor="e",
+)
+lbl_update_status.pack(side=tk.RIGHT, padx=5)
+
+progress_row = tk.Frame(update_group)
+
+update_progress = ttk.Progressbar(progress_row, orient="horizontal", mode="determinate")
+update_progress.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
+
+lbl_progress_text = tk.Label(progress_row, text="", font=FONT_NORMAL, fg="#475569", width=26, anchor="w")
+lbl_progress_text.pack(side=tk.LEFT, padx=(0, 5))
+
+actions_row = tk.Frame(update_group)
+actions_row.pack(fill=tk.X, pady=2)
+
+latest_update_info: dict = {}
+
+
+def on_check_finished(res: dict, interactive: bool):
+    latest_update_info.clear()
+    latest_update_info.update(res)
+
+    if res.get("update_available"):
+        latest_ver = res.get("latest_version", "")
+        lbl_update_status.config(
+            text=f"وضعیت: نسخه جدید {latest_ver} موجود است!",
+            fg="#16a34a",
+        )
+        btn_update_action.config(
+            state="normal",
+            text=f" دریافت و نصب نسخه {latest_ver} ",
+            command=start_update_download,
+        )
+        btn_update_action.pack(side=tk.RIGHT, padx=5)
+        if interactive:
+            messagebox.showinfo(
+                "بروزرسانی جدید",
+                f"نسخه جدید «{latest_ver}» در دسترس است.\nبرای دریافت و نصب، روی دکمه «دریافت و نصب» کلیک کنید.",
+            )
+    else:
+        lbl_update_status.config(
+            text="وضعیت: نرم‌افزار به‌روز است.",
+            fg="#16a34a",
+        )
+        progress_row.pack_forget()
+        btn_update_action.pack_forget()
+        btn_cancel_update.pack_forget()
+        if interactive:
+            messagebox.showinfo("بروزرسانی", "نرم‌افزار شما به‌روز است.")
+
+
+def on_check_failed(error_msg: str, interactive: bool):
+    progress_row.pack_forget()
+    btn_cancel_update.pack_forget()
+    if interactive:
+        btn_update_action.config(
+            state="normal",
+            text=" تلاش مجدد برای بررسی ",
+            command=lambda: perform_check(interactive=True),
+        )
+        btn_update_action.pack(side=tk.RIGHT, padx=5)
+        lbl_update_status.config(text="وضعیت: خطا در بررسی بروزرسانی", fg="#dc2626")
+        messagebox.showerror("خطا در بررسی بروزرسانی", f"خطا در ارتباط با سرور بروزرسانی:\n{error_msg}")
+    else:
+        btn_update_action.pack_forget()
+        lbl_update_status.config(text="وضعیت: نرم‌افزار به‌روز است.", fg="#16a34a")
+
+
+def perform_check(interactive: bool = True):
+    lbl_update_status.config(text="وضعیت: در حال بررسی آخرین نسخه...", fg="#0d6efd")
+    btn_update_action.config(state="disabled")
+
+    def _worker():
+        try:
+            res = update_checker.check()
+            root.after(0, lambda: on_check_finished(res, interactive))
+        except Exception as ex:
+            err_str = str(ex)
+            root.after(0, lambda: on_check_failed(err_str, interactive))
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def start_update_download():
+    download_url = latest_update_info.get("download_url")
+    if not download_url:
+        messagebox.showerror("خطا", "آدرس دانلود فایل بروزرسانی یافت نشد.")
+        return
+
+    dest_path = os.path.join(tempfile.gettempdir(), "bager_library_new.exe")
+    btn_update_action.config(state="disabled")
+    btn_cancel_update.pack(side=tk.RIGHT, padx=5)
+    lbl_update_status.config(text="وضعیت: در حال دانلود فایل بروزرسانی...", fg="#0d6efd")
+    progress_row.pack(fill=tk.X, pady=4, before=actions_row)
+    update_progress["value"] = 0
+
+    def _update_prog_ui(downloaded, total, pct, speed):
+        update_progress["value"] = pct
+        speed_str = format_speed(speed)
+        down_str = format_size(downloaded)
+        total_str = format_size(total) if total > 0 else "نامشخص"
+        lbl_progress_text.config(text=f"{pct:.0f}% ({down_str} / {total_str}) {speed_str}")
+
+    def _prompt_install(path):
+        confirm = messagebox.askyesno(
+            "نصب بروزرسانی",
+            "دانلود نسخه جدید کامل شد.\nآیا مایلید برنامه بسته شده و نسخه جدید اجرا شود؟",
+        )
+        if confirm:
+            try:
+                applied = apply_update(path)
+                if applied:
+                    root.destroy()
+                    sys.exit(0)
+                else:
+                    messagebox.showinfo(
+                        "اطلاع",
+                        f"برنامه در محیط توسعه پایتون در حال اجراست.\nفایل نصبی جدید در مسیر زیر ذخیره شد:\n{path}",
+                    )
+            except Exception as e:
+                messagebox.showerror("خطا در نصب بروزرسانی", f"خطا در جایگزینی فایل:\n{e}")
+
+    def _finish_download_ui(path):
+        btn_cancel_update.pack_forget()
+        btn_update_action.config(
+            state="normal",
+            text=" نصب بروزرسانی ",
+            command=lambda: _prompt_install(path),
+        )
+        btn_update_action.pack(side=tk.RIGHT, padx=5)
+        update_progress["value"] = 100
+        lbl_update_status.config(text="وضعیت: دانلود با موفقیت انجام شد.", fg="#16a34a")
+        lbl_progress_text.config(text="دانلود کامل شد")
+        _prompt_install(path)
+
+    def _error_download_ui(err):
+        btn_cancel_update.pack_forget()
+        btn_update_action.config(
+            state="normal",
+            text=" تلاش مجدد برای دریافت ",
+            command=start_update_download,
+        )
+        btn_update_action.pack(side=tk.RIGHT, padx=5)
+        lbl_update_status.config(text="وضعیت: خطا در دانلود بروزرسانی", fg="#dc2626")
+        messagebox.showerror("خطا در دانلود", f"خطا در حین دانلود فایل بروزرسانی:\n{err}")
+
+    def _cancelled_download_ui():
+        btn_cancel_update.pack_forget()
+        btn_update_action.config(
+            state="normal",
+            text=" دریافت و نصب نسخه جدید ",
+            command=start_update_download,
+        )
+        btn_update_action.pack(side=tk.RIGHT, padx=5)
+        progress_row.pack_forget()
+        update_progress["value"] = 0
+        lbl_progress_text.config(text="")
+        lbl_update_status.config(text="وضعیت: دانلود لغو شد.", fg="#64748b")
+
+    download_manager.download_async(
+        url=download_url,
+        dest_path=dest_path,
+        on_progress=lambda d, t, p, s: root.after(0, lambda: _update_prog_ui(d, t, p, s)),
+        on_finished=lambda p: root.after(0, lambda: _finish_download_ui(p)),
+        on_error=lambda err: root.after(0, lambda: _error_download_ui(err)),
+        on_cancelled=lambda: root.after(0, _cancelled_download_ui),
+    )
+
+
+btn_update_action = create_icon_button(
+    actions_row,
+    text=" بررسی بروزرسانی ",
+    font=FONT_BOLD,
+    command=lambda: perform_check(interactive=True),
+    padx=10,
+    pady=3,
+)
+
+btn_cancel_update = create_icon_button(
+    actions_row,
+    text=" لغو دانلود ",
+    font=FONT_NORMAL,
+    command=download_manager.cancel,
+    padx=10,
+    pady=3,
+)
+
+
+def on_startup_update_detected(res: dict):
+    latest_ver = res.get("latest_version", "")
+    notification_engine.show(
+        "بروزرسانی جدید در دسترس است",
+        f"نسخه جدید {latest_ver} منتشر شده است.",
+    )
+    on_check_finished(res, interactive=False)
+    confirm = messagebox.askyesno(
+        "بروزرسانی جدید",
+        f"نسخه جدید «{latest_ver}» نرم‌افزار در دسترس است.\nآیا مایلید به تب راهنما بروید و بروزرسانی را دریافت کنید؟",
+    )
+    if confirm:
+        notebook.select(help_frame)
+
+
+def check_startup_updates():
+    try:
+        res = update_checker.check()
+        if res.get("update_available"):
+            root.after(1500, lambda: on_startup_update_detected(res))
+        else:
+            root.after(0, lambda: on_check_finished(res, interactive=False))
+    except Exception:
+        root.after(0, lambda: on_check_failed("", interactive=False))
+
+
+threading.Thread(target=check_startup_updates, daemon=True).start()
 
 root.bind("<Escape>", lambda event: root.destroy())
 entry_serch.bind("<KeyRelease>", on_key_release)
