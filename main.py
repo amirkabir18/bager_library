@@ -34,7 +34,7 @@ from database import (
     tr,
     rtl_display_order,
 )
-from auth import ensure_bootstrap_admin
+from auth import OTPService, ensure_bootstrap_admin
 
 conn = sqlite3.connect(db_p)
 init_database(conn)
@@ -116,19 +116,27 @@ filter_settings = {
     'sort_dir': 'ASC',
 }
 
+signin_frame = ttk.Frame(notebook)
+notebook.add(signin_frame, text=" ثبت نام ")
+tk.Label(signin_frame, text="ثبت نام کاربر جدید", font=FONT_TITLE).pack(pady=10)
+user_name_entry = tk.Entry(signin_frame, font=FONT_NORMAL, justify='right')
+user_name_entry.pack(pady=10)
+tk.Label(signin_frame, text="شماره تلفن:", font=FONT_NORMAL).pack(pady=5)
+phon_number_entry = tk.Entry(signin_frame, font=FONT_NORMAL, justify='right')
+phon_number_entry.pack(pady=10)
+tk.Label(signin_frame, text="شناسه چت تلگرام:", font=FONT_NORMAL).pack(pady=5)
+telegram_chat_id_entry = tk.Entry(signin_frame, font=FONT_NORMAL, justify='right')
+telegram_chat_id_entry.pack(pady=10)
+tk.Label(signin_frame, text="نقش کاربر:", font=FONT_NORMAL).pack(pady=5)
+role_combo = ttk.Combobox(signin_frame, font=FONT_NORMAL, justify='right', state="readonly", values=["admin", "user"])
+role_combo.pack(pady=10)
+tk.Label(signin_frame, text="رمز عبور:", font=FONT_NORMAL).pack(pady=5)
+password_hash_entry = tk.Entry(signin_frame, font=FONT_NORMAL, justify='right', show="*")
+password_hash_entry.pack(pady=10)
+
 
 login_frame = ttk.Frame(notebook)
 notebook.add(login_frame, text=" ورود ")
-# user_name_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right')
-# user_name_entry.pack(pady=10)
-# phon_number_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right')
-# phon_number_entry.pack(pady=10)
-# telegram_chat_id_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right')
-# telegram_chat_id_entry.pack(pady=10)
-# role_combo = ttk.Combobox(login_frame, font=FONT_NORMAL, justify='right', state="readonly", values=["admin", "user"])
-# role_combo.pack(pady=10)
-# password_hash_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right', show="*")
-# password_hash_entry.pack(pady=10)
 
 login_label = tk.Label(login_frame, text="ورود به کتابخانه", font=FONT_TITLE)
 login_label.pack(pady=10)
@@ -136,25 +144,40 @@ phon_label = tk.Label(login_frame, text="شماره تلفن:", font=FONT_NORMAL
 phon_label.pack(pady=5)
 phon_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right')
 phon_entry.pack(pady=10)
-
-
+otp_label = tk.Label(login_frame, text="لطفاً کد OTP را وارد کنید:", font=FONT_NORMAL)
+otp_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right')
 from auth import get_user_by_phone
 
 def login():
-
-    if get_user_by_phone(phon_entry.get()) is True:
-        phon_label.config(text="شماره تلفن ثبت شده", fg="green")
-        phon_entry.config(state="disabled")
-        otp_label = tk.Label(login_frame, text="لطفاً کد OTP را وارد کنید:", font=FONT_NORMAL)
-        otp_label.pack(pady=10)
-        otp_entry = tk.Entry(login_frame, font=FONT_NORMAL, justify='right')
-        otp_entry.pack(pady=10)
-        if len(phon_entry.get()) > 6:
-            otp_label.config(text="کد otp نا معتبر است", fg="red")
-        otp_button = tk.Button(login_frame, text="ورود", font=FONT_BOLD)
-        otp_button.pack(pady=10)
+    user = get_user_by_phone(phon_entry.get())
+    if user is not None:
+        otp_s = OTPService()
+        request_otp = otp_s.request_otp(phon_entry.get())
+        if request_otp[0]:
+            phon_label.config(text="شماره تلفن ثبت شده", fg="green")
+            phon_entry.config(state="disabled")
+            otp_label.pack(pady=10)
+            otp_entry.pack(pady=10)
+            otp_button = tk.Button(login_frame, text="ورود", font=FONT_BOLD, command=login_verify)
+            otp_button.pack(pady=10)
+            check_button.pack_forget()
+        else:
+            phon_label.config(text=f"خطا در ارسال کد: {request_otp[1]}", fg="red")
     else:
-        phon_label.config(text="شماره تلفن ثبت نشده", fg="red")        
+        phon_label.config(text="شماره تلفن ثبت نشده", fg="red")
+def login_verify():
+    if len(otp_entry.get()) > 6:
+        otp_label.config(text="کد otp نا معتبر است", fg="red")
+    otp_s = OTPService()
+    verify_otp = otp_s.verify_otp(phon_entry.get(), otp_entry.get())
+    if verify_otp[0]:
+        phon_label.config(text="ورود موفقیت آمیز", fg="green")
+        otp_label.config(text="کد otp صحیح است", fg="green")
+        otp_entry.config(state="disabled")
+        messagebox.showinfo("ورود موفق", "شما با موفقیت وارد شدید!")
+    else:
+        phon_label.config(text="ورود ناموفق", fg="red")
+        otp_label.config(text=f"کد otp اشتباه است: {verify_otp[1]}", fg="red")
 
 check_button = tk.Button(login_frame, text="بررسی", font=FONT_BOLD, command=login)
 check_button.pack(pady=10)
