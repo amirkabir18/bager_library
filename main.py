@@ -145,8 +145,13 @@ st.configure("Modern.TRadiobutton", font=FONT_NORMAL)
 
 current_user: dict | None = None
 
+ALLOWED_DELETE_TABLES = {"books", "members", "loans", "auth_users"}
+
 
 def bind_table_delete(tree_widget, table_name, id_col_index=0, on_deleted=None):
+    if table_name not in ALLOWED_DELETE_TABLES:
+        raise ValueError(f"Table '{table_name}' is not allowed for deletion via bind_table_delete")
+
     def on_delete_key(event):
         selected = tree_widget.selection()
         if not selected:
@@ -174,14 +179,23 @@ def bind_table_delete(tree_widget, table_name, id_col_index=0, on_deleted=None):
 
         if table_name == "auth_users":
             all_succeeded = True
+            deleted_items = []
             for item_id, rec_id in valid_items:
-                del_ok, msg = delete_user(int(rec_id), database_path=db_p)
+                try:
+                    del_ok, msg = delete_user(int(rec_id), database_path=db_p)
+                except Exception as ex:
+                    del_ok, msg = False, str(ex)
                 if del_ok:
-                    tree_widget.delete(item_id)
+                    deleted_items.append(item_id)
                 else:
                     all_succeeded = False
                     messagebox.showerror("خطا در حذف کاربر", msg, parent=root)
-            if all_succeeded:
+            for item_id in deleted_items:
+                try:
+                    tree_widget.delete(item_id)
+                except Exception:
+                    pass
+            if all_succeeded and deleted_items:
                 messagebox.showinfo("موفق", "کاربر با موفقیت حذف شد.", parent=root)
             if on_deleted:
                 on_deleted()
@@ -191,13 +205,23 @@ def bind_table_delete(tree_widget, table_name, id_col_index=0, on_deleted=None):
         try:
             del_cur = del_conn.cursor()
             for item_id, rec_id in valid_items:
+                if table_name == "loans":
+                    del_cur.execute("DELETE FROM notification_logs WHERE loan_id = ?", (rec_id,))
                 del_cur.execute(f"DELETE FROM `{table_name}` WHERE id = ?", (rec_id,))
-                tree_widget.delete(item_id)
             del_conn.commit()
+            for item_id, _ in valid_items:
+                try:
+                    tree_widget.delete(item_id)
+                except Exception:
+                    pass
             messagebox.showinfo("موفق", "ردیف با موفقیت حذف شد.", parent=root)
             if on_deleted:
                 on_deleted()
-        except sqlite3.Error as e:
+        except Exception as e:
+            try:
+                del_conn.rollback()
+            except Exception:
+                pass
             messagebox.showerror("خطا", f"خطا در حذف اطلاعات: {e}", parent=root)
         finally:
             del_conn.close()
@@ -626,7 +650,7 @@ def search(event=None):
 
         if results:
             for row in results:
-                tree.insert("", "end", values=row)
+                tree.insert("", "end", values=tuple(row))
         else:
             tree.insert("", "end", values=("❌ نتیجه‌ای یافت نشد!",) + ("",) * (len(columns) - 1))
 
@@ -998,7 +1022,7 @@ def search_members(event=None):
 
         if results:
             for row in results:
-                member_tree.insert("", "end", values=row)
+                member_tree.insert("", "end", values=tuple(row))
         else:
             member_tree.insert("", "end", values=("❌ نتیجه‌ای یافت نشد!",) + ("",) * (len(member_column) - 1))
 
