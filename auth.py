@@ -211,33 +211,102 @@ def list_users(database_path: str | None = None) -> list[dict[str, Any]]:
         conn.close()
 
 
+def delete_user(user_id: int, database_path: str | None = None) -> tuple[bool, str]:
+    conn = get_db_connection(database_path=database_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT role, is_active FROM auth_users WHERE id = ?", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            return False, "کاربری با این شناسه یافت نشد."
+
+        role = str(row[0]).strip().lower()
+        is_active = bool(row[1])
+
+        if is_active and role in ('admin', 'super admin', 'superadmin'):
+            cur.execute("""
+                SELECT COUNT(*) FROM auth_users
+                WHERE role IN ('admin', 'super admin', 'superadmin') AND is_active = 1 AND id != ?
+            """, (user_id,))
+            remaining_admins = cur.fetchone()[0]
+            if remaining_admins == 0:
+                return False, "امکان حذف آخرین مدیر فعال در سامانه وجود ندارد."
+
+        cur.execute("DELETE FROM auth_users WHERE id = ?", (user_id,))
+        conn.commit()
+        if cur.rowcount > 0:
+            return True, "کاربر با موفقیت حذف شد."
+        return False, "حذف کاربر انجام نشد."
+    finally:
+        conn.close()
+
+
 def has_admin_user(database_path: str | None = None) -> bool:
     conn = get_db_connection(database_path=database_path)
     try:
         cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM auth_users WHERE role = 'admin' AND is_active = 1")
+        cur.execute("SELECT COUNT(*) FROM auth_users WHERE role IN ('admin', 'super admin', 'superadmin') AND is_active = 1")
         return cur.fetchone()[0] > 0
     finally:
         conn.close()
 
 
 def bootstrap_admin_user(
-    username: str = "admin",
-    phone_number: str = "09120000000",
-    password: str = "admin1234",
+    username: str | None = None,
+    phone_number: str | None = None,
+    password: str | None = None,
     telegram_chat_id: str | None = None,
-    database_path: str | None = None
+    database_path: str | None = None,
+    role: str = "super admin"
 ) -> tuple[bool, str, dict[str, Any] | None]:
+    final_username = (
+        username
+        or os.getenv("SUPER_ADMIN_USERNAME")
+        or os.getenv("ADMIN_USERNAME")
+        or "admin"
+    ).strip()
+    final_phone = (
+        phone_number
+        or os.getenv("SUPER_ADMIN_PHONE")
+        or os.getenv("ADMIN_PHONE")
+        or os.getenv("SUPER_ADMIN_PHONE_NUMBER")
+        or os.getenv("ADMIN_PHONE_NUMBER")
+        or "09120000000"
+    ).strip()
+    final_password = (
+        password
+        or os.getenv("SUPER_ADMIN_PASSWORD")
+        or os.getenv("ADMIN_PASSWORD")
+        or "admin1234"
+    )
+    final_tg = (
+        telegram_chat_id
+        or os.getenv("SUPER_ADMIN_TELEGRAM_CHAT_ID")
+        or os.getenv("ADMIN_TELEGRAM_CHAT_ID")
+        or os.getenv("SUPER_ADMIN_CHAT_ID")
+        or os.getenv("ADMIN_CHAT_ID")
+        or None
+    )
+    if final_tg:
+        final_tg = str(final_tg).strip() or None
+
+    final_role = (
+        os.getenv("SUPER_ADMIN_ROLE")
+        or os.getenv("ADMIN_ROLE")
+        or role
+        or "super admin"
+    ).strip()
+
     if has_admin_user(database_path=database_path):
-        existing = get_user_by_username(username, database_path=database_path)
+        existing = get_user_by_username(final_username, database_path=database_path)
         return False, "حساب مدیر از پیش در سامانه تعریف شده است.", existing
 
     success, msg, user_data = create_user(
-        username=username,
-        phone_number=phone_number,
-        password=password,
-        role='admin',
-        telegram_chat_id=telegram_chat_id,
+        username=final_username,
+        phone_number=final_phone,
+        password=final_password,
+        role=final_role,
+        telegram_chat_id=final_tg,
         is_active=True,
         database_path=database_path
     )
@@ -270,7 +339,11 @@ def is_telegram_reachable(
         pass
 
     try:
-        req = urllib.request.Request(f"{target_url.rstrip('/')}", headers={'User-Agent': 'BagerLibrary/1.0'})
+        headers = {'User-Agent': 'BagerLibrary/1.0'}
+        if api_url and not api_url.startswith("https://api.telegram.org"):
+            headers['x-relay-target'] = 'https://api.telegram.org#'
+            headers['X-Relay-Target'] = 'https://api.telegram.org#'
+        req = urllib.request.Request(f"{target_url.rstrip('/')}", headers=headers)
         opener = urllib.request.build_opener()
         if proxy:
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({'http': proxy, 'https': proxy}))
@@ -383,6 +456,11 @@ class TelegramBotClient:
         if self.relay_secret:
             headers['X-Relay-Secret'] = self.relay_secret
 
+        if self.api_url and not self.api_url.startswith("https://api.telegram.org"):
+            target_url = f"https://api.telegram.org/bot{curr_token}/{method}#"
+            headers['x-relay-target'] = target_url
+            headers['X-Relay-Target'] = target_url
+
         post_bytes = json.dumps(data).encode('utf-8') if data is not None else None
         req = urllib.request.Request(endpoint, data=post_bytes, headers=headers)
 
@@ -390,8 +468,25 @@ class TelegramBotClient:
         if self.proxy:
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({'http': self.proxy, 'https': self.proxy}))
 
-        with opener.open(req, timeout=timeout) as response:
-            return json.loads(response.read().decode('utf-8'))
+        try:
+            with opener.open(req, timeout=timeout) as response:
+                return json.loads(response.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            desc = ""
+            try:
+                body = e.read().decode('utf-8', errors='replace')
+                body_json = json.loads(body)
+                desc = body_json.get('description') or body_json.get('error') or body
+            except Exception:
+                desc = str(e.reason or e)
+
+            if e.code == 404:
+                raise RuntimeError(f"ربات تلگرام یا توکن یافت نشد (HTTP 404: {desc})") from e
+            elif e.code == 401:
+                raise RuntimeError(f"توکن ربات تلگرام نامعتبر است (HTTP 401: {desc})") from e
+            elif e.code == 400:
+                raise RuntimeError(f"خطای درخواست تلگرام/رله (HTTP 400: {desc})") from e
+            raise RuntimeError(f"خطای ارتباط با تلگرام (HTTP {e.code}: {desc})") from e
 
     def test_connection(self) -> tuple[bool, str, dict[str, Any] | None]:
         try:

@@ -16,6 +16,7 @@ from auth import (
     hash_otp,
     verify_otp_hash,
     create_user,
+    delete_user,
     get_user_by_username,
     get_user_by_phone,
     get_user_by_identifier,
@@ -100,8 +101,20 @@ class TestAuthWithDatabase(unittest.TestCase):
         conn = sqlite3.connect(self.db_path)
         init_database(conn)
         conn.close()
+        self._orig_env = dict(os.environ)
+        for k in [
+            'TELEGRAM_RELAY_URL', 'CLOUDFLARE_RELAY_URL', 'VERCEL_RELAY_URL',
+            'telegram_relay_url', 'cloudflare_relay_url', 'vercel_relay_url',
+            'SUPER_ADMIN_USERNAME', 'SUPER_ADMIN_PHONE', 'SUPER_ADMIN_PHONE_NUMBER',
+            'SUPER_ADMIN_PASSWORD', 'SUPER_ADMIN_TELEGRAM_CHAT_ID', 'SUPER_ADMIN_ROLE',
+            'ADMIN_USERNAME', 'ADMIN_PHONE', 'ADMIN_PHONE_NUMBER',
+            'ADMIN_PASSWORD', 'ADMIN_TELEGRAM_CHAT_ID', 'ADMIN_ROLE'
+        ]:
+            os.environ.pop(k, None)
 
     def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
         if os.path.exists(self.db_path):
             try:
                 os.remove(self.db_path)
@@ -120,13 +133,28 @@ class TestAuthWithDatabase(unittest.TestCase):
         self.assertTrue(has_admin_user(database_path=self.db_path))
         self.assertIsNotNone(user)
         assert user is not None
-        self.assertEqual(user['role'], 'admin')
+        self.assertEqual(user['role'], 'super admin')
 
         ok2, msg2, _ = bootstrap_admin_user(database_path=self.db_path)
         self.assertFalse(ok2)
 
         ens_ok, _ = ensure_bootstrap_admin(database_path=self.db_path)
         self.assertTrue(ens_ok)
+
+    def test_bootstrap_admin_with_env_vars(self):
+        os.environ['SUPER_ADMIN_USERNAME'] = 'env_superadmin'
+        os.environ['SUPER_ADMIN_PHONE'] = '09129998877'
+        os.environ['SUPER_ADMIN_PASSWORD'] = 'env_secret_pass'
+        os.environ['SUPER_ADMIN_TELEGRAM_CHAT_ID'] = '99887766'
+
+        ok, msg, user = bootstrap_admin_user(database_path=self.db_path)
+        self.assertTrue(ok)
+        self.assertIsNotNone(user)
+        assert user is not None
+        self.assertEqual(user['username'], 'env_superadmin')
+        self.assertEqual(user['phone_number'], '09129998877')
+        self.assertEqual(user['role'], 'super admin')
+        self.assertEqual(user['telegram_chat_id'], '99887766')
 
     def test_create_and_query_users(self):
         ok, _, user = create_user(
@@ -367,6 +395,42 @@ class TestAuthWithDatabase(unittest.TestCase):
         # telegram_relay_url takes highest precedence
         set_setting('telegram_relay_url', 'https://custom-relay.example.com/', database_path=self.db_path)
         self.assertEqual(get_telegram_api_url(database_path=self.db_path), 'https://custom-relay.example.com')
+
+        # Test relay headers in _make_request
+        relay_client = TelegramBotClient(token='123:TOKEN', database_path=self.db_path)
+        with patch('urllib.request.urlopen') as mock_urlopen, patch('urllib.request.build_opener') as mock_build_opener:
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = b'{"ok": true, "result": {}}'
+            mock_build_opener.return_value.open.return_value.__enter__.return_value = mock_resp
+
+            relay_client._make_request('sendMessage', {'chat_id': '123', 'text': 'hi'})
+            call_req = mock_build_opener.return_value.open.call_args[0][0]
+            self.assertEqual(call_req.get_header('X-relay-target'), 'https://api.telegram.org/bot123:TOKEN/sendMessage#')
+            self.assertEqual(call_req.get_header('X-relay-secret'), 'secret123')
+
+    def test_delete_user(self):
+        ok, _, u1 = create_user("testadmin1", "09121110001", role="admin", database_path=self.db_path)
+        self.assertTrue(ok)
+        ok, _, u2 = create_user("testadmin2", "09121110002", role="super admin", database_path=self.db_path)
+        self.assertTrue(ok)
+        ok, _, u3 = create_user("regularuser", "09121110003", role="user", database_path=self.db_path)
+        self.assertTrue(ok)
+
+        # Deleting regular user succeeds
+        assert u3 is not None
+        del_ok, _ = delete_user(u3['id'], database_path=self.db_path)
+        self.assertTrue(del_ok)
+
+        # Deleting one of two admins succeeds
+        assert u1 is not None
+        del_ok, _ = delete_user(u1['id'], database_path=self.db_path)
+        self.assertTrue(del_ok)
+
+        # Deleting last admin is prevented
+        assert u2 is not None
+        del_ok, msg = delete_user(u2['id'], database_path=self.db_path)
+        self.assertFalse(del_ok)
+        self.assertIn("آخرین مدیر", msg)
 
 
 if __name__ == "__main__":

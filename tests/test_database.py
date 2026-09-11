@@ -146,5 +146,32 @@ class TestDatabaseMigration(unittest.TestCase):
         }
         self.assertTrue(expected_indexes.issubset(indexes), f"Missing indexes: {expected_indexes - indexes}")
 
+    def test_loan_lifecycle_and_return(self):
+        database.init_database(self.conn)
+        cur = self.conn.cursor()
+        cur.execute("INSERT INTO books (title, author, isbn) VALUES ('کتاب تست', 'نویسنده تست', '1234567890')")
+        cur.execute("INSERT INTO members (member_id, phone_number) VALUES ('عضو تستی', '09123456789')")
+        cur.execute("""
+            INSERT INTO loans (member_name, book_id, return_date, borrow_date, borrowed)
+            VALUES ('عضو تستی', 'کتاب تست', '2026-09-20', '2026-09-10', 1)
+        """)
+        loan_id = cur.lastrowid
+        self.conn.commit()
+
+        # Check book is currently marked as borrowed
+        cur.execute("SELECT COUNT(*) FROM loans WHERE book_id = 'کتاب تست' AND (borrowed = 1 OR borrowed = '1')")
+        self.assertEqual(cur.fetchone()[0], 1)
+
+        # Return loan
+        cur.execute("UPDATE loans SET borrowed = 0 WHERE id = ?", (loan_id,))
+        self.conn.commit()
+
+        # Check book is now returned and available
+        cur.execute("SELECT COUNT(*) FROM loans WHERE book_id = 'کتاب تست' AND (borrowed = 1 OR borrowed = '1')")
+        self.assertEqual(cur.fetchone()[0], 0)
+
+        cur.execute("SELECT borrowed FROM loans WHERE id = ?", (loan_id,))
+        self.assertEqual(cur.fetchone()[0], 0)
+
 if __name__ == '__main__':
     unittest.main()
