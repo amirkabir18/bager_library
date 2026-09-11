@@ -1,24 +1,26 @@
 import os
-import sys
 import sqlite3
+import sys
 
-base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-db_p = os.path.join(base_dir, 'bager_library.db')
+base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+db_p = os.path.join(base_dir, "bager_library.db")
+
 
 def load_env_file(filepath: str | None = None):
-    p = filepath or os.path.join(base_dir, '.env')
+    p = filepath or os.path.join(base_dir, ".env")
     if not os.path.exists(p):
         return
     try:
         from dotenv import load_dotenv
+
         load_dotenv(p)
     except Exception:
         try:
-            with open(p, 'r', encoding='utf-8') as f:
+            with open(p, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
-                    if line and not line.startswith('#') and '=' in line:
-                        k, v = line.split('=', 1)
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
                         k = k.strip()
                         v = v.strip().strip('"').strip("'")
                         if k not in os.environ:
@@ -26,50 +28,54 @@ def load_env_file(filepath: str | None = None):
         except Exception:
             pass
 
+
 load_env_file()
 
 TRANSLATIONS: dict[str, str] = {
-    'id': 'شناسه',
-    'title': 'عنوان کتاب',
-    'author': 'نویسنده',
-    'isbn': 'شابک',
-    'member_id': 'نام کاربر',
-    'phone_number': 'شماره تلفن',
-    'borrow_date': 'تاریخ امانت',
-    'return_date': 'تاریخ بازگشت',
-    'borrowed': 'وضعیت امانت',
-    'book_id': 'نام کتاب',
-    'member_name': 'نام کاربر',
-    'username': 'نام کاربری',
-    'role': 'نقش',
-    'telegram_chat_id': 'شناسه تلگرام',
-    'telegram_relay_url': 'آدرس رله تلگرام',
-    'telegram_relay_secret': 'کلید امنیتی رله',
-    'is_active': 'وضعیت فعال',
-    'created_at': 'تاریخ ثبت',
-    'password_hash': 'هش رمز عبور',
-    'otp_hash': 'هش کد یکبار مصرف',
-    'expires_at': 'تاریخ انقضا',
-    'attempts': 'تعداد تلاش‌ها',
-    'is_used': 'استفاده شده',
-    'notification_type': 'نوع اعلان',
-    'sent_date': 'تاریخ ارسال',
-    'key': 'کلید تنظیمات',
-    'value': 'مقدار تنظیمات',
-    'super admin': 'سرپرست',
-    'superadmin': 'سرپرست',
-    'admin': 'مدیر',
-    'librarian': 'کتابدار',
-    'user': 'کاربر',
+    "id": "شناسه",
+    "title": "عنوان کتاب",
+    "author": "نویسنده",
+    "isbn": "شابک",
+    "member_id": "نام کاربر",
+    "phone_number": "شماره تلفن",
+    "borrow_date": "تاریخ امانت",
+    "return_date": "تاریخ بازگشت",
+    "borrowed": "وضعیت امانت",
+    "book_id": "نام کتاب",
+    "member_name": "نام کاربر",
+    "username": "نام کاربری",
+    "role": "نقش",
+    "telegram_chat_id": "شناسه تلگرام",
+    "telegram_relay_url": "آدرس رله تلگرام",
+    "telegram_relay_secret": "کلید امنیتی رله",
+    "is_active": "وضعیت فعال",
+    "created_at": "تاریخ ثبت",
+    "password_hash": "هش رمز عبور",
+    "otp_hash": "هش کد یکبار مصرف",
+    "expires_at": "تاریخ انقضا",
+    "attempts": "تعداد تلاش‌ها",
+    "is_used": "استفاده شده",
+    "notification_type": "نوع اعلان",
+    "sent_date": "تاریخ ارسال",
+    "key": "کلید تنظیمات",
+    "value": "مقدار تنظیمات",
+    "super admin": "سرپرست",
+    "superadmin": "سرپرست",
+    "admin": "مدیر",
+    "librarian": "کتابدار",
+    "user": "کاربر",
 }
+
 
 def tr(key: object) -> str:
     s = str(key) if key is not None else ""
     return TRANSLATIONS.get(s, s)
 
+
 def rtl_display_order(cols: list[str], preferred_order: list[str]) -> list[str]:
     ordered = [c for c in preferred_order if c in cols] + [c for c in cols if c not in preferred_order]
     return list(reversed(ordered))
+
 
 def get_db_connection(database_path: str | None = None, enable_foreign_keys: bool = True) -> sqlite3.Connection:
     target_path = database_path or db_p
@@ -77,6 +83,7 @@ def get_db_connection(database_path: str | None = None, enable_foreign_keys: boo
     if enable_foreign_keys:
         c.execute("PRAGMA foreign_keys = ON")
     return c
+
 
 def init_database(connection: sqlite3.Connection | None = None):
     should_close = False
@@ -159,15 +166,18 @@ def init_database(connection: sqlite3.Connection | None = None):
         """)
 
         default_settings = [
-            ('notifications_enabled', 'true'),
-            ('notification_advance_days', '2'),
-            ('notification_sound', 'true'),
-            ('notification_check_interval_mins', '30')
+            ("notifications_enabled", "true"),
+            ("notification_advance_days", "2"),
+            ("notification_sound", "true"),
+            ("notification_check_interval_mins", "30"),
         ]
-        cur.executemany("""
+        cur.executemany(
+            """
             INSERT OR IGNORE INTO app_settings (key, value)
             VALUES (?, ?)
-        """, default_settings)
+        """,
+            default_settings,
+        )
 
         try:
             cur.execute("ALTER TABLE books DROP COLUMN location")
@@ -177,11 +187,11 @@ def init_database(connection: sqlite3.Connection | None = None):
         cur.execute('PRAGMA table_info("auth_users")')
         existing_user_cols = {str(row[1]) for row in cur.fetchall()}
         user_col_defs = {
-            'telegram_chat_id': 'VARCHAR(50)',
-            'role': "VARCHAR(20) DEFAULT 'librarian'",
-            'password_hash': 'VARCHAR(255)',
-            'is_active': 'BOOLEAN DEFAULT 1',
-            'created_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
+            "telegram_chat_id": "VARCHAR(50)",
+            "role": "VARCHAR(20) DEFAULT 'librarian'",
+            "password_hash": "VARCHAR(255)",
+            "is_active": "BOOLEAN DEFAULT 1",
+            "created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         }
         for col_name, col_def in user_col_defs.items():
             if col_name not in existing_user_cols:
@@ -191,7 +201,9 @@ def init_database(connection: sqlite3.Connection | None = None):
                     pass
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_loans_return_borrowed ON loans(return_date, borrowed)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_notification_logs_lookup ON notification_logs(loan_id, sent_date, notification_type)")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notification_logs_lookup ON notification_logs(loan_id, sent_date, notification_type)"
+        )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_otp_sessions_phone ON otp_sessions(phone_number, expires_at)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_auth_users_username ON auth_users(username)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_auth_users_phone ON auth_users(phone_number)")
@@ -200,6 +212,7 @@ def init_database(connection: sqlite3.Connection | None = None):
     finally:
         if should_close:
             connection.close()
+
 
 def get_setting(key: str, default: str = "", database_path: str | None = None) -> str:
     if database_path is not None:
@@ -232,6 +245,7 @@ def get_setting(key: str, default: str = "", database_path: str | None = None) -
     finally:
         c.close()
 
+
 def set_setting(key: str, value: str, database_path: str | None = None, sync_env: bool = True):
     str_val = str(value)
     if sync_env:
@@ -241,16 +255,20 @@ def set_setting(key: str, value: str, database_path: str | None = None, sync_env
     c = get_db_connection(database_path=database_path)
     try:
         cur = c.cursor()
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO app_settings (key, value, updated_at)
             VALUES (?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(key) DO UPDATE SET
                 value = excluded.value,
                 updated_at = CURRENT_TIMESTAMP
-        """, (key, str_val))
+        """,
+            (key, str_val),
+        )
         c.commit()
     finally:
         c.close()
+
 
 def get_all_settings(database_path: str | None = None) -> dict[str, str]:
     settings = {}
