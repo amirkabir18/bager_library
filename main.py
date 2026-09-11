@@ -53,9 +53,15 @@ from auth import (
     normalize_phone_number,
 )
 from database import (
+    clear_notification_logs,
+    get_all_settings,
     get_db_connection,
+    get_notification_logs,
+    get_setting,
     init_database,
+    log_notification,
     rtl_display_order,
+    set_setting,
     tr,
 )
 
@@ -72,7 +78,7 @@ with get_db_connection(db_p) as _init_conn:
 
 root = tk.Tk()
 root.title("کتابخانه باقر العلوم")
-notification_engine = NotificationEngine(root, icon_path=icon_p)
+notification_engine = NotificationEngine(root, icon_path=icon_p, db_path=db_p)
 reminder_manager = LoanReminderManager(root, db_p, notification_engine)
 reminder_manager.start()
 
@@ -246,6 +252,7 @@ tabel_frame = ttk.Frame(notebook)
 member_frame = ttk.Frame(notebook)
 auth_users_frame = ttk.Frame(notebook)
 help_frame = ttk.Frame(notebook)
+settings_frame = ttk.Frame(notebook)
 
 
 def rebuild_tabs():
@@ -262,6 +269,12 @@ def rebuild_tabs():
     else:
         notebook.add(login_frame, text=" وضعیت حساب ")
         notebook.add(help_frame, text=" راهنما ")
+        notebook.add(settings_frame, text=" تنظیمات و اعلان‌ها ")
+        try:
+            load_settings_into_ui()
+            load_notification_logs_ui()
+        except Exception:
+            pass
 
         user_role = str(current_user.get("role", "")).strip().lower()
         if user_role in ("super admin", "superadmin", "admin"):
@@ -2739,6 +2752,405 @@ btn_cancel_update = create_icon_button(
     padx=10,
     pady=3,
 )
+
+# ==================== تنظیمات و اعلان‌ها (Settings & Notifications) ====================
+title_label_settings = tk.Label(settings_frame, text="تنظیمات سیستم و اعلان‌ها", font=FONT_TITLE)
+title_label_settings.pack(pady=(12, 4))
+
+subtitle_label_settings = tk.Label(
+    settings_frame,
+    text="مدیریت ترجیحات یادآوری، هشدارهای سررسید و مشاهده تاریخچه اعلان‌ها",
+    font=FONT_NORMAL,
+    fg="#666666",
+)
+subtitle_label_settings.pack(pady=(0, 8))
+
+settings_container = ttk.Frame(settings_frame)
+settings_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=5)
+
+# --- Preferences Card ---
+pref_card = tk.LabelFrame(
+    settings_container,
+    text=" ترجیحات اعلان‌ها و یادآوری ",
+    font=FONT_BOLD,
+    padx=15,
+    pady=10,
+)
+pref_card.pack(fill=tk.X, pady=(0, 10))
+
+var_notif_enabled = tk.BooleanVar(value=True)
+var_notif_sound = tk.BooleanVar(value=True)
+
+pref_row1 = tk.Frame(pref_card)
+pref_row1.pack(fill=tk.X, pady=4)
+
+chk_enable_notif = tk.Checkbutton(
+    pref_row1,
+    text="فعال‌سازی اعلان‌های دسکتاپ سیستم",
+    variable=var_notif_enabled,
+    font=FONT_NORMAL,
+    anchor="e",
+)
+chk_enable_notif.pack(side=tk.RIGHT, padx=10)
+
+chk_enable_sound = tk.Checkbutton(
+    pref_row1,
+    text="پخش صدای هشدار هنگام نمایش اعلان",
+    variable=var_notif_sound,
+    font=FONT_NORMAL,
+    anchor="e",
+)
+chk_enable_sound.pack(side=tk.RIGHT, padx=10)
+
+pref_row2 = tk.Frame(pref_card)
+pref_row2.pack(fill=tk.X, pady=6)
+
+lbl_advance_days = tk.Label(pref_row2, text="ارسال یادآوری سررسید (چند روز قبل):", font=FONT_NORMAL)
+lbl_advance_days.pack(side=tk.RIGHT, padx=5)
+
+combo_advance_days = ttk.Combobox(
+    pref_row2,
+    values=["1", "2", "3", "5", "7"],
+    state="readonly",
+    width=6,
+    justify="center",
+)
+combo_advance_days.set("2")
+combo_advance_days.pack(side=tk.RIGHT, padx=10)
+
+lbl_check_interval = tk.Label(pref_row2, text="فاصله زمانی بررسی خودکار امانات (دقیقه):", font=FONT_NORMAL)
+lbl_check_interval.pack(side=tk.RIGHT, padx=(20, 5))
+
+combo_interval = ttk.Combobox(
+    pref_row2,
+    values=["15", "30", "60", "120", "360"],
+    state="readonly",
+    width=6,
+    justify="center",
+)
+combo_interval.set("30")
+combo_interval.pack(side=tk.RIGHT, padx=5)
+
+pref_row3 = tk.Frame(pref_card)
+pref_row3.pack(fill=tk.X, pady=(8, 4))
+
+
+def save_settings_ui():
+    notif_val = "true" if var_notif_enabled.get() else "false"
+    sound_val = "true" if var_notif_sound.get() else "false"
+    adv_days = str(combo_advance_days.get()).strip() or "2"
+    interval = str(combo_interval.get()).strip() or "30"
+
+    try:
+        with get_db_connection(db_p) as conn:
+            set_setting(conn, "notifications_enabled", notif_val)
+            set_setting(conn, "notification_sound", sound_val)
+            set_setting(conn, "notification_advance_days", adv_days)
+            set_setting(conn, "notification_check_interval_mins", interval)
+
+        try:
+            reminder_manager.reschedule()
+        except Exception:
+            pass
+
+        messagebox.showinfo("موفقیت", "تنظیمات با موفقیت ذخیره و اعمال شد.", parent=root)
+    except Exception as e:
+        messagebox.showerror("خطا", f"خطا در ذخیره تنظیمات:\n{e}", parent=root)
+
+
+def trigger_test_notification():
+    try:
+        notification_engine.show(
+            "اعلان آزمایشی کتابخانه",
+            "سیستم اعلان‌ها و هشدارهای نرم‌افزار به درستی فعال و در حال کار است.",
+        )
+        try:
+            log_notification(db_p, notification_type="test", loan_id=None)
+        except Exception:
+            pass
+        refresh_notification_logs()
+        messagebox.showinfo("اعلان آزمایشی", "اعلان آزمایشی ارسال و در تاریخچه ثبت شد.", parent=root)
+    except Exception as e:
+        messagebox.showerror("خطا", f"خطا در ارسال اعلان آزمایشی:\n{e}", parent=root)
+
+
+def trigger_check_now():
+    try:
+        found_count = reminder_manager.check_loans()
+        refresh_notification_logs()
+        if found_count > 0:
+            messagebox.showinfo("بررسی امانات", f"بررسی انجام شد. {found_count} اعلان جدید صادر شد.", parent=root)
+        else:
+            messagebox.showinfo("بررسی امانات", "بررسی انجام شد. مورد جدیدی برای ارسال اعلان یافت نشد.", parent=root)
+    except Exception as e:
+        messagebox.showerror("خطا", f"خطا در بررسی امانات:\n{e}", parent=root)
+
+
+btn_save_settings = create_icon_button(
+    pref_row3,
+    text=" ذخیره تنظیمات ",
+    icon_name="check",
+    font=FONT_BOLD,
+    command=save_settings_ui,
+    padx=12,
+    pady=3,
+)
+btn_save_settings.pack(side=tk.RIGHT, padx=5)
+
+btn_test_notif = create_icon_button(
+    pref_row3,
+    text=" ارسال اعلان آزمایشی ",
+    font=FONT_NORMAL,
+    command=trigger_test_notification,
+    padx=10,
+    pady=3,
+)
+btn_test_notif.pack(side=tk.RIGHT, padx=5)
+
+btn_check_now = create_icon_button(
+    pref_row3,
+    text=" بررسی فوری امانات ",
+    icon_name="rotate-ccw",
+    font=FONT_NORMAL,
+    command=trigger_check_now,
+    padx=10,
+    pady=3,
+)
+btn_check_now.pack(side=tk.RIGHT, padx=5)
+
+
+# --- Audit Log Viewer Card ---
+log_card = tk.LabelFrame(
+    settings_container,
+    text=" تاریخچه و لاگ اعلان‌ها ",
+    font=FONT_BOLD,
+    padx=15,
+    pady=8,
+)
+log_card.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+
+filter_row = tk.Frame(log_card)
+filter_row.pack(fill=tk.X, pady=(0, 6))
+
+lbl_log_search = tk.Label(filter_row, text="جستجو:", font=FONT_NORMAL)
+lbl_log_search.pack(side=tk.RIGHT, padx=(10, 2))
+
+entry_log_search = tk.Entry(filter_row, font=FONT_NORMAL, width=16)
+entry_log_search.pack(side=tk.RIGHT, padx=5)
+
+lbl_log_type = tk.Label(filter_row, text="نوع اعلان:", font=FONT_NORMAL)
+lbl_log_type.pack(side=tk.RIGHT, padx=(10, 2))
+
+combo_log_type = ttk.Combobox(
+    filter_row,
+    values=["همه", "یادآوری سررسید", "هشدار دیرکرد", "اعلان آزمایشی"],
+    state="readonly",
+    width=14,
+    justify="center",
+)
+combo_log_type.current(0)
+combo_log_type.pack(side=tk.RIGHT, padx=5)
+
+log_columns = ["id", "notification_type", "book_title", "member_name", "loan_id", "sent_date", "created_at"]
+
+log_tree_frame = ttk.Frame(log_card)
+log_tree_frame.pack(fill=tk.BOTH, expand=True, pady=4)
+
+log_scrollbar = ttk.Scrollbar(log_tree_frame, orient=tk.VERTICAL)
+log_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+
+log_tree = ttk.Treeview(
+    log_tree_frame,
+    yscrollcommand=log_scrollbar.set,
+    columns=log_columns,
+    show="headings",
+    height=8,
+)
+log_scrollbar.config(command=log_tree.yview)
+
+for col in log_columns:
+    log_tree.heading(col, text=tr(col), anchor=tk.CENTER)
+    log_tree.column(col, anchor=tk.CENTER)
+
+log_tree.column("id", width=50, stretch=False)
+log_tree.column("notification_type", width=120)
+log_tree.column("book_title", width=160)
+log_tree.column("member_name", width=130)
+log_tree.column("loan_id", width=70, stretch=False)
+log_tree.column("sent_date", width=95)
+log_tree.column("created_at", width=135)
+
+log_tree["displaycolumns"] = rtl_display_order(
+    log_columns, ["id", "notification_type", "book_title", "member_name", "loan_id", "sent_date", "created_at"]
+)
+log_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+
+def _format_shamsi_date(date_str: str) -> str:
+    if not date_str:
+        return ""
+    try:
+        date_str = str(date_str).strip()
+        if " " in date_str:
+            dt_part, tm_part = date_str.split(" ", 1)
+            parts = [int(p) for p in dt_part.split("-")]
+            if parts[0] > 1900:
+                g_date = datetime.date(parts[0], parts[1], parts[2])
+                s_date = jdatetime.date.fromgregorian(date=g_date).strftime("%Y-%m-%d")
+                tm_clean = tm_part.split(".")[0]
+                return f"{s_date} {tm_clean}"
+        elif "-" in date_str:
+            parts = [int(p) for p in date_str.split("-")]
+            if parts[0] > 1900:
+                g_date = datetime.date(parts[0], parts[1], parts[2])
+                return jdatetime.date.fromgregorian(date=g_date).strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    return str(date_str)
+
+
+def load_notification_logs_ui():
+    for item in log_tree.get_children():
+        log_tree.delete(item)
+
+    search_kw = entry_log_search.get().strip()
+    sel_type = combo_log_type.get().strip()
+    type_filter = None
+    if sel_type == "یادآوری سررسید":
+        type_filter = "due_reminder"
+    elif sel_type == "هشدار دیرکرد":
+        type_filter = "overdue"
+    elif sel_type == "اعلان آزمایشی":
+        type_filter = "test"
+
+    try:
+        logs = get_notification_logs(
+            conn_or_path=db_p,
+            notification_type=type_filter,
+            search_query=search_kw if search_kw else None,
+            limit=200,
+        )
+        if not logs:
+            log_tree.insert("", tk.END, values=("❌ هیچ رکوردی یافت نشد", "", "", "", "", "", ""))
+            return
+
+        type_map = {
+            "due_reminder": "یادآوری سررسید",
+            "due_soon": "یادآوری سررسید",
+            "due_today": "یادآوری سررسید",
+            "overdue": "هشدار دیرکرد",
+            "test": "اعلان آزمایشی",
+        }
+
+        for row in logs:
+            raw_type = row.get("notification_type", "")
+            type_text = type_map.get(raw_type, tr(raw_type))
+            loan_id_val = str(row.get("loan_id") or "-")
+            book_val = str(row.get("book_title") or "-")
+            member_val = str(row.get("member_name") or "-")
+            sent_val = _format_shamsi_date(row.get("sent_date", ""))
+            created_val = _format_shamsi_date(row.get("created_at", ""))
+
+            vals = (
+                row.get("id"),
+                type_text,
+                book_val,
+                member_val,
+                loan_id_val,
+                sent_val,
+                created_val,
+            )
+            log_tree.insert("", tk.END, values=vals)
+    except Exception as e:
+        log_tree.insert("", tk.END, values=(f"❌ خطا: {e}", "", "", "", "", "", ""))
+
+
+def refresh_notification_logs():
+    entry_log_search.delete(0, tk.END)
+    combo_log_type.current(0)
+    load_notification_logs_ui()
+
+
+def clear_logs_ui():
+    confirm = messagebox.askyesno(
+        "تأیید پاک‌سازی",
+        "آیا از پاک‌سازی تمام تاریخچه اعلان‌ها اطمینان دارید؟ این عملیات غیرقابل بازگشت است.",
+        parent=root,
+    )
+    if not confirm:
+        return
+    try:
+        deleted = clear_notification_logs(db_p)
+        refresh_notification_logs()
+        messagebox.showinfo("موفقیت", f"تعداد {deleted} رکورد از تاریخچه اعلان‌ها پاک شد.", parent=root)
+    except Exception as e:
+        messagebox.showerror("خطا", f"خطا در پاک‌سازی تاریخچه:\n{e}", parent=root)
+
+
+btn_filter_logs = create_icon_button(
+    filter_row,
+    text=" فیلتر ",
+    icon_name="filter",
+    font=FONT_NORMAL,
+    command=load_notification_logs_ui,
+    padx=8,
+    pady=2,
+)
+btn_filter_logs.pack(side=tk.RIGHT, padx=5)
+
+btn_refresh_logs = create_icon_button(
+    filter_row,
+    text=" تازه‌سازی ",
+    icon_name="rotate-ccw",
+    font=FONT_NORMAL,
+    command=refresh_notification_logs,
+    padx=8,
+    pady=2,
+)
+btn_refresh_logs.pack(side=tk.RIGHT, padx=5)
+
+btn_clear_logs = create_icon_button(
+    filter_row,
+    text=" پاک‌سازی تاریخچه ",
+    icon_name="x",
+    font=FONT_NORMAL,
+    command=clear_logs_ui,
+    padx=8,
+    pady=2,
+)
+btn_clear_logs.pack(side=tk.LEFT, padx=5)
+
+entry_log_search.bind("<Return>", lambda e: load_notification_logs_ui())
+combo_log_type.bind("<<ComboboxSelected>>", lambda e: load_notification_logs_ui())
+
+
+def load_settings_into_ui():
+    try:
+        with get_db_connection(db_p) as conn:
+            settings = get_all_settings(conn)
+
+        n_en = settings.get("notifications_enabled", "true").lower() == "true"
+        s_en = settings.get("notification_sound", "true").lower() == "true"
+        adv = settings.get("notification_advance_days", "2")
+        inv = settings.get("notification_check_interval_mins", "30")
+
+        var_notif_enabled.set(n_en)
+        var_notif_sound.set(s_en)
+        if adv in combo_advance_days["values"]:
+            combo_advance_days.set(adv)
+        else:
+            combo_advance_days.set("2")
+
+        if inv in combo_interval["values"]:
+            combo_interval.set(inv)
+        else:
+            combo_interval.set("30")
+    except Exception:
+        pass
+
+
+load_settings_into_ui()
+load_notification_logs_ui()
 
 
 def on_startup_update_detected(res: dict):

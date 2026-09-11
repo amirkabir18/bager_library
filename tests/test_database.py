@@ -23,6 +23,8 @@ class TestDatabaseMigration(unittest.TestCase):
                 os.remove(self.temp_db_path)
             except OSError:
                 pass
+        for key in ("NOTIFICATIONS_ENABLED", "CUSTOM_KEY", "SYNC_KEY", "TEST_ENV_VAR"):
+            os.environ.pop(key, None)
 
     def test_init_database_fresh(self):
         database.init_database(self.conn)
