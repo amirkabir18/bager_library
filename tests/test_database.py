@@ -40,10 +40,7 @@ class TestDatabaseMigration(unittest.TestCase):
             "notification_logs",
             "app_settings",
         }
-        self.assertTrue(
-            expected_tables.issubset(tables),
-            f"Missing tables: {expected_tables - tables}",
-        )
+        self.assertTrue(expected_tables.issubset(tables), f"Missing tables: {expected_tables - tables}")
 
         # Check auth_users columns
         cur.execute('PRAGMA table_info("auth_users")')
@@ -59,37 +56,21 @@ class TestDatabaseMigration(unittest.TestCase):
             "created_at",
         }
         self.assertTrue(
-            expected_auth_cols.issubset(auth_cols),
-            f"Missing auth_users cols: {expected_auth_cols - auth_cols}",
+            expected_auth_cols.issubset(auth_cols), f"Missing auth_users cols: {expected_auth_cols - auth_cols}"
         )
 
         # Check otp_sessions columns
         cur.execute('PRAGMA table_info("otp_sessions")')
         otp_cols = {row[1] for row in cur.fetchall()}
-        expected_otp_cols = {
-            "id",
-            "phone_number",
-            "otp_hash",
-            "created_at",
-            "expires_at",
-            "attempts",
-            "is_used",
-        }
+        expected_otp_cols = {"id", "phone_number", "otp_hash", "created_at", "expires_at", "attempts", "is_used"}
         self.assertTrue(
-            expected_otp_cols.issubset(otp_cols),
-            f"Missing otp_sessions cols: {expected_otp_cols - otp_cols}",
+            expected_otp_cols.issubset(otp_cols), f"Missing otp_sessions cols: {expected_otp_cols - otp_cols}"
         )
 
         # Check notification_logs columns
         cur.execute('PRAGMA table_info("notification_logs")')
         notif_cols = {row[1] for row in cur.fetchall()}
-        expected_notif_cols = {
-            "id",
-            "loan_id",
-            "notification_type",
-            "sent_date",
-            "created_at",
-        }
+        expected_notif_cols = {"id", "loan_id", "notification_type", "sent_date", "created_at"}
         self.assertTrue(
             expected_notif_cols.issubset(notif_cols),
             f"Missing notification_logs cols: {expected_notif_cols - notif_cols}",
@@ -139,21 +120,12 @@ class TestDatabaseMigration(unittest.TestCase):
 
     def test_settings_get_and_set(self):
         database.init_database(self.conn)
-        self.assertEqual(
-            database.get_setting("notifications_enabled", database_path=self.temp_db_path),
-            "true",
-        )
+        self.assertEqual(database.get_setting("notifications_enabled", database_path=self.temp_db_path), "true")
         database.set_setting("notifications_enabled", "false", database_path=self.temp_db_path)
-        self.assertEqual(
-            database.get_setting("notifications_enabled", database_path=self.temp_db_path),
-            "false",
-        )
+        self.assertEqual(database.get_setting("notifications_enabled", database_path=self.temp_db_path), "false")
 
         database.set_setting("custom_key", "custom_value", database_path=self.temp_db_path)
-        self.assertEqual(
-            database.get_setting("custom_key", database_path=self.temp_db_path),
-            "custom_value",
-        )
+        self.assertEqual(database.get_setting("custom_key", database_path=self.temp_db_path), "custom_value")
 
         all_settings = database.get_all_settings(database_path=self.temp_db_path)
         self.assertEqual(all_settings["custom_key"], "custom_value")
@@ -163,17 +135,11 @@ class TestDatabaseMigration(unittest.TestCase):
         database.init_database(self.conn)
         os.environ["TEST_ENV_VAR"] = "env_value"
         try:
-            self.assertEqual(
-                database.get_setting("test_env_var", database_path=self.temp_db_path),
-                "env_value",
-            )
+            self.assertEqual(database.get_setting("test_env_var", database_path=self.temp_db_path), "env_value")
 
             database.set_setting("sync_key", "sync_val", database_path=self.temp_db_path)
             self.assertEqual(os.environ.get("SYNC_KEY"), "sync_val")
-            self.assertEqual(
-                database.get_setting("sync_key", database_path=self.temp_db_path),
-                "sync_val",
-            )
+            self.assertEqual(database.get_setting("sync_key", database_path=self.temp_db_path), "sync_val")
         finally:
             os.environ.pop("TEST_ENV_VAR", None)
             os.environ.pop("SYNC_KEY", None)
@@ -204,10 +170,34 @@ class TestDatabaseMigration(unittest.TestCase):
             "idx_auth_users_username",
             "idx_auth_users_phone",
         }
-        self.assertTrue(
-            expected_indexes.issubset(indexes),
-            f"Missing indexes: {expected_indexes - indexes}",
-        )
+        self.assertTrue(expected_indexes.issubset(indexes), f"Missing indexes: {expected_indexes - indexes}")
+
+    def test_loan_lifecycle_and_return(self):
+        database.init_database(self.conn)
+        cur = self.conn.cursor()
+        cur.execute("INSERT INTO books (title, author, isbn) VALUES ('کتاب تست', 'نویسنده تست', '1234567890')")
+        cur.execute("INSERT INTO members (member_id, phone_number) VALUES ('عضو تستی', '09123456789')")
+        cur.execute("""
+            INSERT INTO loans (member_name, book_id, return_date, borrow_date, borrowed)
+            VALUES ('عضو تستی', 'کتاب تست', '2026-09-20', '2026-09-10', 1)
+        """)
+        loan_id = cur.lastrowid
+        self.conn.commit()
+
+        # Check book is currently marked as borrowed
+        cur.execute("SELECT COUNT(*) FROM loans WHERE book_id = 'کتاب تست' AND (borrowed = 1 OR borrowed = '1')")
+        self.assertEqual(cur.fetchone()[0], 1)
+
+        # Return loan
+        cur.execute("UPDATE loans SET borrowed = 0 WHERE id = ?", (loan_id,))
+        self.conn.commit()
+
+        # Check book is now returned and available
+        cur.execute("SELECT COUNT(*) FROM loans WHERE book_id = 'کتاب تست' AND (borrowed = 1 OR borrowed = '1')")
+        self.assertEqual(cur.fetchone()[0], 0)
+
+        cur.execute("SELECT borrowed FROM loans WHERE id = ?", (loan_id,))
+        self.assertEqual(cur.fetchone()[0], 0)
 
 
 if __name__ == "__main__":

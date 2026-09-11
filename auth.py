@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import re
 import secrets
 import socket
@@ -144,14 +145,7 @@ def create_user(
             INSERT INTO auth_users (username, phone_number, telegram_chat_id, role, password_hash, is_active)
             VALUES (?, ?, ?, ?, ?, ?)
         """,
-            (
-                clean_username,
-                norm_phone,
-                telegram_chat_id,
-                role,
-                pwd_hash,
-                1 if is_active else 0,
-            ),
+            (clean_username, norm_phone, telegram_chat_id, role, pwd_hash, 1 if is_active else 0),
         )
         user_id = cur.lastrowid
         conn.commit()
@@ -183,10 +177,7 @@ def get_user_by_username(username: str, database_path: str | None = None) -> dic
     try:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
-        cur.execute(
-            "SELECT * FROM auth_users WHERE username = ? COLLATE NOCASE",
-            (username.strip(),),
-        )
+        cur.execute("SELECT * FROM auth_users WHERE username = ? COLLATE NOCASE", (username.strip(),))
         row = cur.fetchone()
         return dict(row) if row else None
     finally:
@@ -222,8 +213,7 @@ def update_user_telegram_chat_id(phone_number: str, telegram_chat_id: str, datab
     try:
         cur = conn.cursor()
         cur.execute(
-            "UPDATE auth_users SET telegram_chat_id = ? WHERE phone_number = ?",
-            (str(telegram_chat_id), norm_phone),
+            "UPDATE auth_users SET telegram_chat_id = ? WHERE phone_number = ?", (str(telegram_chat_id), norm_phone)
         )
         conn.commit()
         return cur.rowcount > 0
@@ -244,33 +234,92 @@ def list_users(database_path: str | None = None) -> list[dict[str, Any]]:
         conn.close()
 
 
+def delete_user(user_id: int, database_path: str | None = None) -> tuple[bool, str]:
+    conn = get_db_connection(database_path=database_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT role, is_active FROM auth_users WHERE id = ?", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            return False, "کاربری با این شناسه یافت نشد."
+
+        role = str(row[0]).strip().lower()
+        is_active = bool(row[1])
+
+        if is_active and role in ("admin", "super admin", "superadmin"):
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM auth_users
+                WHERE role IN ('admin', 'super admin', 'superadmin') AND is_active = 1 AND id != ?
+            """,
+                (user_id,),
+            )
+            remaining_admins = cur.fetchone()[0]
+            if remaining_admins == 0:
+                return False, "امکان حذف آخرین مدیر فعال در سامانه وجود ندارد."
+
+        cur.execute("DELETE FROM auth_users WHERE id = ?", (user_id,))
+        conn.commit()
+        if cur.rowcount > 0:
+            return True, "کاربر با موفقیت حذف شد."
+        return False, "حذف کاربر انجام نشد."
+    finally:
+        conn.close()
+
+
 def has_admin_user(database_path: str | None = None) -> bool:
     conn = get_db_connection(database_path=database_path)
     try:
         cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM auth_users WHERE role = 'admin' AND is_active = 1")
+        cur.execute(
+            "SELECT COUNT(*) FROM auth_users WHERE role IN ('admin', 'super admin', 'superadmin') AND is_active = 1"
+        )
         return cur.fetchone()[0] > 0
     finally:
         conn.close()
 
 
 def bootstrap_admin_user(
-    username: str = "admin",
-    phone_number: str = "09120000000",
-    password: str = "admin1234",
+    username: str | None = None,
+    phone_number: str | None = None,
+    password: str | None = None,
     telegram_chat_id: str | None = None,
     database_path: str | None = None,
+    role: str = "super admin",
 ) -> tuple[bool, str, dict[str, Any] | None]:
+    final_username = (username or os.getenv("SUPER_ADMIN_USERNAME") or os.getenv("ADMIN_USERNAME") or "admin").strip()
+    final_phone = (
+        phone_number
+        or os.getenv("SUPER_ADMIN_PHONE")
+        or os.getenv("ADMIN_PHONE")
+        or os.getenv("SUPER_ADMIN_PHONE_NUMBER")
+        or os.getenv("ADMIN_PHONE_NUMBER")
+        or "09120000000"
+    ).strip()
+    final_password = password or os.getenv("SUPER_ADMIN_PASSWORD") or os.getenv("ADMIN_PASSWORD") or "admin1234"
+    final_tg = (
+        telegram_chat_id
+        or os.getenv("SUPER_ADMIN_TELEGRAM_CHAT_ID")
+        or os.getenv("ADMIN_TELEGRAM_CHAT_ID")
+        or os.getenv("SUPER_ADMIN_CHAT_ID")
+        or os.getenv("ADMIN_CHAT_ID")
+        or None
+    )
+    if final_tg:
+        final_tg = str(final_tg).strip() or None
+
+    final_role = (os.getenv("SUPER_ADMIN_ROLE") or os.getenv("ADMIN_ROLE") or role or "super admin").strip()
+
     if has_admin_user(database_path=database_path):
-        existing = get_user_by_username(username, database_path=database_path)
+        existing = get_user_by_username(final_username, database_path=database_path)
         return False, "حساب مدیر از پیش در سامانه تعریف شده است.", existing
 
     success, msg, user_data = create_user(
-        username=username,
-        phone_number=phone_number,
-        password=password,
-        role="admin",
-        telegram_chat_id=telegram_chat_id,
+        username=final_username,
+        phone_number=final_phone,
+        password=final_password,
+        role=final_role,
+        telegram_chat_id=final_tg,
         is_active=True,
         database_path=database_path,
     )
@@ -299,7 +348,11 @@ def is_telegram_reachable(timeout: float = 2.5, proxy: str | None = None, api_ur
         pass
 
     try:
-        req = urllib.request.Request(f"{target_url.rstrip('/')}", headers={"User-Agent": "BagerLibrary/1.0"})
+        headers = {"User-Agent": "BagerLibrary/1.0"}
+        if api_url and not api_url.startswith("https://api.telegram.org"):
+            headers["x-relay-target"] = "https://api.telegram.org#"
+            headers["X-Relay-Target"] = "https://api.telegram.org#"
+        req = urllib.request.Request(f"{target_url.rstrip('/')}", headers=headers)
         opener = urllib.request.build_opener()
         if proxy:
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
@@ -316,11 +369,7 @@ def get_telegram_api_url(database_path: str | None = None) -> str:
         get_setting("telegram_relay_url", database_path=database_path)
         or get_setting("cloudflare_relay_url", database_path=database_path)
         or get_setting("vercel_relay_url", database_path=database_path)
-        or get_setting(
-            "telegram_api_url",
-            default="https://api.telegram.org",
-            database_path=database_path,
-        )
+        or get_setting("telegram_api_url", default="https://api.telegram.org", database_path=database_path)
     ).strip()
 
     if not url:
@@ -416,6 +465,11 @@ class TelegramBotClient:
         if self.relay_secret:
             headers["X-Relay-Secret"] = self.relay_secret
 
+        if self.api_url and not self.api_url.startswith("https://api.telegram.org"):
+            target_url = f"https://api.telegram.org/bot{curr_token}/{method}#"
+            headers["x-relay-target"] = target_url
+            headers["X-Relay-Target"] = target_url
+
         post_bytes = json.dumps(data).encode("utf-8") if data is not None else None
         req = urllib.request.Request(endpoint, data=post_bytes, headers=headers)
 
@@ -423,35 +477,40 @@ class TelegramBotClient:
         if self.proxy:
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({"http": self.proxy, "https": self.proxy}))
 
-        with opener.open(req, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+        try:
+            with opener.open(req, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            desc = ""
+            try:
+                body = e.read().decode("utf-8", errors="replace")
+                body_json = json.loads(body)
+                desc = body_json.get("description") or body_json.get("error") or body
+            except Exception:
+                desc = str(e.reason or e)
+
+            if e.code == 404:
+                raise RuntimeError(f"ربات تلگرام یا توکن یافت نشد (HTTP 404: {desc})") from e
+            elif e.code == 401:
+                raise RuntimeError(f"توکن ربات تلگرام نامعتبر است (HTTP 401: {desc})") from e
+            elif e.code == 400:
+                raise RuntimeError(f"خطای درخواست تلگرام/رله (HTTP 400: {desc})") from e
+            raise RuntimeError(f"خطای ارتباط با تلگرام (HTTP {e.code}: {desc})") from e
 
     def test_connection(self) -> tuple[bool, str, dict[str, Any] | None]:
         try:
             res = self._make_request("getMe", timeout=4.0)
             if res.get("ok"):
                 bot_user = res.get("result", {})
-                return (
-                    True,
-                    f"اتصال به ربات @{bot_user.get('username', '')} برقرار شد.",
-                    bot_user,
-                )
+                return True, f"اتصال به ربات @{bot_user.get('username', '')} برقرار شد.", bot_user
             return False, res.get("description", "خطا در احراز هویت ربات"), None
         except Exception as e:
             return False, f"خطا در اتصال به ربات تلگرام: {str(e)}", None
 
     def send_message(
-        self,
-        chat_id: str | int,
-        text: str,
-        parse_mode: str = "HTML",
-        reply_markup: dict[str, Any] | None = None,
+        self, chat_id: str | int, text: str, parse_mode: str = "HTML", reply_markup: dict[str, Any] | None = None
     ) -> tuple[bool, str, dict[str, Any] | None]:
-        payload: dict[str, Any] = {
-            "chat_id": str(chat_id),
-            "text": text,
-            "parse_mode": parse_mode,
-        }
+        payload: dict[str, Any] = {"chat_id": str(chat_id), "text": text, "parse_mode": parse_mode}
         if reply_markup:
             payload["reply_markup"] = reply_markup
 
@@ -540,14 +599,7 @@ class TelegramBotClient:
                     "برای اتصال حساب کاربری و دریافت کدهای ورود، دکمه زیر را لمس کرده و شماره تماس خود را ارسال کنید:"
                 )
                 keyboard = {
-                    "keyboard": [
-                        [
-                            {
-                                "text": "📱 ارسال شماره تماس برای اتصال",
-                                "request_contact": True,
-                            }
-                        ]
-                    ],
+                    "keyboard": [[{"text": "📱 ارسال شماره تماس برای اتصال", "request_contact": True}]],
                     "resize_keyboard": True,
                     "one_time_keyboard": True,
                 }
@@ -555,21 +607,13 @@ class TelegramBotClient:
                 processed += 1
 
         if new_offset > last_offset:
-            set_setting(
-                "telegram_last_update_id",
-                str(new_offset),
-                database_path=self.database_path,
-            )
+            set_setting("telegram_last_update_id", str(new_offset), database_path=self.database_path)
 
         return processed
 
 
 class OTPService:
-    def __init__(
-        self,
-        database_path: str | None = None,
-        bot_client: TelegramBotClient | None = None,
-    ):
+    def __init__(self, database_path: str | None = None, bot_client: TelegramBotClient | None = None):
         self.database_path = database_path
         self.bot_client = bot_client or TelegramBotClient(database_path=database_path)
 
@@ -601,10 +645,7 @@ class OTPService:
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
 
-            cur.execute(
-                "SELECT created_at FROM otp_sessions WHERE phone_number = ? ORDER BY id DESC LIMIT 1",
-                (phone,),
-            )
+            cur.execute("SELECT created_at FROM otp_sessions WHERE phone_number = ? ORDER BY id DESC LIMIT 1", (phone,))
             last_sess = cur.fetchone()
             if last_sess:
                 try:
@@ -622,10 +663,7 @@ class OTPService:
                 except Exception:
                     pass
 
-            cur.execute(
-                "UPDATE otp_sessions SET is_used = 1 WHERE phone_number = ? AND is_used = 0",
-                (phone,),
-            )
+            cur.execute("UPDATE otp_sessions SET is_used = 1 WHERE phone_number = ? AND is_used = 0", (phone,))
 
             otp_code = generate_otp_code(6)
             otp_hash_val = hash_otp(otp_code)
@@ -700,11 +738,7 @@ class OTPService:
             session = cur.fetchone()
 
             if not session:
-                return (
-                    False,
-                    "کد یکبار مصرفی برای این کاربر یافت نشد یا قبلاً استفاده شده است.",
-                    None,
-                )
+                return False, "کد یکبار مصرفی برای این کاربر یافت نشد یا قبلاً استفاده شده است.", None
 
             session_id = session["id"]
             stored_hash = session["otp_hash"]
@@ -717,45 +751,25 @@ class OTPService:
             if now_utc > expires_at:
                 cur.execute("UPDATE otp_sessions SET is_used = 1 WHERE id = ?", (session_id,))
                 conn.commit()
-                return (
-                    False,
-                    "کد یکبار مصرف منقضی شده است. لطفاً کد جدید دریافت کنید.",
-                    None,
-                )
+                return False, "کد یکبار مصرف منقضی شده است. لطفاً کد جدید دریافت کنید.", None
 
             if attempts >= MAX_OTP_ATTEMPTS:
                 cur.execute("UPDATE otp_sessions SET is_used = 1 WHERE id = ?", (session_id,))
                 conn.commit()
-                return (
-                    False,
-                    "تعداد دفعات ورود اشتباه بیش از حد مجاز است. لطفاً کد جدید دریافت کنید.",
-                    None,
-                )
+                return False, "تعداد دفعات ورود اشتباه بیش از حد مجاز است. لطفاً کد جدید دریافت کنید.", None
 
             if not verify_otp_hash(clean_code, stored_hash):
                 new_attempts = attempts + 1
                 remaining = MAX_OTP_ATTEMPTS - new_attempts
                 if new_attempts >= MAX_OTP_ATTEMPTS:
                     cur.execute(
-                        "UPDATE otp_sessions SET attempts = ?, is_used = 1 WHERE id = ?",
-                        (new_attempts, session_id),
+                        "UPDATE otp_sessions SET attempts = ?, is_used = 1 WHERE id = ?", (new_attempts, session_id)
                     )
                     conn.commit()
-                    return (
-                        False,
-                        "کد اشتباه است. حداکثر دفعات مجاز به پایان رسید. لطفاً کد جدید دریافت کنید.",
-                        None,
-                    )
-                cur.execute(
-                    "UPDATE otp_sessions SET attempts = ? WHERE id = ?",
-                    (new_attempts, session_id),
-                )
+                    return False, "کد اشتباه است. حداکثر دفعات مجاز به پایان رسید. لطفاً کد جدید دریافت کنید.", None
+                cur.execute("UPDATE otp_sessions SET attempts = ? WHERE id = ?", (new_attempts, session_id))
                 conn.commit()
-                return (
-                    False,
-                    f"کد وارد شده نادرست است. ({remaining} بار تلاش باقی مانده)",
-                    None,
-                )
+                return False, f"کد وارد شده نادرست است. ({remaining} بار تلاش باقی مانده)", None
 
             cur.execute("UPDATE otp_sessions SET is_used = 1 WHERE id = ?", (session_id,))
             conn.commit()
@@ -787,10 +801,7 @@ def authenticate_with_password(
 
 
 def authenticate(
-    identifier: str,
-    credential: str,
-    mode: str = "auto",
-    database_path: str | None = None,
+    identifier: str, credential: str, mode: str = "auto", database_path: str | None = None
 ) -> tuple[bool, str, dict[str, Any] | None]:
     clean_identifier = identifier.strip()
     clean_credential = credential.strip()

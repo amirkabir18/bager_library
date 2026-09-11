@@ -59,6 +59,11 @@ TRANSLATIONS: dict[str, str] = {
     "sent_date": "تاریخ ارسال",
     "key": "کلید تنظیمات",
     "value": "مقدار تنظیمات",
+    "super admin": "سرپرست",
+    "superadmin": "سرپرست",
+    "admin": "مدیر",
+    "librarian": "کتابدار",
+    "user": "کاربر",
 }
 
 
@@ -210,6 +215,19 @@ def init_database(connection: sqlite3.Connection | None = None):
 
 
 def get_setting(key: str, default: str = "", database_path: str | None = None) -> str:
+    if database_path is not None:
+        c = get_db_connection(database_path=database_path)
+        try:
+            cur = c.cursor()
+            cur.execute("SELECT value FROM app_settings WHERE key = ?", (key,))
+            row = cur.fetchone()
+            if row is not None and str(row[0]) != "":
+                return str(row[0])
+        except Exception:
+            pass
+        finally:
+            c.close()
+
     env_val = os.getenv(key.upper())
     if env_val is None:
         env_val = os.getenv(key)
