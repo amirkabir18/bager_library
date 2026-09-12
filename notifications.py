@@ -19,17 +19,50 @@ class NotificationEngine:
     """
 
     def __init__(
-        self, root: Optional[tk.Tk] = None, app_id: str = "کتابخانه باقر العلوم", icon_path: Optional[str] = None
+        self,
+        root: Optional[tk.Tk] = None,
+        app_id: str = "کتابخانه باقر العلوم",
+        icon_path: Optional[str] = None,
+        db_path: Optional[str] = None,
     ):
         self.root = root
         self.app_id = app_id
         self.icon_path = icon_path if (icon_path and os.path.exists(icon_path)) else None
+        self.db_path = db_path
 
-    def show(self, title: str, message: str):
+    def is_enabled(self) -> bool:
+        """Returns True if desktop notifications are enabled in settings."""
+        try:
+            from database import get_setting
+
+            val = get_setting("notifications_enabled", "true", database_path=self.db_path)
+            return str(val).strip().lower() != "false"
+        except Exception:
+            return True
+
+    def are_notifications_enabled(self) -> bool:
+        """Alias for is_enabled()."""
+        return self.is_enabled()
+
+    def is_sound_enabled(self) -> bool:
+        """Returns True if notification sound is enabled in settings."""
+        try:
+            from database import get_setting
+
+            val = get_setting("notification_sound", "true", database_path=self.db_path)
+            return str(val).strip().lower() != "false"
+        except Exception:
+            return True
+
+    def show(self, title: str, message: str, force: bool = False):
         """
         Send a desktop notification. Tries native Windows toast first;
         falls back to Tkinter popup if on non-Windows or if winotify encounters an error.
+        If force=False, respects the notifications_enabled setting.
         """
+        if not force and not self.is_enabled():
+            return
+
         if sys.platform == "win32":
             try:
                 self._show_windows_toast(title, message)
@@ -40,21 +73,38 @@ class NotificationEngine:
         if self.root:
             self._show_tkinter_popup(title, message)
 
-    def _show_windows_toast(self, title: str, message: str):
+    def _show_windows_toast(self, title: str, message: str, sound: Optional[bool] = None):
         from winotify import Notification, audio
+
+        if sound is None:
+            sound = self.is_sound_enabled()
 
         toast = Notification(
             app_id=self.app_id, title=title, msg=message, icon=self.icon_path if self.icon_path else ""
         )
-        toast.set_audio(audio.Default, loop=False)
+        if sound:
+            toast.set_audio(audio.Default, loop=False)
+        else:
+            toast.set_audio(audio.Silent, loop=False)
         toast.show()
 
-    def _show_tkinter_popup(self, title: str, message: str):
+    def _show_tkinter_popup(self, title: str, message: str, sound: Optional[bool] = None):
         """
         Creates a floating non-blocking borderless toast window in the bottom-right corner of the screen.
         """
         if not self.root:
             return
+
+        if sound is None:
+            sound = self.is_sound_enabled()
+
+        if sound:
+            try:
+                import winsound
+
+                winsound.MessageBeep(winsound.MB_ICONASTERISK)
+            except Exception:
+                pass
 
         try:
             popup = tk.Toplevel(self.root)
@@ -118,16 +168,64 @@ class LoanReminderManager:
         self.notification_engine = notification_engine
         self.check_interval_ms = check_interval_ms
         self._running = False
+        self._after_id = None
 
     def start(self):
         """Starts the periodic background scan."""
         self._running = True
         # Run first check after a brief 1-second delay so GUI initializes smoothly
-        self.root.after(1000, self._run_and_schedule)
+        self._after_id = self.root.after(1000, self._run_and_schedule)
 
     def stop(self):
         """Stops the periodic background scan."""
         self._running = False
+        if self._after_id is not None:
+            try:
+                self.root.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
+
+    def reschedule(self, new_interval_ms: Optional[int] = None):
+        """Cancels pending check and reschedules with new or current interval."""
+        if new_interval_ms is not None:
+            self.check_interval_ms = new_interval_ms
+        if self._after_id is not None:
+            try:
+                self.root.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
+        if self._running:
+            self._after_id = self.root.after(self.get_check_interval_ms(), self._run_and_schedule)
+
+    def get_advance_days(self) -> int:
+        """Returns the configured advance reminder days (default: 2)."""
+        try:
+            from database import get_setting
+
+            val = get_setting("notification_advance_days", "2", database_path=self.db_path)
+            if val is not None:
+                days = int(val)
+                if days > 0:
+                    return days
+        except Exception:
+            pass
+        return 2
+
+    def get_check_interval_ms(self) -> int:
+        """Returns check interval in milliseconds, preferring app_settings if configured."""
+        try:
+            from database import get_setting
+
+            val = get_setting("notification_check_interval_mins", database_path=self.db_path)
+            if val is not None:
+                mins = float(val)
+                if mins > 0:
+                    return int(mins * 60 * 1000)
+        except Exception:
+            pass
+        return self.check_interval_ms
 
     def _run_and_schedule(self):
         if not self._running:
@@ -138,7 +236,8 @@ class LoanReminderManager:
             print(f"[LoanReminderManager] Periodic check error: {e}")
         finally:
             if self._running:
-                self.root.after(self.check_interval_ms, self._run_and_schedule)
+                interval = self.get_check_interval_ms()
+                self._after_id = self.root.after(interval, self._run_and_schedule)
 
     def check_loans(self) -> int:
         """
@@ -166,20 +265,13 @@ class LoanReminderManager:
                 pass
 
             # Fetch advance days setting (default: 2)
-            advance_days = 2
-            try:
-                cursor.execute("SELECT value FROM app_settings WHERE key = 'notification_advance_days'")
-                row = cursor.fetchone()
-                if row:
-                    advance_days = int(row[0])
-            except (sqlite3.Error, ValueError, TypeError):
-                advance_days = 2
+            advance_days = self.get_advance_days()
 
             # Ensure notification_logs exists
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS notification_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    loan_id INTEGER NOT NULL REFERENCES loans(id),
+                    loan_id INTEGER REFERENCES loans(id),
                     notification_type VARCHAR(50) NOT NULL,
                     sent_date DATE NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
