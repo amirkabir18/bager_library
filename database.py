@@ -9,33 +9,95 @@ except ImportError:
     jdatetime = None
 
 base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-db_p = os.path.join(base_dir, "bager_library.db")
+
+
+def get_app_data_dir() -> str:
+    """
+    Return the persistent directory where application data (database, settings) is stored.
+
+    1. Respects BAGER_DATA_DIR environment variable if specified.
+    2. When frozen (PyInstaller executable):
+       - Attempts to use the directory containing the executable (portable mode).
+       - Falls back to the user's Local AppData folder (%LOCALAPPDATA%/bager_library)
+         if the executable directory is not writable (e.g. Program Files).
+    3. In development mode: returns the repository root directory.
+    """
+    env_dir = os.environ.get("BAGER_DATA_DIR")
+    if env_dir:
+        os.makedirs(env_dir, exist_ok=True)
+        return env_dir
+
+    if getattr(sys, "frozen", False):
+        sys_exe = getattr(sys, "executable", None) or ""
+        exe_dir = os.path.dirname(os.path.abspath(sys_exe)) if sys_exe else ""
+        if exe_dir and os.path.exists(exe_dir):
+            try:
+                test_file = os.path.join(exe_dir, f".write_test_{os.getpid()}")
+                with open(test_file, "w") as f:
+                    f.write("test")
+                try:
+                    os.remove(test_file)
+                except OSError:
+                    pass
+                return exe_dir
+            except (OSError, PermissionError):
+                pass
+
+        appdata = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        data_dir = os.path.join(appdata, "bager_library")
+        os.makedirs(data_dir, exist_ok=True)
+        return data_dir
+
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def get_db_path() -> str:
+    """Return the absolute path to the persistent SQLite database file."""
+    env_db = os.environ.get("BAGER_DB_PATH")
+    if env_db:
+        return env_db
+    return os.path.join(get_app_data_dir(), "bager_library.db")
 
 
 def load_env_file(filepath: str | None = None):
-    p = filepath or os.path.join(base_dir, ".env")
-    if not os.path.exists(p):
-        return
-    try:
-        from dotenv import load_dotenv
+    candidates: list[str] = []
+    if filepath:
+        candidates.append(filepath)
+    else:
+        candidates.append(os.path.join(get_app_data_dir(), ".env"))
+        if getattr(sys, "frozen", False):
+            sys_exe = getattr(sys, "executable", None) or ""
+            if sys_exe:
+                candidates.append(os.path.join(os.path.dirname(os.path.abspath(sys_exe)), ".env"))
+        if base_dir not in candidates:
+            candidates.append(os.path.join(base_dir, ".env"))
 
-        load_dotenv(p)
-    except Exception:
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        k, v = line.split("=", 1)
-                        k = k.strip()
-                        v = v.strip().strip('"').strip("'")
-                        if k not in os.environ:
-                            os.environ[k] = v
-        except Exception:
-            pass
+    for p in candidates:
+        if os.path.exists(p):
+            try:
+                from dotenv import load_dotenv
+
+                load_dotenv(p)
+                break
+            except Exception:
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith("#") and "=" in line:
+                                k, v = line.split("=", 1)
+                                k = k.strip()
+                                v = v.strip().strip('"').strip("'")
+                                if k not in os.environ:
+                                    os.environ[k] = v
+                    break
+                except Exception:
+                    pass
 
 
 load_env_file()
+app_data_dir = get_app_data_dir()
+db_p = get_db_path()
 
 TRANSLATIONS: dict[str, str] = {
     "id": "شناسه",
@@ -99,6 +161,12 @@ def rtl_display_order(cols: list[str], preferred_order: list[str]) -> list[str]:
 
 def get_db_connection(database_path: str | None = None, enable_foreign_keys: bool = True) -> sqlite3.Connection:
     target_path = database_path or db_p
+    target_dir = os.path.dirname(os.path.abspath(target_path))
+    if target_dir and not os.path.exists(target_dir):
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+        except OSError:
+            pass
     c = sqlite3.connect(target_path)
     if enable_foreign_keys:
         c.execute("PRAGMA foreign_keys = ON")

@@ -24,7 +24,6 @@ from updater import (
 )
 
 base_dir = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
-db_p = os.path.join(base_dir, "bager_library.db")
 icon_p = os.path.join(base_dir, "logo.ico")
 fonts_dir = os.path.join(base_dir, "assets", "fonts", "iransans", "ttf")
 
@@ -56,6 +55,7 @@ from auth import (
 )
 from database import (
     clear_notification_logs,
+    db_p,
     get_all_settings,
     get_db_connection,
     get_notification_logs,
