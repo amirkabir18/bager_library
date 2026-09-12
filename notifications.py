@@ -34,6 +34,7 @@ class NotificationEngine:
         """Returns True if desktop notifications are enabled in settings."""
         try:
             from database import get_setting
+
             val = get_setting("notifications_enabled", "true", database_path=self.db_path)
             return str(val).strip().lower() != "false"
         except Exception:
@@ -47,6 +48,7 @@ class NotificationEngine:
         """Returns True if notification sound is enabled in settings."""
         try:
             from database import get_setting
+
             val = get_setting("notification_sound", "true", database_path=self.db_path)
             return str(val).strip().lower() != "false"
         except Exception:
@@ -99,6 +101,7 @@ class NotificationEngine:
         if sound:
             try:
                 import winsound
+
                 winsound.MessageBeep(winsound.MB_ICONASTERISK)
             except Exception:
                 pass
@@ -200,6 +203,7 @@ class LoanReminderManager:
         """Returns the configured advance reminder days (default: 2)."""
         try:
             from database import get_setting
+
             val = get_setting("notification_advance_days", "2", database_path=self.db_path)
             if val is not None:
                 days = int(val)
@@ -213,6 +217,7 @@ class LoanReminderManager:
         """Returns check interval in milliseconds, preferring app_settings if configured."""
         try:
             from database import get_setting
+
             val = get_setting("notification_check_interval_mins", database_path=self.db_path)
             if val is not None:
                 mins = float(val)

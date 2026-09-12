@@ -59,7 +59,7 @@ class TestAppSettingsDatabase(unittest.TestCase):
         book_id = cur.lastrowid
         cur.execute(
             "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-01', '2025-01-15', 1)",
-            (book_id, 'علی تست'),
+            (book_id, "علی تست"),
         )
         loan_id = cur.lastrowid
         self.conn.commit()
@@ -93,12 +93,12 @@ class TestAppSettingsDatabase(unittest.TestCase):
 
         cur.execute(
             "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-01', '2025-01-15', 1)",
-            (book1_id, 'رضا احمدی'),
+            (book1_id, "رضا احمدی"),
         )
         loan1 = cur.lastrowid
         cur.execute(
             "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-01', '2025-01-10', 1)",
-            (book2_id, 'سارا کریمی'),
+            (book2_id, "سارا کریمی"),
         )
         loan2 = cur.lastrowid
         self.conn.commit()
@@ -125,6 +125,88 @@ class TestAppSettingsDatabase(unittest.TestCase):
         # Test limit
         limit_logs = database.get_notification_logs(self.conn, limit=2)
         self.assertEqual(len(limit_logs), 2)
+
+    def test_get_notification_logs_advanced_filtering_and_sorting(self):
+        cur = self.conn.cursor()
+        cur.execute("INSERT INTO books (title, author, isbn) VALUES ('کتاب الف', 'نویسنده ۱', '1000000000001')")
+        b1 = cur.lastrowid
+        cur.execute("INSERT INTO books (title, author, isbn) VALUES ('کتاب ب', 'نویسنده ۲', '1000000000002')")
+        b2 = cur.lastrowid
+        cur.execute("INSERT INTO books (title, author, isbn) VALUES ('الفبای فیزیک', 'نویسنده ۳', '1000000000003')")
+        b3 = cur.lastrowid
+
+        cur.execute(
+            "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, 'محمد رضایی', '2025-01-01', '2025-01-10', 1)",
+            (b1,),
+        )
+        l1 = cur.lastrowid
+        cur.execute(
+            "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, 'رضا محمدی', '2025-01-02', '2025-01-11', 1)",
+            (b2,),
+        )
+        l2 = cur.lastrowid
+        cur.execute(
+            "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, 'احمد حسینی', '2025-01-03', '2025-01-12', 1)",
+            (b3,),
+        )
+        l3 = cur.lastrowid
+        self.conn.commit()
+
+        database.log_notification(self.conn, "due_reminder", loan_id=l1, sent_date="2025-01-08")
+        database.log_notification(self.conn, "overdue", loan_id=l2, sent_date="2025-01-09")
+        database.log_notification(self.conn, "test", loan_id=l3, sent_date="2025-01-10")
+
+        # 1. Targeted column: book_title
+        res = database.get_notification_logs(self.conn, search_query="الف", column="book_title")
+        self.assertEqual(len(res), 2)
+        titles = {r["book_title"] for r in res}
+        self.assertEqual(titles, {"کتاب الف", "الفبای فیزیک"})
+
+        # 2. Targeted column: member_name with startswith
+        res_starts = database.get_notification_logs(
+            self.conn, search_query="رضا", column="member_name", match_mode="startswith"
+        )
+        self.assertEqual(len(res_starts), 1)
+        self.assertEqual(res_starts[0]["member_name"], "رضا محمدی")
+
+        # 3. Match mode exact
+        res_exact = database.get_notification_logs(
+            self.conn, search_query="کتاب الف", column="book_title", match_mode="exact"
+        )
+        self.assertEqual(len(res_exact), 1)
+        self.assertEqual(res_exact[0]["book_title"], "کتاب الف")
+
+        # 4. Search by loan_id column
+        res_loan = database.get_notification_logs(self.conn, search_query=str(l2), column="loan_id")
+        self.assertEqual(len(res_loan), 1)
+        self.assertEqual(res_loan[0]["member_name"], "رضا محمدی")
+
+        # 5. Sorting ASC vs DESC by sent_date
+        res_asc = database.get_notification_logs(self.conn, sort_col="sent_date", sort_dir="ASC")
+        self.assertEqual(res_asc[0]["sent_date"], "2025-01-08")
+        self.assertEqual(res_asc[-1]["sent_date"], "2025-01-10")
+
+        res_desc = database.get_notification_logs(self.conn, sort_col="sent_date", sort_dir="DESC")
+        self.assertEqual(res_desc[0]["sent_date"], "2025-01-10")
+        self.assertEqual(res_desc[-1]["sent_date"], "2025-01-08")
+
+        # 6. Sorting by member_name
+        res_member_sort = database.get_notification_logs(self.conn, sort_col="member_name", sort_dir="ASC")
+        self.assertEqual(res_member_sort[0]["member_name"], "احمد حسینی")
+
+        # 7. Shamsi date normalization in search query (1403/10/19 corresponds to 2025-01-08)
+        # Check jdatetime conversion if available
+        try:
+            import jdatetime
+
+            g_d = datetime.date(2025, 1, 8)
+            j_d = jdatetime.date.fromgregorian(date=g_d)
+            shamsi_str = j_d.strftime("%Y-%m-%d")
+            res_shamsi = database.get_notification_logs(self.conn, search_query=shamsi_str, column="sent_date")
+            self.assertEqual(len(res_shamsi), 1)
+            self.assertEqual(res_shamsi[0]["sent_date"], "2025-01-08")
+        except ImportError:
+            pass
 
     def test_clear_notification_logs(self):
         database.log_notification(self.conn, "TEST_1", loan_id=None)
@@ -186,8 +268,7 @@ class TestNotificationSettingsEngine(unittest.TestCase):
         database.set_setting(self.conn, "notifications_enabled", "true")
         database.set_setting(self.conn, "notification_sound", "true")
 
-        with patch("winsound.MessageBeep") as mock_beep, \
-             patch("tkinter.Toplevel"):
+        with patch("winsound.MessageBeep") as mock_beep, patch("tkinter.Toplevel"):
             self.engine._show_tkinter_popup("Title", "Message")
             mock_beep.assert_called_once()
 
@@ -195,8 +276,7 @@ class TestNotificationSettingsEngine(unittest.TestCase):
         database.set_setting(self.conn, "notifications_enabled", "true")
         database.set_setting(self.conn, "notification_sound", "false")
 
-        with patch("winsound.MessageBeep") as mock_beep, \
-             patch("tkinter.Toplevel"):
+        with patch("winsound.MessageBeep") as mock_beep, patch("tkinter.Toplevel"):
             self.engine._show_tkinter_popup("Title", "Message")
             mock_beep.assert_not_called()
 

@@ -3,6 +3,11 @@ import os
 import sqlite3
 import sys
 
+try:
+    import jdatetime
+except ImportError:
+    jdatetime = None
+
 base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 db_p = os.path.join(base_dir, "bager_library.db")
 
@@ -186,7 +191,9 @@ def init_database(connection: sqlite3.Connection | None = None):
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
-                cur.execute("INSERT INTO notification_logs_temp (id, loan_id, notification_type, sent_date, created_at) SELECT id, loan_id, notification_type, sent_date, created_at FROM notification_logs")
+                cur.execute(
+                    "INSERT INTO notification_logs_temp (id, loan_id, notification_type, sent_date, created_at) SELECT id, loan_id, notification_type, sent_date, created_at FROM notification_logs"
+                )
                 cur.execute("DROP TABLE notification_logs")
                 cur.execute("ALTER TABLE notification_logs_temp RENAME TO notification_logs")
         except Exception:
@@ -382,12 +389,33 @@ def get_all_settings(
     return settings
 
 
+def _normalize_filter_date(val: str | None) -> str | None:
+    if not val:
+        return None
+    cleaned = val.strip().replace("/", "-")
+    parts = cleaned.split("-")
+    if len(parts) == 3:
+        try:
+            y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+            if y < 1900 and jdatetime is not None:
+                g_date = jdatetime.date(y, m, d).togregorian()
+                return g_date.strftime("%Y-%m-%d")
+            return f"{y:04d}-{m:02d}-{d:02d}"
+        except Exception:
+            pass
+    return cleaned
+
+
 def get_notification_logs(
     conn_or_path: sqlite3.Connection | str | None = None,
     notification_type: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
     search_query: str | None = None,
+    column: str = "all",
+    match_mode: str = "contains",
+    sort_col: str = "id",
+    sort_dir: str = "DESC",
     limit: int | None = None,
     offset: int = 0,
 ) -> list[dict]:
@@ -423,25 +451,103 @@ def get_notification_logs(
                 conditions.append("LOWER(nl.notification_type) = LOWER(?)")
                 params.append(nt)
 
-        if start_date and start_date.strip():
+        start_date_norm = _normalize_filter_date(start_date)
+        if start_date_norm:
             conditions.append("nl.sent_date >= ?")
-            params.append(start_date.strip())
+            params.append(start_date_norm)
 
-        if end_date and end_date.strip():
+        end_date_norm = _normalize_filter_date(end_date)
+        if end_date_norm:
             conditions.append("nl.sent_date <= ?")
-            params.append(end_date.strip())
+            params.append(end_date_norm)
 
         if search_query and search_query.strip():
-            sq = f"%{search_query.strip()}%"
-            conditions.append(
-                "(b.title LIKE ? OR l.book_id LIKE ? OR l.member_name LIKE ? OR CAST(nl.loan_id AS TEXT) LIKE ?)"
+            sq_raw = search_query.strip()
+            mode = (match_mode or "contains").strip().lower()
+            if mode == "exact":
+                pattern = sq_raw
+            elif mode == "startswith":
+                pattern = f"{sq_raw}%"
+            else:
+                pattern = f"%{sq_raw}%"
+
+            col = (column or "all").strip().lower()
+            type_case_expr = (
+                "(CASE "
+                "WHEN nl.notification_type IN ('due_reminder', 'due_soon', 'due_today') THEN 'due_reminder یادآوری سررسید امانت' "
+                "WHEN nl.notification_type IN ('overdue', 'هشدار دیرکرد') THEN 'overdue هشدار دیرکرد تأخیر' "
+                "WHEN nl.notification_type IN ('test', 'test_notification') THEN 'test اعلان آزمایشی' "
+                "ELSE nl.notification_type END)"
             )
-            params.extend([sq, sq, sq, sq])
+
+            sq_date_norm = _normalize_filter_date(sq_raw)
+
+            if col == "book_title":
+                conditions.append("(b.title LIKE ? OR l.book_id LIKE ?)")
+                params.extend([pattern, pattern])
+            elif col == "member_name":
+                conditions.append("l.member_name LIKE ?")
+                params.append(pattern)
+            elif col == "loan_id":
+                conditions.append("CAST(nl.loan_id AS TEXT) LIKE ?")
+                params.append(pattern)
+            elif col == "id":
+                conditions.append("CAST(nl.id AS TEXT) LIKE ?")
+                params.append(pattern)
+            elif col == "sent_date":
+                if sq_date_norm and sq_date_norm != sq_raw:
+                    date_pattern = (
+                        f"%{sq_date_norm}%"
+                        if mode == "contains"
+                        else (f"{sq_date_norm}%" if mode == "startswith" else sq_date_norm)
+                    )
+                    conditions.append("(CAST(nl.sent_date AS TEXT) LIKE ? OR CAST(nl.sent_date AS TEXT) LIKE ?)")
+                    params.extend([pattern, date_pattern])
+                else:
+                    conditions.append("CAST(nl.sent_date AS TEXT) LIKE ?")
+                    params.append(pattern)
+            elif col in ("notification_type", "type"):
+                conditions.append(f"(nl.notification_type LIKE ? OR {type_case_expr} LIKE ?)")
+                params.extend([pattern, pattern])
+            else:
+                # "all"
+                all_parts = [
+                    "(b.title LIKE ? OR l.book_id LIKE ?)",
+                    "l.member_name LIKE ?",
+                    "CAST(nl.loan_id AS TEXT) LIKE ?",
+                    "CAST(nl.id AS TEXT) LIKE ?",
+                    "CAST(nl.sent_date AS TEXT) LIKE ?",
+                    f"(nl.notification_type LIKE ? OR {type_case_expr} LIKE ?)",
+                ]
+                all_params = [pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern]
+                if sq_date_norm and sq_date_norm != sq_raw:
+                    date_pattern = (
+                        f"%{sq_date_norm}%"
+                        if mode == "contains"
+                        else (f"{sq_date_norm}%" if mode == "startswith" else sq_date_norm)
+                    )
+                    all_parts.append("CAST(nl.sent_date AS TEXT) LIKE ?")
+                    all_params.append(date_pattern)
+
+                conditions.append(f"({' OR '.join(all_parts)})")
+                params.extend(all_params)
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
 
-        query += " ORDER BY nl.id DESC"
+        sort_map = {
+            "id": "nl.id",
+            "sent_date": "nl.sent_date",
+            "created_at": "nl.created_at",
+            "notification_type": "nl.notification_type",
+            "type": "nl.notification_type",
+            "loan_id": "nl.loan_id",
+            "book_title": "book_title",
+            "member_name": "member_name",
+        }
+        order_col = sort_map.get(str(sort_col).strip().lower(), "nl.id")
+        order_dir = "ASC" if str(sort_dir).strip().upper() == "ASC" else "DESC"
+        query += f" ORDER BY {order_col} {order_dir}"
 
         if limit is not None:
             query += " LIMIT ?"
@@ -454,15 +560,17 @@ def get_notification_logs(
         rows = cur.fetchall()
         results = []
         for r in rows:
-            results.append({
-                "id": r[0],
-                "loan_id": r[1],
-                "notification_type": r[2],
-                "sent_date": str(r[3]) if r[3] is not None else "",
-                "created_at": str(r[4]) if r[4] is not None else "",
-                "book_title": str(r[5]) if r[5] is not None else None,
-                "member_name": str(r[6]) if r[6] is not None else None,
-            })
+            results.append(
+                {
+                    "id": r[0],
+                    "loan_id": r[1],
+                    "notification_type": r[2],
+                    "sent_date": str(r[3]) if r[3] is not None else "",
+                    "created_at": str(r[4]) if r[4] is not None else "",
+                    "book_title": str(r[5]) if r[5] is not None else None,
+                    "member_name": str(r[6]) if r[6] is not None else None,
+                }
+            )
         return results
     finally:
         if should_close:

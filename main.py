@@ -57,7 +57,6 @@ from database import (
     get_all_settings,
     get_db_connection,
     get_notification_logs,
-    get_setting,
     init_database,
     log_notification,
     rtl_display_order,
@@ -2938,8 +2937,19 @@ lbl_log_search.pack(side=tk.RIGHT, padx=(10, 2))
 entry_log_search = tk.Entry(filter_row, font=FONT_NORMAL, width=16)
 entry_log_search.pack(side=tk.RIGHT, padx=5)
 
+btn_search_logs = create_icon_button(
+    filter_row,
+    text=" جستجو ",
+    icon_name="search",
+    font=FONT_BOLD,
+    command=lambda: load_notification_logs_ui(),
+    padx=6,
+    pady=2,
+)
+btn_search_logs.pack(side=tk.RIGHT, padx=4)
+
 lbl_log_type = tk.Label(filter_row, text="نوع اعلان:", font=FONT_NORMAL)
-lbl_log_type.pack(side=tk.RIGHT, padx=(10, 2))
+lbl_log_type.pack(side=tk.RIGHT, padx=(8, 2))
 
 combo_log_type = ttk.Combobox(
     filter_row,
@@ -2950,6 +2960,39 @@ combo_log_type = ttk.Combobox(
 )
 combo_log_type.current(0)
 combo_log_type.pack(side=tk.RIGHT, padx=5)
+
+btn_filter_logs = create_icon_button(
+    filter_row,
+    text=" فیلترها ",
+    icon_name="filter",
+    font=FONT_NORMAL,
+    command=lambda: open_audit_log_filter_popup(),
+    padx=6,
+    pady=2,
+)
+btn_filter_logs.pack(side=tk.RIGHT, padx=4)
+
+btn_refresh_logs = create_icon_button(
+    filter_row,
+    text=" تازه‌سازی ",
+    icon_name="rotate-ccw",
+    font=FONT_NORMAL,
+    command=lambda: refresh_notification_logs(),
+    padx=6,
+    pady=2,
+)
+btn_refresh_logs.pack(side=tk.RIGHT, padx=4)
+
+btn_clear_logs = create_icon_button(
+    filter_row,
+    text=" پاک‌سازی تاریخچه ",
+    icon_name="x",
+    font=FONT_NORMAL,
+    command=lambda: clear_logs_ui(),
+    padx=6,
+    pady=2,
+)
+btn_clear_logs.pack(side=tk.LEFT, padx=5)
 
 log_columns = ["id", "notification_type", "book_title", "member_name", "loan_id", "sent_date", "created_at"]
 
@@ -3009,25 +3052,51 @@ def _format_shamsi_date(date_str: str) -> str:
     return str(date_str)
 
 
+audit_log_filter_settings = {
+    "column": "all",
+    "match_mode": "contains",
+    "notification_type": "all",
+    "sort_col": "id",
+    "sort_dir": "DESC",
+}
+
+
+def update_audit_log_filter_indicator():
+    is_custom = (
+        audit_log_filter_settings["column"] != "all"
+        or audit_log_filter_settings["match_mode"] != "contains"
+        or audit_log_filter_settings["notification_type"] != "all"
+        or audit_log_filter_settings["sort_col"] != "id"
+        or audit_log_filter_settings["sort_dir"] != "DESC"
+    )
+    if is_custom:
+        btn_filter_logs.config(text=" فیلترها (فعال) ", fg="#0d6efd")
+    else:
+        btn_filter_logs.config(text=" فیلترها ", fg="black")
+
+
 def load_notification_logs_ui():
     for item in log_tree.get_children():
         log_tree.delete(item)
 
     search_kw = entry_log_search.get().strip()
-    sel_type = combo_log_type.get().strip()
-    type_filter = None
-    if sel_type == "یادآوری سررسید":
-        type_filter = "due_reminder"
-    elif sel_type == "هشدار دیرکرد":
-        type_filter = "overdue"
-    elif sel_type == "اعلان آزمایشی":
-        type_filter = "test"
+    raw_type = audit_log_filter_settings.get("notification_type", "all")
+    type_filter = None if raw_type == "all" else raw_type
+
+    col_filter = audit_log_filter_settings.get("column", "all")
+    mode_filter = audit_log_filter_settings.get("match_mode", "contains")
+    s_col = audit_log_filter_settings.get("sort_col", "id")
+    s_dir = audit_log_filter_settings.get("sort_dir", "DESC")
 
     try:
         logs = get_notification_logs(
             conn_or_path=db_p,
             notification_type=type_filter,
             search_query=search_kw if search_kw else None,
+            column=col_filter,
+            match_mode=mode_filter,
+            sort_col=s_col,
+            sort_dir=s_dir,
             limit=200,
         )
         if not logs:
@@ -3065,9 +3134,208 @@ def load_notification_logs_ui():
         log_tree.insert("", tk.END, values=(f"❌ خطا: {e}", "", "", "", "", "", ""))
 
 
+def open_audit_log_filter_popup():
+    popup = tk.Toplevel(root)
+    popup.title("فیلترهای تاریخچه اعلان‌ها")
+    popup.geometry("450x520")
+    popup.resizable(False, False)
+    if os.path.exists(icon_p):
+        try:
+            popup.iconbitmap(icon_p)
+        except Exception:
+            pass
+
+    popup.transient(root)
+    popup.grab_set()
+
+    root.update_idletasks()
+    rx = root.winfo_rootx()
+    ry = root.winfo_rooty()
+    rw = root.winfo_width()
+    rh = root.winfo_height()
+    px = max(50, rx + (rw - 450) // 2)
+    py = max(50, ry + (rh - 520) // 2)
+    popup.geometry(f"+{px}+{py}")
+
+    col_var = tk.StringVar(value=audit_log_filter_settings["column"])
+    match_var = tk.StringVar(value=audit_log_filter_settings["match_mode"])
+    type_var = tk.StringVar(value=audit_log_filter_settings["notification_type"])
+    sort_col_var = tk.StringVar(value=audit_log_filter_settings["sort_col"])
+    sort_dir_var = tk.StringVar(value=audit_log_filter_settings["sort_dir"])
+
+    group_col = tk.LabelFrame(popup, text="جستجو در ستون", font=FONT_BOLD, padx=10, pady=5)
+    group_col.pack(fill=tk.X, padx=15, pady=(10, 5))
+
+    col_frame_1 = tk.Frame(group_col)
+    col_frame_1.pack(fill=tk.X, pady=2)
+    rb_all = tk.Radiobutton(col_frame_1, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL, anchor="e")
+    rb_all.pack(side=tk.RIGHT, padx=4)
+    rb_bt = tk.Radiobutton(
+        col_frame_1, text="عنوان کتاب", variable=col_var, value="book_title", font=FONT_NORMAL, anchor="e"
+    )
+    rb_bt.pack(side=tk.RIGHT, padx=4)
+    rb_mn = tk.Radiobutton(
+        col_frame_1, text="نام کاربر", variable=col_var, value="member_name", font=FONT_NORMAL, anchor="e"
+    )
+    rb_mn.pack(side=tk.RIGHT, padx=4)
+
+    col_frame_2 = tk.Frame(group_col)
+    col_frame_2.pack(fill=tk.X, pady=2)
+    rb_lid = tk.Radiobutton(
+        col_frame_2, text="شناسه امانت", variable=col_var, value="loan_id", font=FONT_NORMAL, anchor="e"
+    )
+    rb_lid.pack(side=tk.RIGHT, padx=4)
+    rb_sd = tk.Radiobutton(
+        col_frame_2, text="تاریخ ارسال", variable=col_var, value="sent_date", font=FONT_NORMAL, anchor="e"
+    )
+    rb_sd.pack(side=tk.RIGHT, padx=4)
+    rb_id = tk.Radiobutton(col_frame_2, text="شناسه", variable=col_var, value="id", font=FONT_NORMAL, anchor="e")
+    rb_id.pack(side=tk.RIGHT, padx=4)
+
+    group_mode = tk.LabelFrame(popup, text="نوع تطابق جستجو", font=FONT_BOLD, padx=10, pady=5)
+    group_mode.pack(fill=tk.X, padx=15, pady=5)
+    mode_frame = tk.Frame(group_mode)
+    mode_frame.pack(fill=tk.X)
+    rb_contains = tk.Radiobutton(
+        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL, anchor="e"
+    )
+    rb_contains.pack(side=tk.RIGHT, padx=8)
+    rb_starts = tk.Radiobutton(
+        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL, anchor="e"
+    )
+    rb_starts.pack(side=tk.RIGHT, padx=8)
+    rb_exact = tk.Radiobutton(
+        mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL, anchor="e"
+    )
+    rb_exact.pack(side=tk.RIGHT, padx=8)
+
+    group_type = tk.LabelFrame(popup, text="نوع اعلان", font=FONT_BOLD, padx=10, pady=5)
+    group_type.pack(fill=tk.X, padx=15, pady=5)
+    type_frame = tk.Frame(group_type)
+    type_frame.pack(fill=tk.X)
+    rb_t_all = tk.Radiobutton(
+        type_frame, text="همه اعلان‌ها", variable=type_var, value="all", font=FONT_NORMAL, anchor="e"
+    )
+    rb_t_all.pack(side=tk.RIGHT, padx=6)
+    rb_t_due = tk.Radiobutton(
+        type_frame, text="یادآوری سررسید", variable=type_var, value="due_reminder", font=FONT_NORMAL, anchor="e"
+    )
+    rb_t_due.pack(side=tk.RIGHT, padx=6)
+    rb_t_overdue = tk.Radiobutton(
+        type_frame, text="هشدار دیرکرد", variable=type_var, value="overdue", font=FONT_NORMAL, anchor="e"
+    )
+    rb_t_overdue.pack(side=tk.RIGHT, padx=6)
+    rb_t_test = tk.Radiobutton(
+        type_frame, text="اعلان آزمایشی", variable=type_var, value="test", font=FONT_NORMAL, anchor="e"
+    )
+    rb_t_test.pack(side=tk.RIGHT, padx=6)
+
+    group_sort = tk.LabelFrame(popup, text="مرتب‌سازی نتایج", font=FONT_BOLD, padx=10, pady=5)
+    group_sort.pack(fill=tk.X, padx=15, pady=5)
+    sort_frame = tk.Frame(group_sort)
+    sort_frame.pack(fill=tk.X, pady=3)
+
+    tk.Label(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
+    sort_options = {
+        "شناسه": "id",
+        "تاریخ ارسال": "sent_date",
+        "تاریخ ثبت": "created_at",
+        "عنوان کتاب": "book_title",
+        "نام کاربر": "member_name",
+        "شناسه امانت": "loan_id",
+    }
+    rev_sort_options = {v: k for k, v in sort_options.items()}
+
+    sort_col_cb = ttk.Combobox(
+        sort_frame, state="readonly", width=14, font=FONT_NORMAL, justify="right", values=list(sort_options.keys())
+    )
+    current_sort_label = rev_sort_options.get(sort_col_var.get(), "شناسه")
+    sort_col_cb.set(current_sort_label)
+    sort_col_cb.pack(side=tk.RIGHT, padx=5)
+
+    tk.Label(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
+    sort_dir_cb = ttk.Combobox(
+        sort_frame,
+        state="readonly",
+        width=14,
+        font=FONT_NORMAL,
+        justify="right",
+        values=["نزولی (جدیدترین)", "صعودی (قدیمی‌ترین)"],
+    )
+    sort_dir_cb.set("نزولی (جدیدترین)" if sort_dir_var.get() == "DESC" else "صعودی (قدیمی‌ترین)")
+    sort_dir_cb.pack(side=tk.RIGHT, padx=5)
+
+    action_frame = tk.Frame(popup)
+    action_frame.pack(fill=tk.X, padx=15, pady=(15, 10))
+
+    def apply_audit_log_filters():
+        audit_log_filter_settings["column"] = col_var.get()
+        audit_log_filter_settings["match_mode"] = match_var.get()
+        audit_log_filter_settings["notification_type"] = type_var.get()
+        audit_log_filter_settings["sort_col"] = sort_options.get(sort_col_cb.get(), "id")
+        audit_log_filter_settings["sort_dir"] = "DESC" if "نزولی" in sort_dir_cb.get() else "ASC"
+
+        type_display_map = {
+            "all": "همه",
+            "due_reminder": "یادآوری سررسید",
+            "overdue": "هشدار دیرکرد",
+            "test": "اعلان آزمایشی",
+        }
+        combo_log_type.set(type_display_map.get(audit_log_filter_settings["notification_type"], "همه"))
+
+        update_audit_log_filter_indicator()
+        popup.destroy()
+        load_notification_logs_ui()
+
+    def reset_audit_log_filters():
+        audit_log_filter_settings["column"] = "all"
+        audit_log_filter_settings["match_mode"] = "contains"
+        audit_log_filter_settings["notification_type"] = "all"
+        audit_log_filter_settings["sort_col"] = "id"
+        audit_log_filter_settings["sort_dir"] = "DESC"
+
+        combo_log_type.current(0)
+        update_audit_log_filter_indicator()
+        popup.destroy()
+        load_notification_logs_ui()
+
+    btn_apply = create_icon_button(
+        action_frame,
+        text=" اعمال فیلتر ",
+        icon_name="check",
+        font=FONT_BOLD,
+        padx=6,
+        pady=2,
+        command=apply_audit_log_filters,
+    )
+    btn_apply.pack(side=tk.RIGHT, padx=4)
+
+    btn_reset = create_icon_button(
+        action_frame,
+        text=" تنظیم مجدد ",
+        icon_name="rotate-ccw",
+        font=FONT_NORMAL,
+        padx=6,
+        pady=2,
+        command=reset_audit_log_filters,
+    )
+    btn_reset.pack(side=tk.RIGHT, padx=4)
+
+    btn_cancel = create_icon_button(
+        action_frame, text=" انصراف ", icon_name="x", font=FONT_NORMAL, padx=6, pady=2, command=popup.destroy
+    )
+    btn_cancel.pack(side=tk.LEFT, padx=4)
+
+
 def refresh_notification_logs():
     entry_log_search.delete(0, tk.END)
     combo_log_type.current(0)
+    audit_log_filter_settings["column"] = "all"
+    audit_log_filter_settings["match_mode"] = "contains"
+    audit_log_filter_settings["notification_type"] = "all"
+    audit_log_filter_settings["sort_col"] = "id"
+    audit_log_filter_settings["sort_dir"] = "DESC"
+    update_audit_log_filter_indicator()
     load_notification_logs_ui()
 
 
@@ -3087,41 +3355,39 @@ def clear_logs_ui():
         messagebox.showerror("خطا", f"خطا در پاک‌سازی تاریخچه:\n{e}", parent=root)
 
 
-btn_filter_logs = create_icon_button(
-    filter_row,
-    text=" فیلتر ",
-    icon_name="filter",
-    font=FONT_NORMAL,
-    command=load_notification_logs_ui,
-    padx=8,
-    pady=2,
-)
-btn_filter_logs.pack(side=tk.RIGHT, padx=5)
+def on_combo_log_type_changed(event=None):
+    sel_type = combo_log_type.get().strip()
+    type_code_map = {
+        "همه": "all",
+        "یادآوری سررسید": "due_reminder",
+        "هشدار دیرکرد": "overdue",
+        "اعلان آزمایشی": "test",
+    }
+    audit_log_filter_settings["notification_type"] = type_code_map.get(sel_type, "all")
+    update_audit_log_filter_indicator()
+    load_notification_logs_ui()
 
-btn_refresh_logs = create_icon_button(
-    filter_row,
-    text=" تازه‌سازی ",
-    icon_name="rotate-ccw",
-    font=FONT_NORMAL,
-    command=refresh_notification_logs,
-    padx=8,
-    pady=2,
-)
-btn_refresh_logs.pack(side=tk.RIGHT, padx=5)
 
-btn_clear_logs = create_icon_button(
-    filter_row,
-    text=" پاک‌سازی تاریخچه ",
-    icon_name="x",
-    font=FONT_NORMAL,
-    command=clear_logs_ui,
-    padx=8,
-    pady=2,
-)
-btn_clear_logs.pack(side=tk.LEFT, padx=5)
+combo_log_type.bind("<<ComboboxSelected>>", on_combo_log_type_changed)
 
+audit_log_search_after_id = None
+
+
+def on_log_search_key_release(event=None):
+    global audit_log_search_after_id
+    if event and event.keysym in ("Up", "Down", "Left", "Right", "Return", "Escape"):
+        return
+    if audit_log_search_after_id is not None:
+        try:
+            root.after_cancel(audit_log_search_after_id)
+        except Exception:
+            pass
+    audit_log_search_after_id = root.after(200, load_notification_logs_ui)
+
+
+entry_log_search.bind("<KeyRelease>", on_log_search_key_release)
 entry_log_search.bind("<Return>", lambda e: load_notification_logs_ui())
-combo_log_type.bind("<<ComboboxSelected>>", lambda e: load_notification_logs_ui())
+btn_filter_logs.config(command=open_audit_log_filter_popup)
 
 
 def load_settings_into_ui():
