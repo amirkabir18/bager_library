@@ -48,7 +48,38 @@
     {
       "label": "build exe",
       "type": "shell",
-      "command": "${command:python.interpreterPath} -m PyInstaller --noconfirm --onefile --windowed --name \"bager_library\" --icon \"logo.ico\" --add-data \"assets;assets\" --add-data \"logo.ico;.\" --add-data \"app_info.json;.\" --hidden-import jdatetime --hidden-import dotenv main.py",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m",
+        "PyInstaller",
+        "--noconfirm",
+        "--onefile",
+        "--windowed",
+        "--name",
+        "bager_library",
+        "--icon",
+        "logo.ico",
+        "--add-data",
+        {
+          "value": "assets;assets",
+          "quoting": "strong"
+        },
+        "--add-data",
+        {
+          "value": "logo.ico;.",
+          "quoting": "strong"
+        },
+        "--add-data",
+        {
+          "value": "app_info.json;.",
+          "quoting": "strong"
+        },
+        "--hidden-import",
+        "jdatetime",
+        "--hidden-import",
+        "dotenv",
+        "main.py"
+      ],
       "group": {
         "kind": "build",
         "isDefault": true

@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -107,6 +108,27 @@ class TestUpdateChecker(unittest.TestCase):
         self.assertFalse(res["update_available"])
         self.assertEqual(res["latest_version"], "0.1.0")
 
+    @patch("urllib.request.urlopen")
+    def test_check_fallback_to_raw_app_info(self, mock_urlopen):
+        mock_raw_resp = MagicMock()
+        mock_raw_resp.status = 200
+        mock_raw_resp.read.return_value = json.dumps({"version": "0.3.0"}).encode("utf-8")
+
+        mock_urlopen.side_effect = [
+            Exception("API Rate limit"),
+            MagicMock(__enter__=MagicMock(return_value=mock_raw_resp)),
+        ]
+
+        res = self.checker.check()
+        self.assertTrue(res["update_available"])
+        self.assertEqual(res["latest_version"], "0.3.0")
+
+    @patch("urllib.request.urlopen")
+    def test_check_failure_raises_runtime_error(self, mock_urlopen):
+        mock_urlopen.side_effect = Exception("Network offline")
+        with self.assertRaises(RuntimeError):
+            self.checker.check()
+
 
 class TestDownloadManager(unittest.TestCase):
     def setUp(self):
@@ -191,6 +213,33 @@ class TestDownloadManager(unittest.TestCase):
         self.assertFalse(os.path.exists(self.dest_file))
         self.assertFalse(os.path.exists(self.dest_file + ".tmp"))
 
+    def test_download_already_downloading(self):
+        dm = updater.DownloadManager()
+        dm._is_downloading = True
+        errors = []
+        dm.download_async(
+            url="http://example.com/app.exe",
+            dest_path=self.dest_file,
+            on_error=lambda msg: errors.append(msg),
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("دانلود دیگری در حال انجام است", errors[0])
+
+    @patch("urllib.request.urlopen")
+    def test_download_error_callback(self, mock_urlopen):
+        mock_urlopen.side_effect = Exception("Connection refused")
+        dm = updater.DownloadManager()
+        errors = []
+        dm.download_async(
+            url="http://example.com/app.exe",
+            dest_path=self.dest_file,
+            on_error=lambda msg: errors.append(msg),
+        )
+        dm._thread.join(timeout=5)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("Connection refused", errors[0])
+        self.assertFalse(dm.is_downloading)
+
 
 class TestApplyUpdate(unittest.TestCase):
     def test_apply_update_dev_mode(self):
@@ -205,8 +254,31 @@ class TestApplyUpdate(unittest.TestCase):
             if os.path.exists(f_path):
                 os.remove(f_path)
 
-    @patch("subprocess.Popen")
-    def test_apply_update_frozen_win32(self, mock_popen):
+    def test_apply_update_non_windows(self):
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(b"new exe")
+            f_path = f.name
+        try:
+            with (
+                patch.object(sys, "frozen", True, create=True),
+                patch.object(sys, "platform", "linux"),
+            ):
+                applied = updater.apply_update(f_path)
+                self.assertFalse(applied)
+        finally:
+            if os.path.exists(f_path):
+                os.remove(f_path)
+
+    def test_apply_update_missing_new_binary(self):
+        with (
+            patch.object(sys, "frozen", True, create=True),
+            patch.object(sys, "platform", "win32"),
+        ):
+            with self.assertRaises(FileNotFoundError) as ctx:
+                updater.apply_update("/non/existent/update/file.exe")
+            self.assertIn("Update file not found", str(ctx.exception))
+
+    def test_apply_update_missing_target_exe(self):
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"new exe")
             f_path = f.name
@@ -215,9 +287,141 @@ class TestApplyUpdate(unittest.TestCase):
                 patch.object(sys, "frozen", True, create=True),
                 patch.object(sys, "platform", "win32"),
             ):
-                applied = updater.apply_update(f_path, target_exe="C:\\app\\bager.exe")
-                self.assertTrue(applied)
-                mock_popen.assert_called_once()
+                with self.assertRaises(FileNotFoundError) as ctx:
+                    updater.apply_update(f_path, target_exe="/non/existent/target.exe")
+                self.assertIn("Current executable not found", str(ctx.exception))
         finally:
             if os.path.exists(f_path):
                 os.remove(f_path)
+
+    def test_apply_update_permission_error(self):
+        with tempfile.NamedTemporaryFile(delete=False) as new_f:
+            new_f.write(b"new exe")
+            new_f_path = new_f.name
+        with tempfile.NamedTemporaryFile(delete=False) as target_f:
+            target_f.write(b"target exe")
+            target_f_path = target_f.name
+        try:
+            with (
+                patch.object(sys, "frozen", True, create=True),
+                patch.object(sys, "platform", "win32"),
+            ):
+                original_open = open
+
+                def mock_open_write_test(file, *args, **kwargs):
+                    if isinstance(file, str) and file.endswith(".write_test"):
+                        raise OSError("Access denied")
+                    return original_open(file, *args, **kwargs)
+
+                with patch("builtins.open", side_effect=mock_open_write_test):
+                    with self.assertRaises(PermissionError) as ctx:
+                        updater.apply_update(new_f_path, target_exe=target_f_path)
+                    self.assertIn("No write permission to target directory", str(ctx.exception))
+        finally:
+            for p in (new_f_path, target_f_path):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    def test_apply_update_script_write_error(self):
+        with tempfile.NamedTemporaryFile(delete=False) as new_f:
+            new_f.write(b"new exe")
+            new_f_path = new_f.name
+        with tempfile.NamedTemporaryFile(delete=False) as target_f:
+            target_f.write(b"target exe")
+            target_f_path = target_f.name
+        try:
+            with (
+                patch.object(sys, "frozen", True, create=True),
+                patch.object(sys, "platform", "win32"),
+            ):
+                original_open = open
+
+                def mock_open_helper(file, *args, **kwargs):
+                    if isinstance(file, str) and "bager_update_helper.bat" in file:
+                        raise OSError("Disk full")
+                    return original_open(file, *args, **kwargs)
+
+                with patch("builtins.open", side_effect=mock_open_helper):
+                    with self.assertRaises(RuntimeError) as ctx:
+                        updater.apply_update(new_f_path, target_exe=target_f_path)
+                    self.assertIn("Failed to write update helper script", str(ctx.exception))
+        finally:
+            for p in (new_f_path, target_f_path):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    @patch("subprocess.Popen")
+    def test_apply_update_popen_error(self, mock_popen):
+        mock_popen.side_effect = OSError("Spawn failed")
+        with tempfile.NamedTemporaryFile(delete=False) as new_f:
+            new_f.write(b"new exe")
+            new_f_path = new_f.name
+        with tempfile.NamedTemporaryFile(delete=False) as target_f:
+            target_f.write(b"target exe")
+            target_f_path = target_f.name
+        try:
+            with (
+                patch.object(sys, "frozen", True, create=True),
+                patch.object(sys, "platform", "win32"),
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    updater.apply_update(new_f_path, target_exe=target_f_path)
+                self.assertIn("Failed to launch update helper", str(ctx.exception))
+        finally:
+            for p in (new_f_path, target_f_path):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    @patch("subprocess.Popen")
+    def test_apply_update_frozen_win32_success(self, mock_popen):
+        with tempfile.NamedTemporaryFile(delete=False) as new_f:
+            new_f.write(b"new exe content")
+            new_f_path = new_f.name
+        with tempfile.NamedTemporaryFile(delete=False) as target_f:
+            target_f.write(b"current exe content")
+            target_f_path = target_f.name
+        helper_path = os.path.join(tempfile.gettempdir(), "bager_update_helper.bat")
+        try:
+            with (
+                patch.object(sys, "frozen", True, create=True),
+                patch.object(sys, "platform", "win32"),
+                patch.object(sys, "argv", ["bager.exe", "--minimized"]),
+            ):
+                applied = updater.apply_update(new_f_path, target_exe=target_f_path)
+                self.assertTrue(applied)
+                mock_popen.assert_called_once()
+
+                call_args, call_kwargs = mock_popen.call_args
+                cmd = call_args[0]
+                self.assertEqual(cmd[0], "cmd.exe")
+                self.assertEqual(cmd[1], "/c")
+                self.assertEqual(cmd[2], helper_path)
+                self.assertEqual(cmd[3:], ["--minimized"])
+
+                expected_flags = 0x08000000
+                self.assertEqual(call_kwargs["creationflags"], expected_flags)
+                self.assertTrue(call_kwargs["close_fds"])
+                self.assertEqual(call_kwargs["stdin"], subprocess.DEVNULL)
+                self.assertEqual(call_kwargs["stdout"], subprocess.DEVNULL)
+                self.assertEqual(call_kwargs["stderr"], subprocess.DEVNULL)
+                self.assertEqual(call_kwargs["env"]["PYINSTALLER_RESET_ENVIRONMENT"], "1")
+
+                # Verify the batch script was created and contains expected directives
+                self.assertTrue(os.path.exists(helper_path))
+                with open(helper_path, "r", encoding="utf-8") as bf:
+                    content = bf.read()
+                self.assertIn("EnableDelayedExpansion", content)
+                self.assertIn("WaitForExit", content)
+                self.assertIn("PYINSTALLER_RESET_ENVIRONMENT=1", content)
+                self.assertIn("bager_update_helper.bat", helper_path)
+                self.assertIn(os.path.abspath(new_f_path), content)
+                self.assertIn(os.path.abspath(target_f_path), content)
+                self.assertIn(".old", content)
+                self.assertIn('start "" "!TARGET_FILE!" %*', content)
+        finally:
+            for p in (new_f_path, target_f_path, helper_path):
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass

@@ -5,6 +5,7 @@ resilient chunked streaming downloads with progress tracking, and atomic self-re
 """
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -16,6 +17,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable, Optional
 
+logger = logging.getLogger(__name__)
 BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 APP_INFO_PATH = os.path.join(BASE_DIR, "app_info.json")
 
@@ -319,56 +321,149 @@ class DownloadManager:
 
 def apply_update(new_binary_path: str, target_exe: Optional[str] = None) -> bool:
     """
-    Applies the downloaded update.
-    If running as a frozen PyInstaller binary, launches a detached Windows helper batch script
-    that waits for this process PID to terminate, swaps the binary, and relaunches the app.
-    If running from source, leaves the binary in place and returns False.
-    """
-    if not os.path.exists(new_binary_path):
-        raise FileNotFoundError(f"فایل بروزرسانی یافت نشد: {new_binary_path}")
+    Applies the downloaded update for a Windows production environment.
 
+    Launches a detached Windows helper batch script that:
+    1. Waits for the current process PID to terminate.
+    2. Safely backs up the existing executable (.old).
+    3. Swaps in the new binary.
+    4. Relaunches the application with its original arguments.
+
+    Returns True if the update mechanism was successfully triggered.
+    Returns False if running in an un-frozen (development) environment or not on Windows.
+    """
     is_frozen = getattr(sys, "frozen", False)
     current_exe = target_exe or sys.executable
 
-    if not is_frozen or sys.platform != "win32":
-        # In source development mode, we cannot/should not overwrite python.exe
+    # In development mode, do not overwrite the python interpreter or source files
+    if not is_frozen:
+        logger.info("Running in development mode. Skipping self-replacement.")
         return False
+
+    if sys.platform != "win32":
+        logger.warning("Auto-update via batch script is only supported on Windows.")
+        return False
+
+    if not os.path.exists(new_binary_path):
+        raise FileNotFoundError(f"Update file not found: {new_binary_path}")
+
+    if not os.path.exists(current_exe):
+        raise FileNotFoundError(f"Current executable not found: {current_exe}")
+
+    # Ensure absolute paths to avoid working directory issues
+    new_binary_path = os.path.abspath(new_binary_path)
+    current_exe = os.path.abspath(current_exe)
+
+    # Verify write permissions to the target directory before attempting file operations
+    target_dir = os.path.dirname(current_exe)
+    test_file = os.path.join(target_dir, ".write_test")
+    try:
+        with open(test_file, "w") as f:
+            f.write("test")
+        os.remove(test_file)
+    except OSError as e:
+        raise PermissionError(
+            f"No write permission to target directory: {target_dir}. "
+            "Ensure the app is not installed in a read-only location (e.g., Program Files without Admin rights)."
+        ) from e
 
     helper_path = os.path.join(tempfile.gettempdir(), "bager_update_helper.bat")
     pid = os.getpid()
 
+    # Construct the batch script with delayed expansion for safe path handling
     bat_content = f"""@echo off
 chcp 65001 > nul
-set PID={pid}
-set NEW_FILE={new_binary_path}
-set TARGET_FILE={current_exe}
+set "PID={pid}"
+set "NEW_FILE={new_binary_path}"
+set "TARGET_FILE={current_exe}"
+set "BACKUP_FILE={current_exe}.old"
 
-:wait_pid
+setlocal EnableDelayedExpansion
+
+:: Wait for target process to terminate using native process wait
+powershell.exe -NoProfile -NonInteractive -Command "try {{ (Get-Process -Id %PID% -ErrorAction Stop).WaitForExit(30000) }} catch {{}}; exit 0" >nul 2>&1
 timeout /t 1 /nobreak > nul
-tasklist /fi "pid eq %PID%" 2>nul | find "%PID%" > nul
-if not errorlevel 1 goto wait_pid
 
-:replace_loop
-move /y "%NEW_FILE%" "%TARGET_FILE%" > nul
-if errorlevel 1 (
-    timeout /t 1 /nobreak > nul
-    goto replace_loop
+if exist "!TARGET_FILE!" (
+    move /y "!TARGET_FILE!" "!BACKUP_FILE!" > nul
+    if errorlevel 1 (
+        echo ERROR: Failed to backup executable. Aborting.
+        exit /b 1
+    )
 )
 
-start "" "%TARGET_FILE%"
+move /y "!NEW_FILE!" "!TARGET_FILE!" > nul
+if errorlevel 1 (
+    echo ERROR: Failed to install update. Restoring backup.
+    if exist "!BACKUP_FILE!" (
+        move /y "!BACKUP_FILE!" "!TARGET_FILE!" > nul
+    )
+    exit /b 1
+)
+
+if exist "!BACKUP_FILE!" (
+    del "!BACKUP_FILE!" > nul 2>&1
+)
+
+:: Clear PyInstaller environment variables and signal clean process start
+set "PYINSTALLER_RESET_ENVIRONMENT=1"
+set "_PYI_PARENT_PROCESS_LEVEL="
+set "_PYI_ARCHIVE_FILE="
+set "_PYI_APPLICATION_HOME_DIR="
+set "_PYI_SPLASH_IPC="
+set "_MEIPASS2="
+set "_MEIPASS="
+
+:: Relaunch with original arguments (%* passes all arguments received by this batch script)
+start "" "!TARGET_FILE!" %*
+
+:: Self-delete the helper script
 (goto) 2>nul & del "%~f0"
 """
 
-    with open(helper_path, "w", encoding="utf-8") as f:
-        f.write(bat_content)
+    try:
+        with open(helper_path, "w", encoding="utf-8") as f:
+            f.write(bat_content)
+    except OSError as e:
+        raise RuntimeError(f"Failed to write update helper script: {e}") from e
 
+    # Flags to hide the command prompt window
     CREATE_NO_WINDOW = 0x08000000
-    DETACHED_PROCESS = 0x00000008
 
-    subprocess.Popen(
-        ["cmd.exe", "/c", helper_path],
-        creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS,
-        close_fds=True,
-    )
+    startupinfo = None
+    if sys.platform == "win32":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0  # SW_HIDE
 
-    return True
+    # Prepare clean environment to prevent PyInstaller parent process security validation errors
+    env = os.environ.copy()
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    for pyi_var in (
+        "_PYI_PARENT_PROCESS_LEVEL",
+        "_PYI_ARCHIVE_FILE",
+        "_PYI_APPLICATION_HOME_DIR",
+        "_PYI_SPLASH_IPC",
+        "_MEIPASS2",
+        "_MEIPASS",
+    ):
+        env.pop(pyi_var, None)
+
+    # Pass original arguments to the helper script
+    cmd = ["cmd.exe", "/c", helper_path] + sys.argv[1:]
+
+    try:
+        subprocess.Popen(
+            cmd,
+            creationflags=CREATE_NO_WINDOW,
+            startupinfo=startupinfo,
+            env=env,
+            close_fds=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logger.info("Windows update helper launched. Application will restart.")
+        return True
+    except Exception as e:
+        raise RuntimeError(f"Failed to launch update helper: {e}") from e
