@@ -308,21 +308,9 @@ header_frame.pack(fill=tk.X, padx=12, pady=(10, 6))
 title_box = ctk.CTkFrame(header_frame, fg_color="transparent")
 title_box.pack(side=tk.RIGHT, padx=12, pady=6)
 
-logo_icon = None
-if os.path.exists(icon_p):
-    try:
-        logo_pil = Image.open(icon_p)
-        logo_icon = ctk.CTkImage(light_image=logo_pil, dark_image=logo_pil, size=(26, 22))
-    except Exception:
-        logo_icon = get_icon("book-open", size=(22, 22))
-else:
-    logo_icon = get_icon("book-open", size=(22, 22))
-
 lbl_app_logo = ctk.CTkLabel(
     title_box,
-    text=" کتابخانه باقر العلوم ",
-    image=logo_icon,
-    compound="right",
+    text="کتابخانه باقر العلوم",
     font=FONT_TITLE,
 )
 lbl_app_logo.pack(side=tk.RIGHT)
