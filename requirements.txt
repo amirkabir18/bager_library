@@ -1,3 +1,6 @@
+customtkinter>=6.0.0
 jdatetime
+pillow>=10.0.0
 python-dotenv
 winotify
+

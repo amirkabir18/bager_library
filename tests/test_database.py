@@ -201,6 +201,72 @@ class TestDatabaseMigration(unittest.TestCase):
         cur.execute("SELECT borrowed FROM loans WHERE id = ?", (loan_id,))
         self.assertEqual(cur.fetchone()[0], 0)
 
+    def test_get_app_data_dir_dev_mode(self):
+        expected_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.assertEqual(os.path.abspath(database.get_app_data_dir()), expected_dir)
+
+    def test_get_app_data_dir_env_override(self):
+        with tempfile.TemporaryDirectory() as custom_dir:
+            os.environ["BAGER_DATA_DIR"] = custom_dir
+            try:
+                self.assertEqual(database.get_app_data_dir(), custom_dir)
+                self.assertEqual(database.get_db_path(), os.path.join(custom_dir, "bager_library.db"))
+            finally:
+                os.environ.pop("BAGER_DATA_DIR", None)
+
+    def test_get_db_path_env_override(self):
+        with tempfile.TemporaryDirectory() as custom_dir:
+            custom_db = os.path.join(custom_dir, "custom.db")
+            os.environ["BAGER_DB_PATH"] = custom_db
+            try:
+                self.assertEqual(database.get_db_path(), custom_db)
+            finally:
+                os.environ.pop("BAGER_DB_PATH", None)
+
+    def test_get_app_data_dir_frozen_writable(self):
+        with tempfile.TemporaryDirectory() as fake_exe_dir:
+            fake_exe = os.path.join(fake_exe_dir, "bager_library.exe")
+            with open(fake_exe, "w") as f:
+                f.write("")
+
+            original_frozen = getattr(sys, "frozen", False)
+            original_exe = sys.executable
+            try:
+                sys.frozen = True
+                sys.executable = fake_exe
+                self.assertEqual(database.get_app_data_dir(), fake_exe_dir)
+            finally:
+                if original_frozen:
+                    sys.frozen = original_frozen
+                elif hasattr(sys, "frozen"):
+                    delattr(sys, "frozen")
+                sys.executable = original_exe
+
+    def test_get_app_data_dir_frozen_fallback_localappdata(self):
+        with tempfile.TemporaryDirectory() as fake_appdata:
+            original_frozen = getattr(sys, "frozen", False)
+            original_exe = sys.executable
+            original_appdata = os.environ.get("LOCALAPPDATA")
+            try:
+                sys.frozen = True
+                # Non-existent or unwritable exe path
+                sys.executable = r"Z:\nonexistent_drive\bager_library.exe"
+                os.environ["LOCALAPPDATA"] = fake_appdata
+                resolved = database.get_app_data_dir()
+                expected = os.path.join(fake_appdata, "bager_library")
+                self.assertEqual(resolved, expected)
+                self.assertTrue(os.path.isdir(expected))
+            finally:
+                if original_frozen:
+                    sys.frozen = original_frozen
+                elif hasattr(sys, "frozen"):
+                    delattr(sys, "frozen")
+                sys.executable = original_exe
+                if original_appdata is not None:
+                    os.environ["LOCALAPPDATA"] = original_appdata
+                else:
+                    os.environ.pop("LOCALAPPDATA", None)
+
 
 if __name__ == "__main__":
     unittest.main()
