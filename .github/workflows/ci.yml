@@ -105,21 +105,44 @@ jobs:
             --hidden-import dotenv `
             main.py
 
-      - name: Verify Executable Creation
+      - name: Build Windows Directory Package (no --onefile) with PyInstaller
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --onedir --windowed `
+            --name "bager_library" `
+            --distpath "dist/package" `
+            --icon "logo.ico" `
+            --add-data "assets;assets" `
+            --add-data "logo.ico;." `
+            --add-data "app_info.json;." `
+            --hidden-import jdatetime `
+            --hidden-import dotenv `
+            main.py
+          Compress-Archive -Path "dist/package/bager_library" -DestinationPath "dist/bager_library-windows-x64.zip" -Force
+
+      - name: Verify Builds Creation
         shell: pwsh
         run: |
           if (-not (Test-Path "dist/bager_library.exe")) {
             Write-Error "dist/bager_library.exe does not exist!"
             exit 1
           }
-          $item = Get-Item "dist/bager_library.exe"
-          Write-Host "Created binary: $($item.FullName) ($([math]::Round($item.Length / 1MB, 2)) MB)"
+          if (-not (Test-Path "dist/bager_library-windows-x64.zip")) {
+            Write-Error "dist/bager_library-windows-x64.zip does not exist!"
+            exit 1
+          }
+          $exeItem = Get-Item "dist/bager_library.exe"
+          $zipItem = Get-Item "dist/bager_library-windows-x64.zip"
+          Write-Host "Created binary: $($exeItem.FullName) ($([math]::Round($exeItem.Length / 1MB, 2)) MB)"
+          Write-Host "Created onedir zip: $($zipItem.FullName) ($([math]::Round($zipItem.Length / 1MB, 2)) MB)"
 
-      - name: Upload EXE Artifact
+      - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: bager-library-windows-x64
-          path: dist/bager_library.exe
+          path: |
+            dist/bager_library.exe
+            dist/bager_library-windows-x64.zip
           if-no-files-found: error
 
   release:
@@ -172,8 +195,10 @@ jobs:
             این انتشار به‌صورت خودکار پس از بروزرسانی نسخه در شاخه `main` ایجاد شده است.
             
             ### فایل‌های اجرایی:
-            - **bager_library.exe**: نسخه بدون نیاز به نصب برای ویندوز
+            - **bager_library.exe**: نسخه تک‌فایلی مستقل برای ویندوز
+            - **bager_library-windows-x64.zip**: نسخه پوشه‌ای بدون یکپارچه‌سازی (اجرای سریع‌تر) فشرده‌شده
           files: |
-            release-assets/bager_library.exe
+            release-assets/**/bager_library.exe
+            release-assets/**/bager_library-windows-x64.zip
           generate_release_notes: true
 

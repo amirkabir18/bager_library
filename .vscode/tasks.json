@@ -89,6 +89,64 @@
         "reveal": "always",
         "panel": "shared"
       }
+    },
+    {
+      "label": "build onedir",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m",
+        "PyInstaller",
+        "--noconfirm",
+        "--onedir",
+        "--windowed",
+        "--name",
+        "bager_library",
+        "--icon",
+        "logo.ico",
+        "--add-data",
+        {
+          "value": "assets;assets",
+          "quoting": "strong"
+        },
+        "--add-data",
+        {
+          "value": "logo.ico;.",
+          "quoting": "strong"
+        },
+        "--add-data",
+        {
+          "value": "app_info.json;.",
+          "quoting": "strong"
+        },
+        "--hidden-import",
+        "jdatetime",
+        "--hidden-import",
+        "dotenv",
+        "main.py"
+      ],
+      "group": {
+        "kind": "build"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "build onedir:zip",
+      "type": "shell",
+      "command": "powershell -NoProfile -Command \"Compress-Archive -Path 'dist/bager_library' -DestinationPath 'dist/bager_library-windows-x64.zip' -Force\"",
+      "dependsOn": "build onedir",
+      "group": {
+        "kind": "build"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
     }
   ]
 }
