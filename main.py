@@ -9,7 +9,9 @@ import tkinter.font as tkfont
 import webbrowser
 from tkinter import messagebox, ttk
 
+import customtkinter as ctk
 import jdatetime
+from PIL import Image
 
 from notifications import LoanReminderManager, NotificationEngine
 from updater import (
@@ -75,8 +77,15 @@ with get_db_connection(db_p) as _init_conn:
     _init_cur.execute(f'PRAGMA table_info("{tabel_name}")')
     columns: list[str] = [str(row[1]) for row in _init_cur.fetchall()]
 
-root = tk.Tk()
+# CustomTkinter Global Theme
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+root = ctk.CTk()
 root.title("کتابخانه باقر العلوم")
+root.geometry("1080x720")
+root.minsize(920, 620)
+
 notification_engine = NotificationEngine(root, icon_path=icon_p, db_path=db_p)
 reminder_manager = LoanReminderManager(root, db_p, notification_engine)
 reminder_manager.start()
@@ -90,63 +99,109 @@ if os.path.exists(icon_p):
 available_families = tkfont.families(root)
 FONT_FAMILY = "IRANSansWeb(FaNum)" if "IRANSansWeb(FaNum)" in available_families else "Tahoma"
 
-for font_name in (
-    "TkDefaultFont",
-    "TkTextFont",
-    "TkFixedFont",
-    "TkMenuFont",
-    "TkHeadingFont",
-    "TkCaptionFont",
-    "TkSmallCaptionFont",
-    "TkTooltipFont",
-):
-    try:
-        tkfont.nametofont(font_name).configure(family=FONT_FAMILY, size=10)
-    except Exception:
-        pass
+FONT_TITLE = ctk.CTkFont(family=FONT_FAMILY, size=15, weight="bold")
+FONT_HEADER = ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold")
+FONT_NORMAL = ctk.CTkFont(family=FONT_FAMILY, size=11)
+FONT_BOLD = ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold")
+FONT_SMALL = ctk.CTkFont(family=FONT_FAMILY, size=10)
 
-FONT_TITLE = (FONT_FAMILY, 13, "bold")
-FONT_NORMAL = (FONT_FAMILY, 10)
-FONT_BOLD = (FONT_FAMILY, 10, "bold")
-
-icons_cache: dict[str, tk.PhotoImage] = {}
+icons_cache: dict[tuple[str, int, int], ctk.CTkImage] = {}
 
 
-def get_icon(name: str) -> tk.PhotoImage | None:
-    if name in icons_cache:
-        return icons_cache[name]
+def get_icon(name: str, size: tuple[int, int] = (18, 18)) -> ctk.CTkImage | None:
+    cache_key = (name, size[0], size[1])
+    if cache_key in icons_cache:
+        return icons_cache[cache_key]
     icon_path = os.path.join(base_dir, "assets", "icons", "lucide", f"{name}.png")
     if os.path.exists(icon_path):
         try:
-            img = tk.PhotoImage(file=icon_path)
-            icons_cache[name] = img
-            return img
+            pil_img = Image.open(icon_path)
+            ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=size)
+            icons_cache[cache_key] = ctk_img
+            return ctk_img
         except Exception:
             return None
     return None
 
 
-def create_icon_button(parent, text: str, icon_name: str | None = None, command=None, font=None, **kwargs) -> tk.Button:
-    btn = tk.Button(parent, text=text, font=font or FONT_NORMAL, **kwargs)
-    if command is not None:
-        btn.config(command=command)
-    if icon_name:
-        img = get_icon(icon_name)
-        if img:
-            btn.config(image=img, compound=tk.RIGHT)
-            setattr(btn, "image", img)
-    return btn
+def create_icon_button(
+    parent,
+    text: str,
+    icon_name: str | None = None,
+    command=None,
+    font=None,
+    fg_color=None,
+    hover_color=None,
+    width=None,
+    height=32,
+    corner_radius=8,
+    **kwargs,
+) -> ctk.CTkButton:
+    img = get_icon(icon_name) if icon_name else None
+    btn_kwargs = {
+        "text": text,
+        "command": command,
+        "font": font or FONT_NORMAL,
+        "height": height,
+        "corner_radius": corner_radius,
+        "compound": "right",
+    }
+    if width is not None:
+        btn_kwargs["width"] = width
+    if fg_color is not None:
+        btn_kwargs["fg_color"] = fg_color
+    if hover_color is not None:
+        btn_kwargs["hover_color"] = hover_color
+    if img:
+        btn_kwargs["image"] = img
+    btn_kwargs.update(kwargs)
+    return ctk.CTkButton(parent, **btn_kwargs)
 
 
-st = ttk.Style()
-st.configure(".", font=FONT_NORMAL)
-st.configure("Treeview", font=FONT_NORMAL, rowheight=30)
-st.configure("Treeview.Heading", font=FONT_BOLD)
-st.configure("TNotebook", tabposition="ne")
-st.configure("TNotebook.Tab", font=FONT_NORMAL)
-st.configure("TCombobox", font=FONT_NORMAL)
-st.configure("TRadiobutton", font=FONT_NORMAL)
-st.configure("Modern.TRadiobutton", font=FONT_NORMAL)
+def apply_treeview_styling(mode="dark"):
+    st = ttk.Style()
+    st.theme_use("clam")
+    if mode == "dark":
+        bg_col = "#242424"
+        fg_col = "#f1f5f9"
+        field_col = "#242424"
+        head_bg = "#1e1e1e"
+        head_fg = "#ffffff"
+        head_active = "#333333"
+        sel_bg = "#1f538d"
+        sel_fg = "#ffffff"
+    else:
+        bg_col = "#ffffff"
+        fg_col = "#0f172a"
+        field_col = "#ffffff"
+        head_bg = "#f1f5f9"
+        head_fg = "#0f172a"
+        head_active = "#e2e8f0"
+        sel_bg = "#3b82f6"
+        sel_fg = "#ffffff"
+
+    st.configure(
+        "Treeview",
+        background=bg_col,
+        foreground=fg_col,
+        fieldbackground=field_col,
+        rowheight=32,
+        font=(FONT_FAMILY, 10),
+        borderwidth=0,
+    )
+    st.configure(
+        "Treeview.Heading",
+        background=head_bg,
+        foreground=head_fg,
+        relief="flat",
+        font=(FONT_FAMILY, 10, "bold"),
+        padding=6,
+    )
+    st.map("Treeview", background=[("selected", sel_bg)], foreground=[("selected", sel_fg)])
+    st.map("Treeview.Heading", background=[("active", head_active)])
+
+
+apply_treeview_styling("dark")
 
 current_user: dict | None = None
 
@@ -234,8 +289,42 @@ def bind_table_delete(tree_widget, table_name, id_col_index=0, on_deleted=None):
     tree_widget.bind("<Delete>", on_delete_key)
 
 
-notebook = ttk.Notebook(root)
-notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+# ==================== Shell Header & Navigation ====================
+header_frame = ctk.CTkFrame(root, height=54, corner_radius=10)
+header_frame.pack(fill=tk.X, padx=12, pady=(10, 6))
+
+title_box = ctk.CTkFrame(header_frame, fg_color="transparent")
+title_box.pack(side=tk.RIGHT, padx=12, pady=6)
+
+logo_icon = get_icon("book-open", size=(22, 22))
+lbl_app_logo = ctk.CTkLabel(
+    title_box,
+    text=" کتابخانه باقر العلوم ",
+    image=logo_icon,
+    compound="right",
+    font=FONT_TITLE,
+)
+lbl_app_logo.pack(side=tk.RIGHT)
+
+nav_bar = ctk.CTkFrame(header_frame, fg_color="transparent")
+nav_bar.pack(side=tk.RIGHT, padx=8, fill=tk.Y)
+
+left_actions = ctk.CTkFrame(header_frame, fg_color="transparent")
+left_actions.pack(side=tk.LEFT, padx=12, pady=6)
+
+lbl_user_badge = ctk.CTkLabel(left_actions, text="", font=FONT_NORMAL, text_color="#10b981")
+lbl_user_badge.pack(side=tk.LEFT, padx=6)
+
+content_container = ctk.CTkFrame(root, corner_radius=10, fg_color="transparent")
+content_container.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 10))
+
+login_frame = ctk.CTkFrame(content_container, corner_radius=10)
+books_frame = ctk.CTkFrame(content_container, corner_radius=10)
+tabel_frame = ctk.CTkFrame(content_container, corner_radius=10)
+member_frame = ctk.CTkFrame(content_container, corner_radius=10)
+auth_users_frame = ctk.CTkFrame(content_container, corner_radius=10)
+help_frame = ctk.CTkFrame(content_container, corner_radius=10)
+settings_frame = ctk.CTkFrame(content_container, corner_radius=10)
 
 filter_settings = {
     "column": "all",
@@ -245,49 +334,116 @@ filter_settings = {
     "sort_dir": "ASC",
 }
 
-login_frame = ttk.Frame(notebook)
-books_frame = ttk.Frame(notebook)
-tabel_frame = ttk.Frame(notebook)
-member_frame = ttk.Frame(notebook)
-auth_users_frame = ttk.Frame(notebook)
-help_frame = ttk.Frame(notebook)
-settings_frame = ttk.Frame(notebook)
+current_active_tab = "login"
+nav_buttons: dict[str, ctk.CTkButton] = {}
+
+
+def switch_tab(tab_name: str):
+    global current_active_tab
+    frames = {
+        "login": login_frame,
+        "books": books_frame,
+        "loans": tabel_frame,
+        "members": member_frame,
+        "users": auth_users_frame,
+        "help": help_frame,
+        "settings": settings_frame,
+    }
+    for k, f in frames.items():
+        f.pack_forget()
+
+    target = frames.get(tab_name, books_frame)
+    target.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+    current_active_tab = tab_name
+
+    for k, btn in nav_buttons.items():
+        if k == tab_name:
+            btn.configure(fg_color="#1f538d", text_color="#ffffff")
+        else:
+            btn.configure(fg_color="transparent", text_color=("#334155", "#94a3b8"))
+
+
+class NavigationManager:
+    def select(self, target_frame):
+        frames = {
+            "login": login_frame,
+            "books": books_frame,
+            "loans": tabel_frame,
+            "members": member_frame,
+            "users": auth_users_frame,
+            "help": help_frame,
+            "settings": settings_frame,
+        }
+        for k, f in frames.items():
+            if f == target_frame:
+                switch_tab(k)
+                return
+
+
+notebook = NavigationManager()
 
 
 def rebuild_tabs():
-    for tab in list(notebook.tabs()):
-        try:
-            notebook.forget(tab)
-        except Exception:
-            pass
+    for w in nav_bar.winfo_children():
+        w.destroy()
+    nav_buttons.clear()
 
     if current_user is None:
-        notebook.add(help_frame, text=" راهنما ")
-        notebook.add(login_frame, text=" ورود ")
-        notebook.select(login_frame)
+        lbl_user_badge.configure(text="")
+        tabs = [
+            ("login", "ورود به سامانه", "user-plus"),
+            ("help", "راهنما", "bookmark"),
+        ]
+        default_tab = "login"
     else:
-        notebook.add(login_frame, text=" وضعیت حساب ")
-        notebook.add(help_frame, text=" راهنما ")
-        notebook.add(settings_frame, text=" تنظیمات و اعلان‌ها ")
+        u_role = tr(str(current_user.get("role", "")))
+        u_name = str(current_user.get("username", ""))
+        lbl_user_badge.configure(text=f"👤 {u_name} ({u_role})")
+
+        user_role = str(current_user.get("role", "")).strip().lower()
+        tabs = [
+            ("books", "جستجوی کتاب", "book-open"),
+            ("loans", "جدول امانات", "arrow-right-left"),
+            ("members", "اعضای کتابخانه", "user-plus"),
+        ]
+        if user_role in ("super admin", "superadmin", "admin"):
+            tabs.append(("users", "مدیریت کاربران", "user-plus"))
+            try:
+                search_users()
+            except Exception:
+                pass
+        tabs.extend(
+            [
+                ("settings", "تنظیمات و اعلان‌ها", "filter"),
+                ("help", "راهنما", "bookmark"),
+                ("login", "حساب کاربری", "check"),
+            ]
+        )
+        default_tab = "books"
         try:
             load_settings_into_ui()
             load_notification_logs_ui()
         except Exception:
             pass
 
-        user_role = str(current_user.get("role", "")).strip().lower()
-        if user_role in ("super admin", "superadmin", "admin"):
-            notebook.add(auth_users_frame, text=" مدیریت کاربران ")
-            try:
-                search_users()
-            except Exception:
-                pass
+    for tab_id, tab_label, tab_icon in tabs:
+        btn = ctk.CTkButton(
+            nav_bar,
+            text=f" {tab_label} ",
+            image=get_icon(tab_icon),
+            compound="right",
+            font=FONT_NORMAL,
+            height=34,
+            corner_radius=8,
+            fg_color="transparent",
+            text_color=("#334155", "#94a3b8"),
+            hover_color=("#e2e8f0", "#2d3748"),
+            command=lambda tid=tab_id: switch_tab(tid),
+        )
+        btn.pack(side=tk.RIGHT, padx=4)
+        nav_buttons[tab_id] = btn
 
-        notebook.add(member_frame, text=" اعضای کتابخانه ")
-        notebook.add(tabel_frame, text=" جدول امانات ")
-        notebook.add(books_frame, text=" جستجوی کتاب ")
-
-        notebook.select(books_frame)
+    switch_tab(default_tab)
 
 
 rebuild_tabs()
@@ -297,33 +453,44 @@ def show_logged_in_view(user):
     for widget in login_frame.winfo_children():
         widget.destroy()
 
-    tk.Label(login_frame, text="وضعیت حساب کاربری", font=FONT_TITLE).pack(pady=15)
+    ctk.CTkLabel(login_frame, text="وضعیت حساب کاربری", font=FONT_TITLE).pack(pady=(20, 10))
 
-    info_card = tk.LabelFrame(login_frame, text="مشخصات حساب کاربری فعال", font=FONT_BOLD, padx=20, pady=15)
+    info_card = ctk.CTkFrame(login_frame, corner_radius=12, width=480)
     info_card.pack(pady=10, padx=20, fill=tk.X)
 
     role_val = str(user.get("role", ""))
     role_fa = tr(role_val)
-    tk.Label(info_card, text=f"نام کاربری: {user.get('username', '')}", font=FONT_BOLD, anchor="e").pack(
-        fill=tk.X, pady=4
+
+    title_row = ctk.CTkFrame(info_card, fg_color="transparent")
+    title_row.pack(fill=tk.X, padx=20, pady=(15, 10))
+    ctk.CTkLabel(title_row, text="مشخصات حساب کاربری فعال", font=FONT_HEADER).pack(side=tk.RIGHT)
+
+    ctk.CTkLabel(info_card, text=f"نام کاربری: {user.get('username', '')}", font=FONT_BOLD, anchor="e").pack(
+        fill=tk.X, padx=20, pady=4
     )
-    tk.Label(info_card, text=f"شماره تلفن: {user.get('phone_number', '')}", font=FONT_NORMAL, anchor="e").pack(
-        fill=tk.X, pady=4
+    ctk.CTkLabel(info_card, text=f"شماره تلفن: {user.get('phone_number', '')}", font=FONT_NORMAL, anchor="e").pack(
+        fill=tk.X, padx=20, pady=4
     )
-    tk.Label(info_card, text=f"نقش کاربری: {role_fa}", font=FONT_BOLD, fg="#198754", anchor="e").pack(fill=tk.X, pady=4)
+    role_badge = ctk.CTkLabel(
+        info_card, text=f"نقش کاربری: {role_fa}", font=FONT_BOLD, text_color="#10b981", anchor="e"
+    )
+    role_badge.pack(fill=tk.X, padx=20, pady=4)
+
     if user.get("telegram_chat_id"):
-        tk.Label(info_card, text=f"شناسه چت تلگرام: {user.get('telegram_chat_id')}", font=FONT_NORMAL, anchor="e").pack(
-            fill=tk.X, pady=4
-        )
+        ctk.CTkLabel(
+            info_card, text=f"شناسه چت تلگرام: {user.get('telegram_chat_id')}", font=FONT_NORMAL, anchor="e"
+        ).pack(fill=tk.X, padx=20, pady=(4, 15))
+    else:
+        ctk.CTkLabel(info_card, text="", font=FONT_SMALL).pack(pady=4)
 
     logout_btn = create_icon_button(
         login_frame,
         text=" خروج از حساب کاربری ",
         icon_name="x",
         font=FONT_BOLD,
-        fg="red",
-        padx=12,
-        pady=5,
+        fg_color="#dc2626",
+        hover_color="#b91c1c",
+        height=38,
         command=logout,
     )
     logout_btn.pack(pady=20)
@@ -333,36 +500,58 @@ def show_login_view():
     for widget in login_frame.winfo_children():
         widget.destroy()
 
-    tk.Label(login_frame, text="ورود به کتابخانه باقر العلوم", font=FONT_TITLE).pack(pady=15)
+    ctk.CTkLabel(login_frame, text="ورود به سامانه کتابخانه باقر العلوم", font=FONT_TITLE).pack(pady=(25, 10))
 
-    card = tk.LabelFrame(login_frame, text=" ورود با رمز یکبار مصرف (OTP) ", font=FONT_BOLD, padx=25, pady=20)
+    card = ctk.CTkFrame(login_frame, corner_radius=12, width=440)
     card.pack(pady=10, padx=20)
 
-    step1_frame = tk.Frame(card)
-    step1_frame.pack(fill=tk.BOTH, expand=True)
+    card_header = ctk.CTkLabel(card, text=" ورود با رمز یکبار مصرف (OTP) ", font=FONT_HEADER)
+    card_header.pack(pady=(16, 10))
 
-    status_lbl = tk.Label(
-        step1_frame, text="شماره تلفن همراه خود را وارد کنید:", font=FONT_NORMAL, wraplength=380, justify="center"
+    step1_frame = ctk.CTkFrame(card, fg_color="transparent")
+    step1_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 16))
+
+    status_lbl = ctk.CTkLabel(
+        step1_frame,
+        text="شماره تلفن همراه خود را وارد کنید:",
+        font=FONT_NORMAL,
+        wraplength=380,
+        justify="center",
     )
     status_lbl.pack(pady=8)
 
-    phone_entry = tk.Entry(step1_frame, font=FONT_NORMAL, justify="center", width=26)
+    phone_entry = ctk.CTkEntry(
+        step1_frame,
+        placeholder_text="مثال: 09123456789",
+        font=FONT_NORMAL,
+        justify="center",
+        width=260,
+        height=36,
+    )
     phone_entry.pack(pady=6)
     phone_entry.focus()
 
-    step2_frame = tk.Frame(card)
+    step2_frame = ctk.CTkFrame(card, fg_color="transparent")
 
-    otp_info_lbl = tk.Label(step2_frame, text="", font=FONT_NORMAL, fg="#0d6efd", wraplength=380, justify="center")
+    otp_info_lbl = ctk.CTkLabel(
+        step2_frame, text="", font=FONT_NORMAL, text_color="#38bdf8", wraplength=380, justify="center"
+    )
     otp_info_lbl.pack(pady=6)
 
-    otp_code_lbl = tk.Label(step2_frame, text="کد تأیید ۶ رقمی را وارد کنید:", font=FONT_NORMAL)
+    otp_code_lbl = ctk.CTkLabel(step2_frame, text="کد تأیید ۶ رقمی را وارد کنید:", font=FONT_NORMAL)
     otp_code_lbl.pack(pady=4)
 
-    otp_entry = tk.Entry(step2_frame, font=(FONT_FAMILY, 14, "bold"), justify="center", width=14)
+    otp_entry = ctk.CTkEntry(
+        step2_frame,
+        font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
+        justify="center",
+        width=160,
+        height=40,
+    )
     otp_entry.pack(pady=6)
 
-    pwd_frame = tk.Frame(card)
-    pwd_status_lbl = tk.Label(
+    pwd_frame = ctk.CTkFrame(card, fg_color="transparent")
+    pwd_status_lbl = ctk.CTkLabel(
         pwd_frame,
         text="شماره تلفن یا نام کاربری و رمز عبور را وارد کنید:",
         font=FONT_NORMAL,
@@ -371,12 +560,12 @@ def show_login_view():
     )
     pwd_status_lbl.pack(pady=6)
 
-    tk.Label(pwd_frame, text="نام کاربری یا شماره تلفن:", font=FONT_NORMAL).pack(pady=2)
-    pwd_ident_entry = tk.Entry(pwd_frame, font=FONT_NORMAL, justify="center", width=26)
+    ctk.CTkLabel(pwd_frame, text="نام کاربری یا شماره تلفن:", font=FONT_NORMAL).pack(pady=2)
+    pwd_ident_entry = ctk.CTkEntry(pwd_frame, font=FONT_NORMAL, justify="center", width=260, height=36)
     pwd_ident_entry.pack(pady=4)
 
-    tk.Label(pwd_frame, text="رمز عبور:", font=FONT_NORMAL).pack(pady=2)
-    pwd_val_entry = tk.Entry(pwd_frame, font=FONT_NORMAL, justify="center", width=26, show="*")
+    ctk.CTkLabel(pwd_frame, text="رمز عبور:", font=FONT_NORMAL).pack(pady=2)
+    pwd_val_entry = ctk.CTkEntry(pwd_frame, font=FONT_NORMAL, justify="center", width=260, height=36, show="*")
     pwd_val_entry.pack(pady=4)
 
     pending_phone = {"val": ""}
@@ -384,8 +573,8 @@ def show_login_view():
     def switch_to_pwd():
         step1_frame.pack_forget()
         step2_frame.pack_forget()
-        card.config(text=" ورود با رمز عبور (آفلاین) ")
-        pwd_frame.pack(fill=tk.BOTH, expand=True)
+        card_header.configure(text=" ورود با رمز عبور (آفلاین) ")
+        pwd_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 16))
         current_entered = phone_entry.get().strip()
         if current_entered:
             pwd_ident_entry.delete(0, tk.END)
@@ -397,28 +586,28 @@ def show_login_view():
     def switch_to_otp():
         pwd_frame.pack_forget()
         step2_frame.pack_forget()
-        card.config(text=" ورود با رمز یکبار مصرف (OTP) ")
-        step1_frame.pack(fill=tk.BOTH, expand=True)
+        card_header.configure(text=" ورود با رمز یکبار مصرف (OTP) ")
+        step1_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 16))
         phone_entry.focus()
 
     def do_pwd_login(event=None):
         ident = pwd_ident_entry.get().strip()
         pwd = pwd_val_entry.get().strip()
         if not ident or not pwd:
-            pwd_status_lbl.config(text="لطفاً نام کاربری و رمز عبور را وارد کنید!", fg="red")
+            pwd_status_lbl.configure(text="لطفاً نام کاربری و رمز عبور را وارد کنید!", text_color="#ef4444")
             return
         success, msg, u = authenticate(ident, pwd, mode="password", database_path=db_p)
         if success and u:
             on_login_success(u)
         else:
-            pwd_status_lbl.config(text=msg or "اطلاعات ورود نادرست است.", fg="red")
+            pwd_status_lbl.configure(text=msg or "اطلاعات ورود نادرست است.", text_color="#ef4444")
 
     def reset_to_step1():
         step2_frame.pack_forget()
         pwd_frame.pack_forget()
-        card.config(text=" ورود با رمز یکبار مصرف (OTP) ")
-        step1_frame.pack(fill=tk.BOTH, expand=True)
-        status_lbl.config(text="شماره تلفن همراه خود را وارد کنید:", fg="black")
+        card_header.configure(text=" ورود با رمز یکبار مصرف (OTP) ")
+        step1_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 16))
+        status_lbl.configure(text="شماره تلفن همراه خود را وارد کنید:", text_color=("#1f2937", "#f8fafc"))
         phone_entry.delete(0, tk.END)
         phone_entry.insert(0, pending_phone["val"])
         phone_entry.focus()
@@ -427,13 +616,13 @@ def show_login_view():
         raw_phone = phone_entry.get().strip()
         norm_phone = normalize_phone_number(raw_phone)
         if len(norm_phone) != 11 or not norm_phone.startswith("09"):
-            status_lbl.config(text="شماره تلفن نامعتبر است! مثال: 09123456789", fg="red")
+            status_lbl.configure(text="شماره تلفن نامعتبر است! مثال: 09123456789", text_color="#ef4444")
             phone_entry.focus()
             return
 
         u = get_user_by_identifier(norm_phone, database_path=db_p)
         if not u:
-            status_lbl.config(text="کاربری با این شماره تلفن یافت نشد.", fg="red")
+            status_lbl.configure(text="کاربری با این شماره تلفن یافت نشد.", text_color="#ef4444")
             messagebox.showerror("خطا", "کاربری با این شماره تلفن در سامانه یافت نشد.", parent=root)
             return
 
@@ -442,18 +631,18 @@ def show_login_view():
         if req_res[0]:
             pending_phone["val"] = norm_phone
             step1_frame.pack_forget()
-            step2_frame.pack(fill=tk.BOTH, expand=True)
-            otp_info_lbl.config(text=f"کد تأیید به شماره {mask_phone_number(norm_phone)} ارسال شد.")
+            step2_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 16))
+            otp_info_lbl.configure(text=f"کد تأیید به شماره {mask_phone_number(norm_phone)} ارسال شد.")
             otp_entry.delete(0, tk.END)
             otp_entry.focus()
         else:
-            status_lbl.config(text=f"خطا در ارسال کد:\n{req_res[1]}", fg="red")
-            btn_fallback_pwd.config(fg="#dc2626")
+            status_lbl.configure(text=f"خطا در ارسال کد:\n{req_res[1]}", text_color="#ef4444")
+            btn_fallback_pwd.configure(text_color="#ef4444")
 
     def do_verify_otp(event=None):
         code = otp_entry.get().strip()
         if len(code) != 6 or not code.isdigit():
-            otp_code_lbl.config(text="کد OTP باید ۶ رقم عددی باشد.", fg="red")
+            otp_code_lbl.configure(text="کد OTP باید ۶ رقم عددی باشد.", text_color="#ef4444")
             otp_entry.focus()
             return
 
@@ -464,7 +653,7 @@ def show_login_view():
             u = get_user_by_identifier(target_phone, database_path=db_p)
             on_login_success(u)
         else:
-            otp_code_lbl.config(text=f"کد اشتباه یا منقضی است: {verify_res[1]}", fg="red")
+            otp_code_lbl.configure(text=f"کد اشتباه یا منقضی است: {verify_res[1]}", text_color="#ef4444")
             otp_entry.focus()
 
     btn_req_otp = create_icon_button(
@@ -472,8 +661,8 @@ def show_login_view():
         text=" درخواست کد OTP ",
         icon_name="arrow-right-left",
         font=FONT_BOLD,
-        padx=12,
-        pady=4,
+        width=220,
+        height=36,
         command=do_request_otp,
     )
     btn_req_otp.pack(pady=(10, 4))
@@ -482,15 +671,22 @@ def show_login_view():
         step1_frame,
         text=" ورود با رمز عبور (آفلاین) ",
         font=FONT_NORMAL,
-        fg="#0d6efd",
-        padx=8,
-        pady=2,
+        fg_color="transparent",
+        text_color=("#2563eb", "#38bdf8"),
+        hover_color=("#e2e8f0", "#1e293b"),
+        height=32,
         command=switch_to_pwd,
     )
     btn_fallback_pwd.pack(pady=4)
 
     btn_verify = create_icon_button(
-        step2_frame, text=" تأیید و ورود ", icon_name="check", font=FONT_BOLD, padx=14, pady=4, command=do_verify_otp
+        step2_frame,
+        text=" تأیید و ورود ",
+        icon_name="check",
+        font=FONT_BOLD,
+        width=200,
+        height=36,
+        command=do_verify_otp,
     )
     btn_verify.pack(pady=8)
 
@@ -499,8 +695,9 @@ def show_login_view():
         text=" تغییر شماره / ارسال مجدد ",
         icon_name="rotate-ccw",
         font=FONT_NORMAL,
-        padx=8,
-        pady=3,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        height=32,
         command=reset_to_step1,
     )
     btn_back.pack(pady=3)
@@ -509,15 +706,22 @@ def show_login_view():
         step2_frame,
         text=" ورود با رمز عبور آفلاین ",
         font=FONT_NORMAL,
-        fg="#0d6efd",
-        padx=8,
-        pady=2,
+        fg_color="transparent",
+        text_color=("#2563eb", "#38bdf8"),
+        hover_color=("#e2e8f0", "#1e293b"),
+        height=32,
         command=switch_to_pwd,
     )
     btn_step2_pwd.pack(pady=3)
 
     btn_do_pwd = create_icon_button(
-        pwd_frame, text=" ورود به سامانه ", icon_name="check", font=FONT_BOLD, padx=14, pady=4, command=do_pwd_login
+        pwd_frame,
+        text=" ورود به سامانه ",
+        icon_name="check",
+        font=FONT_BOLD,
+        width=200,
+        height=36,
+        command=do_pwd_login,
     )
     btn_do_pwd.pack(pady=8)
 
@@ -526,8 +730,10 @@ def show_login_view():
         text=" بازگشت به ورود با پیامک/تلگرام (OTP) ",
         icon_name="arrow-right-left",
         font=FONT_NORMAL,
-        padx=8,
-        pady=3,
+        fg_color="transparent",
+        text_color=("#2563eb", "#38bdf8"),
+        hover_color=("#e2e8f0", "#1e293b"),
+        height=32,
         command=switch_to_otp,
     )
     btn_back_to_otp.pack(pady=4)
@@ -558,37 +764,49 @@ def logout():
     show_login_view()
 
 
-search_bar_frame = ttk.Frame(books_frame)
-search_bar_frame.pack(fill=tk.X, padx=10, pady=10)
+search_bar_frame = ctk.CTkFrame(books_frame, corner_radius=8, height=48)
+search_bar_frame.pack(fill=tk.X, padx=10, pady=(10, 6))
 search_bar_frame.columnconfigure(3, weight=1)
 
-sub_btn = create_icon_button(search_bar_frame, text=" جستجو ", icon_name="search", font=FONT_BOLD, padx=6)
-sub_btn.grid(row=0, column=0, padx=(0, 6))
+sub_btn = create_icon_button(search_bar_frame, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=90)
+sub_btn.grid(row=0, column=0, padx=(8, 4), pady=6)
 
-filter_btn = create_icon_button(search_bar_frame, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, padx=6)
-filter_btn.grid(row=0, column=1, padx=(0, 6))
+filter_btn = create_icon_button(search_bar_frame, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=90)
+filter_btn.grid(row=0, column=1, padx=4, pady=6)
 
 add_book_btn = create_icon_button(
-    search_bar_frame, text=" افزودن کتاب ", icon_name="book-plus", font=FONT_NORMAL, padx=6
+    search_bar_frame,
+    text=" افزودن کتاب ",
+    icon_name="book-plus",
+    font=FONT_NORMAL,
+    fg_color="#16a34a",
+    hover_color="#15803d",
+    width=110,
 )
-add_book_btn.grid(row=0, column=2, padx=(0, 6))
+add_book_btn.grid(row=0, column=2, padx=4, pady=6)
 
-entry_serch = tk.Entry(search_bar_frame, font=FONT_NORMAL, justify="right")
-entry_serch.grid(row=0, column=3, sticky="ew")
+entry_serch = ctk.CTkEntry(
+    search_bar_frame,
+    placeholder_text="جستجو در بین کتاب‌ها (عنوان، نویسنده، شابک و ...)",
+    font=FONT_NORMAL,
+    justify="right",
+    height=36,
+)
+entry_serch.grid(row=0, column=3, sticky="ew", padx=(4, 8), pady=6)
 
-tree_frame = tk.Frame(books_frame)
+tree_frame = ctk.CTkFrame(books_frame, corner_radius=8)
 tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
 
-scrollbar = tk.Scrollbar(tree_frame)
-scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+scrollbar = ctk.CTkScrollbar(tree_frame)
+scrollbar.pack(side=tk.LEFT, fill=tk.Y, padx=(4, 0), pady=4)
 
 tree = ttk.Treeview(tree_frame, yscrollcommand=scrollbar.set, columns=columns, show="headings", height=15)
-scrollbar.config(command=tree.yview)
+scrollbar.configure(command=tree.yview)
 for col in columns:
     tree.heading(col, text=tr(col), anchor=tk.CENTER)
     tree.column(col, anchor=tk.CENTER)
 tree["displaycolumns"] = rtl_display_order(columns, ["id", "title", "author", "isbn"])
-tree.pack(side=tk.RIGHT, fill="both", expand=True, padx=10, pady=10)
+tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=4)
 
 
 def update_filter_button_indicator():
@@ -600,9 +818,9 @@ def update_filter_button_indicator():
         or filter_settings["sort_dir"] != "ASC"
     )
     if is_custom:
-        filter_btn.config(text=" فیلترها (فعال) ", fg="#0d6efd")
+        filter_btn.configure(text=" فیلترها (فعال) ", fg_color="#2563eb")
     else:
-        filter_btn.config(text=" فیلترها ", fg="black")
+        filter_btn.configure(text=" فیلترها ", fg_color=ctk.ThemeManager.theme["CTkButton"]["fg_color"])
 
 
 def search(event=None):
@@ -672,13 +890,13 @@ def search(event=None):
         temp_conn.close()
 
 
-sub_btn.config(command=search)
+sub_btn.configure(command=search)
 
 
 def open_filter_popup():
-    popup = tk.Toplevel(root)
+    popup = ctk.CTkToplevel(root)
     popup.title("فیلترهای پیشرفته جستجو")
-    popup.geometry("440x510")
+    popup.geometry("460x530")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -694,8 +912,8 @@ def open_filter_popup():
     ry = root.winfo_rooty()
     rw = root.winfo_width()
     rh = root.winfo_height()
-    px = max(50, rx + (rw - 440) // 2)
-    py = max(50, ry + (rh - 510) // 2)
+    px = max(50, rx + (rw - 460) // 2)
+    py = max(50, ry + (rh - 530) // 2)
     popup.geometry(f"+{px}+{py}")
 
     col_var = tk.StringVar(value=filter_settings["column"])
@@ -704,77 +922,75 @@ def open_filter_popup():
     sort_col_var = tk.StringVar(value=filter_settings["sort_col"])
     sort_dir_var = tk.StringVar(value=filter_settings["sort_dir"])
 
-    group_col = tk.LabelFrame(popup, text="جستجو در ستون", font=FONT_BOLD, padx=10, pady=5)
-    group_col.pack(fill=tk.X, padx=15, pady=(10, 5))
-    col_frame = tk.Frame(group_col)
-    col_frame.pack(fill=tk.X)
-    rb_all = tk.Radiobutton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL, anchor="e")
+    group_col = ctk.CTkFrame(popup, corner_radius=8)
+    group_col.pack(fill=tk.X, padx=15, pady=(12, 5))
+    ctk.CTkLabel(group_col, text="جستجو در ستون:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    col_frame = ctk.CTkFrame(group_col, fg_color="transparent")
+    col_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_all = ctk.CTkRadioButton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL)
     rb_all.pack(side=tk.RIGHT, padx=4)
     for col in ["title", "author", "isbn", "id"]:
         if col in columns:
-            rb = tk.Radiobutton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL, anchor="e")
+            rb = ctk.CTkRadioButton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL)
             rb.pack(side=tk.RIGHT, padx=4)
 
-    group_mode = tk.LabelFrame(popup, text="نوع تطابق جستجو", font=FONT_BOLD, padx=10, pady=5)
+    group_mode = ctk.CTkFrame(popup, corner_radius=8)
     group_mode.pack(fill=tk.X, padx=15, pady=5)
-    mode_frame = tk.Frame(group_mode)
-    mode_frame.pack(fill=tk.X)
-    rb_contains = tk.Radiobutton(
-        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL, anchor="e"
+    ctk.CTkLabel(group_mode, text="نوع تطابق جستجو:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    mode_frame = ctk.CTkFrame(group_mode, fg_color="transparent")
+    mode_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_contains = ctk.CTkRadioButton(
+        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL
     )
     rb_contains.pack(side=tk.RIGHT, padx=8)
-    rb_starts = tk.Radiobutton(
-        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL, anchor="e"
+    rb_starts = ctk.CTkRadioButton(
+        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL
     )
     rb_starts.pack(side=tk.RIGHT, padx=8)
-    rb_exact = tk.Radiobutton(
-        mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL, anchor="e"
-    )
+    rb_exact = ctk.CTkRadioButton(mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL)
     rb_exact.pack(side=tk.RIGHT, padx=8)
 
-    group_avail = tk.LabelFrame(popup, text="وضعیت امانت کتاب", font=FONT_BOLD, padx=10, pady=5)
+    group_avail = ctk.CTkFrame(popup, corner_radius=8)
     group_avail.pack(fill=tk.X, padx=15, pady=5)
-    avail_frame = tk.Frame(group_avail)
-    avail_frame.pack(fill=tk.X)
-    rb_av_all = tk.Radiobutton(
-        avail_frame, text="همه کتاب‌ها", variable=avail_var, value="all", font=FONT_NORMAL, anchor="e"
+    ctk.CTkLabel(group_avail, text="وضعیت امانت کتاب:", font=FONT_BOLD, anchor="e").pack(
+        fill=tk.X, padx=10, pady=(6, 2)
     )
-    rb_av_all.pack(side=tk.RIGHT, padx=8)
-    rb_av_avail = tk.Radiobutton(
-        avail_frame, text="فقط کتاب‌های موجود", variable=avail_var, value="available", font=FONT_NORMAL, anchor="e"
+    avail_frame = ctk.CTkFrame(group_avail, fg_color="transparent")
+    avail_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_av_all = ctk.CTkRadioButton(avail_frame, text="همه کتاب‌ها", variable=avail_var, value="all", font=FONT_NORMAL)
+    rb_av_all.pack(side=tk.RIGHT, padx=6)
+    rb_av_avail = ctk.CTkRadioButton(
+        avail_frame, text="فقط موجود", variable=avail_var, value="available", font=FONT_NORMAL
     )
-    rb_av_avail.pack(side=tk.RIGHT, padx=8)
-    rb_av_borrowed = tk.Radiobutton(
-        avail_frame, text="فقط در امانت", variable=avail_var, value="borrowed", font=FONT_NORMAL, anchor="e"
+    rb_av_avail.pack(side=tk.RIGHT, padx=6)
+    rb_av_borrowed = ctk.CTkRadioButton(
+        avail_frame, text="فقط در امانت", variable=avail_var, value="borrowed", font=FONT_NORMAL
     )
-    rb_av_borrowed.pack(side=tk.RIGHT, padx=8)
+    rb_av_borrowed.pack(side=tk.RIGHT, padx=6)
 
-    group_sort = tk.LabelFrame(popup, text="مرتب‌سازی نتایج", font=FONT_BOLD, padx=10, pady=5)
+    group_sort = ctk.CTkFrame(popup, corner_radius=8)
     group_sort.pack(fill=tk.X, padx=15, pady=5)
-    sort_frame = tk.Frame(group_sort)
-    sort_frame.pack(fill=tk.X, pady=3)
+    ctk.CTkLabel(group_sort, text="مرتب‌سازی نتایج:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    sort_frame = ctk.CTkFrame(group_sort, fg_color="transparent")
+    sort_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
 
-    tk.Label(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
+    ctk.CTkLabel(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
     sort_cols_available = [c for c in ["title", "author", "id"] if c in columns]
-    sort_col_cb = ttk.Combobox(
+    sort_col_cb = ctk.CTkOptionMenu(
         sort_frame,
-        state="readonly",
-        width=12,
+        width=130,
         font=FONT_NORMAL,
-        justify="right",
         values=[tr(c) for c in sort_cols_available],
     )
     sort_col_cb.set(tr(sort_col_var.get()))
     sort_col_cb.pack(side=tk.RIGHT, padx=5)
 
-    tk.Label(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
-    sort_dir_cb = ttk.Combobox(
-        sort_frame, state="readonly", width=9, font=FONT_NORMAL, justify="right", values=["صعودی", "نزولی"]
-    )
+    ctk.CTkLabel(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
+    sort_dir_cb = ctk.CTkOptionMenu(sort_frame, width=100, font=FONT_NORMAL, values=["صعودی", "نزولی"])
     sort_dir_cb.set("صعودی" if sort_dir_var.get() == "ASC" else "نزولی")
     sort_dir_cb.pack(side=tk.RIGHT, padx=5)
 
-    action_frame = tk.Frame(popup)
+    action_frame = ctk.CTkFrame(popup, fg_color="transparent")
     action_frame.pack(fill=tk.X, padx=15, pady=(15, 10))
 
     def apply_filters():
@@ -803,7 +1019,13 @@ def open_filter_popup():
         search()
 
     btn_apply = create_icon_button(
-        action_frame, text=" اعمال فیلتر ", icon_name="check", font=FONT_BOLD, padx=6, pady=2, command=apply_filters
+        action_frame,
+        text=" اعمال فیلتر ",
+        icon_name="check",
+        font=FONT_BOLD,
+        fg_color="#2563eb",
+        hover_color="#1d4ed8",
+        command=apply_filters,
     )
     btn_apply.pack(side=tk.RIGHT, padx=4)
 
@@ -812,25 +1034,31 @@ def open_filter_popup():
         text=" تنظیم مجدد ",
         icon_name="rotate-ccw",
         font=FONT_NORMAL,
-        padx=6,
-        pady=2,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
         command=reset_filters,
     )
     btn_reset.pack(side=tk.RIGHT, padx=4)
 
     btn_cancel = create_icon_button(
-        action_frame, text=" انصراف ", icon_name="x", font=FONT_NORMAL, padx=6, pady=2, command=popup.destroy
+        action_frame,
+        text=" انصراف ",
+        icon_name="x",
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        command=popup.destroy,
     )
     btn_cancel.pack(side=tk.LEFT, padx=4)
 
 
-filter_btn.config(command=open_filter_popup)
+filter_btn.configure(command=open_filter_popup)
 
 
 def open_add_book_popup():
-    popup = tk.Toplevel(root)
+    popup = ctk.CTkToplevel(root)
     popup.title("ثبت کتاب جدید")
-    popup.geometry("380x360")
+    popup.geometry("420x420")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -846,11 +1074,11 @@ def open_add_book_popup():
     ry = root.winfo_rooty()
     rw = root.winfo_width()
     rh = root.winfo_height()
-    px = max(50, rx + (rw - 380) // 2)
-    py = max(50, ry + (rh - 360) // 2)
+    px = max(50, rx + (rw - 420) // 2)
+    py = max(50, ry + (rh - 420) // 2)
     popup.geometry(f"+{px}+{py}")
 
-    tk.Label(popup, text="ثبت کتاب جدید", font=FONT_TITLE).pack(pady=10)
+    ctk.CTkLabel(popup, text="ثبت کتاب جدید", font=FONT_TITLE).pack(pady=(15, 10))
 
     book_cols = [c for c in ["title", "author", "isbn"] if c in columns] + [
         c for c in columns if c not in ["id", "title", "author", "isbn"]
@@ -858,9 +1086,11 @@ def open_add_book_popup():
     popup_entries = {}
     for col in book_cols:
         col_fa = tr(col)
-        tk.Label(popup, text=f"{col_fa}:", font=FONT_NORMAL).pack(pady=3)
-        ent = tk.Entry(popup, width=28, font=FONT_NORMAL, justify="right")
-        ent.pack(pady=3)
+        row_f = ctk.CTkFrame(popup, fg_color="transparent")
+        row_f.pack(fill=tk.X, padx=25, pady=4)
+        ctk.CTkLabel(row_f, text=f"{col_fa}:", font=FONT_NORMAL, width=90, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
+        ent = ctk.CTkEntry(row_f, font=FONT_NORMAL, justify="right", height=32)
+        ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
         popup_entries[col] = ent
 
     def do_insert_book():
@@ -895,19 +1125,33 @@ def open_add_book_popup():
         finally:
             temp_conn.close()
 
-    btn_f = tk.Frame(popup)
-    btn_f.pack(pady=15)
+    btn_f = ctk.CTkFrame(popup, fg_color="transparent")
+    btn_f.pack(pady=20, padx=20, fill=tk.X)
     btn_save = create_icon_button(
-        btn_f, text=" ثبت اطلاعات ", icon_name="check", command=do_insert_book, font=FONT_BOLD, padx=10, pady=3
+        btn_f,
+        text=" ثبت اطلاعات ",
+        icon_name="check",
+        command=do_insert_book,
+        font=FONT_BOLD,
+        fg_color="#16a34a",
+        hover_color="#15803d",
+        width=120,
     )
     btn_save.pack(side=tk.RIGHT, padx=5)
     btn_cancel = create_icon_button(
-        btn_f, text=" انصراف ", icon_name="x", command=popup.destroy, font=FONT_NORMAL, padx=10, pady=3
+        btn_f,
+        text=" انصراف ",
+        icon_name="x",
+        command=popup.destroy,
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        width=90,
     )
     btn_cancel.pack(side=tk.LEFT, padx=5)
 
 
-add_book_btn.config(command=open_add_book_popup)
+add_book_btn.configure(command=open_add_book_popup)
 bind_table_delete(tree, tabel_name, id_col_index=columns.index("id") if "id" in columns else 0, on_deleted=search)
 
 search_after_id = None
@@ -934,41 +1178,55 @@ member_filter_settings = {
     "sort_dir": "ASC",
 }
 
-search_bar_frame_member = ttk.Frame(member_frame)
-search_bar_frame_member.pack(fill=tk.X, padx=10, pady=10)
+search_bar_frame_member = ctk.CTkFrame(member_frame, corner_radius=8, height=48)
+search_bar_frame_member.pack(fill=tk.X, padx=10, pady=(10, 6))
 search_bar_frame_member.columnconfigure(3, weight=1)
 
-sub_btn_member = create_icon_button(search_bar_frame_member, text=" جستجو ", icon_name="search", font=FONT_BOLD, padx=6)
-sub_btn_member.grid(row=0, column=0, padx=(0, 6))
+sub_btn_member = create_icon_button(
+    search_bar_frame_member, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=90
+)
+sub_btn_member.grid(row=0, column=0, padx=(8, 4), pady=6)
 
 filter_btn_member = create_icon_button(
-    search_bar_frame_member, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, padx=6
+    search_bar_frame_member, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=90
 )
-filter_btn_member.grid(row=0, column=1, padx=(0, 6))
+filter_btn_member.grid(row=0, column=1, padx=4, pady=6)
 
 add_member_btn = create_icon_button(
-    search_bar_frame_member, text=" افزودن عضو ", icon_name="user-plus", font=FONT_NORMAL, padx=6
+    search_bar_frame_member,
+    text=" افزودن عضو ",
+    icon_name="user-plus",
+    font=FONT_NORMAL,
+    fg_color="#16a34a",
+    hover_color="#15803d",
+    width=110,
 )
-add_member_btn.grid(row=0, column=2, padx=(0, 6))
+add_member_btn.grid(row=0, column=2, padx=4, pady=6)
 
-entry_search_member = tk.Entry(search_bar_frame_member, font=FONT_NORMAL, justify="right")
-entry_search_member.grid(row=0, column=3, sticky="ew")
+entry_search_member = ctk.CTkEntry(
+    search_bar_frame_member,
+    placeholder_text="جستجو در اعضا (نام، شماره تماس و ...)",
+    font=FONT_NORMAL,
+    justify="right",
+    height=36,
+)
+entry_search_member.grid(row=0, column=3, sticky="ew", padx=(4, 8), pady=6)
 
-member_tree_frame = tk.Frame(member_frame)
+member_tree_frame = ctk.CTkFrame(member_frame, corner_radius=8)
 member_tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
 
-member_scrollbar = tk.Scrollbar(member_tree_frame)
-member_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+member_scrollbar = ctk.CTkScrollbar(member_tree_frame)
+member_scrollbar.pack(side=tk.LEFT, fill=tk.Y, padx=(4, 0), pady=4)
 
 member_tree = ttk.Treeview(
     member_tree_frame, yscrollcommand=member_scrollbar.set, columns=member_column, show="headings", height=15
 )
-member_scrollbar.config(command=member_tree.yview)
+member_scrollbar.configure(command=member_tree.yview)
 for col in member_column:
     member_tree.heading(col, text=tr(col), anchor=tk.CENTER)
     member_tree.column(col, anchor=tk.CENTER)
 member_tree["displaycolumns"] = rtl_display_order(member_column, ["id", "member_id", "phone_number"])
-member_tree.pack(side=tk.RIGHT, fill="both", expand=True, padx=10, pady=10)
+member_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=4)
 
 
 def update_member_filter_indicator():
@@ -979,9 +1237,9 @@ def update_member_filter_indicator():
         or member_filter_settings["sort_dir"] != "ASC"
     )
     if is_custom:
-        filter_btn_member.config(text=" فیلترها (فعال) ", fg="#0d6efd")
+        filter_btn_member.configure(text=" فیلترها (فعال) ", fg_color="#2563eb")
     else:
-        filter_btn_member.config(text=" فیلترها ", fg="black")
+        filter_btn_member.configure(text=" فیلترها ", fg_color=ctk.ThemeManager.theme["CTkButton"]["fg_color"])
 
 
 def search_members(event=None):
@@ -1044,13 +1302,13 @@ def search_members(event=None):
         temp_conn.close()
 
 
-sub_btn_member.config(command=search_members)
+sub_btn_member.configure(command=search_members)
 
 
 def open_member_filter_popup():
-    popup = tk.Toplevel(root)
+    popup = ctk.CTkToplevel(root)
     popup.title("فیلترهای اعضای کتابخانه")
-    popup.geometry("400x380")
+    popup.geometry("420x420")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -1066,8 +1324,8 @@ def open_member_filter_popup():
     ry = root.winfo_rooty()
     rw = root.winfo_width()
     rh = root.winfo_height()
-    px = max(50, rx + (rw - 400) // 2)
-    py = max(50, ry + (rh - 380) // 2)
+    px = max(50, rx + (rw - 420) // 2)
+    py = max(50, ry + (rh - 420) // 2)
     popup.geometry(f"+{px}+{py}")
 
     col_var = tk.StringVar(value=member_filter_settings["column"])
@@ -1075,59 +1333,56 @@ def open_member_filter_popup():
     sort_col_var = tk.StringVar(value=member_filter_settings["sort_col"])
     sort_dir_var = tk.StringVar(value=member_filter_settings["sort_dir"])
 
-    group_col = tk.LabelFrame(popup, text="جستجو در ستون", font=FONT_BOLD, padx=10, pady=5)
-    group_col.pack(fill=tk.X, padx=15, pady=(10, 5))
-    col_frame = tk.Frame(group_col)
-    col_frame.pack(fill=tk.X)
-    rb_all = tk.Radiobutton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL, anchor="e")
+    group_col = ctk.CTkFrame(popup, corner_radius=8)
+    group_col.pack(fill=tk.X, padx=15, pady=(12, 5))
+    ctk.CTkLabel(group_col, text="جستجو در ستون:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    col_frame = ctk.CTkFrame(group_col, fg_color="transparent")
+    col_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_all = ctk.CTkRadioButton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL)
     rb_all.pack(side=tk.RIGHT, padx=4)
     for col in member_column:
-        rb = tk.Radiobutton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL, anchor="e")
+        rb = ctk.CTkRadioButton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL)
         rb.pack(side=tk.RIGHT, padx=4)
 
-    group_mode = tk.LabelFrame(popup, text="نوع تطابق جستجو", font=FONT_BOLD, padx=10, pady=5)
+    group_mode = ctk.CTkFrame(popup, corner_radius=8)
     group_mode.pack(fill=tk.X, padx=15, pady=5)
-    mode_frame = tk.Frame(group_mode)
-    mode_frame.pack(fill=tk.X)
-    rb_contains = tk.Radiobutton(
-        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL, anchor="e"
+    ctk.CTkLabel(group_mode, text="نوع تطابق جستجو:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    mode_frame = ctk.CTkFrame(group_mode, fg_color="transparent")
+    mode_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_contains = ctk.CTkRadioButton(
+        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL
     )
     rb_contains.pack(side=tk.RIGHT, padx=8)
-    rb_starts = tk.Radiobutton(
-        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL, anchor="e"
+    rb_starts = ctk.CTkRadioButton(
+        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL
     )
     rb_starts.pack(side=tk.RIGHT, padx=8)
-    rb_exact = tk.Radiobutton(
-        mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL, anchor="e"
-    )
+    rb_exact = ctk.CTkRadioButton(mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL)
     rb_exact.pack(side=tk.RIGHT, padx=8)
 
-    group_sort = tk.LabelFrame(popup, text="مرتب‌سازی نتایج", font=FONT_BOLD, padx=10, pady=5)
+    group_sort = ctk.CTkFrame(popup, corner_radius=8)
     group_sort.pack(fill=tk.X, padx=15, pady=5)
-    sort_frame = tk.Frame(group_sort)
-    sort_frame.pack(fill=tk.X, pady=3)
+    ctk.CTkLabel(group_sort, text="مرتب‌سازی نتایج:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    sort_frame = ctk.CTkFrame(group_sort, fg_color="transparent")
+    sort_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
 
-    tk.Label(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
+    ctk.CTkLabel(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
     sort_cols_avail = [c for c in ["id", "member_id", "phone_number"] if c in member_column]
-    sort_col_cb = ttk.Combobox(
+    sort_col_cb = ctk.CTkOptionMenu(
         sort_frame,
-        state="readonly",
-        width=12,
+        width=130,
         font=FONT_NORMAL,
-        justify="right",
         values=[tr(c) for c in sort_cols_avail],
     )
     sort_col_cb.set(tr(sort_col_var.get()))
     sort_col_cb.pack(side=tk.RIGHT, padx=5)
 
-    tk.Label(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
-    sort_dir_cb = ttk.Combobox(
-        sort_frame, state="readonly", width=9, font=FONT_NORMAL, justify="right", values=["صعودی", "نزولی"]
-    )
+    ctk.CTkLabel(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
+    sort_dir_cb = ctk.CTkOptionMenu(sort_frame, width=100, font=FONT_NORMAL, values=["صعودی", "نزولی"])
     sort_dir_cb.set("صعودی" if sort_dir_var.get() == "ASC" else "نزولی")
     sort_dir_cb.pack(side=tk.RIGHT, padx=5)
 
-    action_frame = tk.Frame(popup)
+    action_frame = ctk.CTkFrame(popup, fg_color="transparent")
     action_frame.pack(fill=tk.X, padx=15, pady=(15, 10))
 
     def apply_member_filters():
@@ -1158,8 +1413,8 @@ def open_member_filter_popup():
         text=" اعمال فیلتر ",
         icon_name="check",
         font=FONT_BOLD,
-        padx=6,
-        pady=2,
+        fg_color="#2563eb",
+        hover_color="#1d4ed8",
         command=apply_member_filters,
     )
     btn_apply.pack(side=tk.RIGHT, padx=4)
@@ -1169,25 +1424,31 @@ def open_member_filter_popup():
         text=" تنظیم مجدد ",
         icon_name="rotate-ccw",
         font=FONT_NORMAL,
-        padx=6,
-        pady=2,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
         command=reset_member_filters,
     )
     btn_reset.pack(side=tk.RIGHT, padx=4)
 
     btn_cancel = create_icon_button(
-        action_frame, text=" انصراف ", icon_name="x", font=FONT_NORMAL, padx=6, pady=2, command=popup.destroy
+        action_frame,
+        text=" انصراف ",
+        icon_name="x",
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        command=popup.destroy,
     )
     btn_cancel.pack(side=tk.LEFT, padx=4)
 
 
-filter_btn_member.config(command=open_member_filter_popup)
+filter_btn_member.configure(command=open_member_filter_popup)
 
 
 def open_add_member_popup():
-    popup = tk.Toplevel(root)
+    popup = ctk.CTkToplevel(root)
     popup.title("ثبت عضو جدید")
-    popup.geometry("380x300")
+    popup.geometry("400x320")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -1203,19 +1464,25 @@ def open_add_member_popup():
     ry = root.winfo_rooty()
     rw = root.winfo_width()
     rh = root.winfo_height()
-    px = max(50, rx + (rw - 380) // 2)
-    py = max(50, ry + (rh - 300) // 2)
+    px = max(50, rx + (rw - 400) // 2)
+    py = max(50, ry + (rh - 320) // 2)
     popup.geometry(f"+{px}+{py}")
 
-    tk.Label(popup, text="ثبت عضو جدید", font=FONT_TITLE).pack(pady=10)
+    ctk.CTkLabel(popup, text="ثبت عضو جدید", font=FONT_TITLE).pack(pady=(15, 10))
 
-    tk.Label(popup, text="نام کاربر (عضو):", font=FONT_NORMAL).pack(pady=3)
-    entry_m_id = tk.Entry(popup, width=28, font=FONT_NORMAL, justify="right")
-    entry_m_id.pack(pady=3)
+    row_1 = ctk.CTkFrame(popup, fg_color="transparent")
+    row_1.pack(fill=tk.X, padx=25, pady=6)
+    ctk.CTkLabel(row_1, text="نام کاربر (عضو):", font=FONT_NORMAL, width=110, anchor="e").pack(
+        side=tk.RIGHT, padx=(5, 0)
+    )
+    entry_m_id = ctk.CTkEntry(row_1, font=FONT_NORMAL, justify="right", height=34)
+    entry_m_id.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
-    tk.Label(popup, text="شماره تلفن:", font=FONT_NORMAL).pack(pady=3)
-    entry_m_phone = tk.Entry(popup, width=28, font=FONT_NORMAL, justify="right")
-    entry_m_phone.pack(pady=3)
+    row_2 = ctk.CTkFrame(popup, fg_color="transparent")
+    row_2.pack(fill=tk.X, padx=25, pady=6)
+    ctk.CTkLabel(row_2, text="شماره تلفن:", font=FONT_NORMAL, width=110, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
+    entry_m_phone = ctk.CTkEntry(row_2, font=FONT_NORMAL, justify="right", height=34)
+    entry_m_phone.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
     def do_insert_member():
         m_id = entry_m_id.get().strip()
@@ -1253,19 +1520,33 @@ def open_add_member_popup():
         finally:
             temp_conn.close()
 
-    btn_f = tk.Frame(popup)
-    btn_f.pack(pady=15)
+    btn_f = ctk.CTkFrame(popup, fg_color="transparent")
+    btn_f.pack(pady=20, padx=20, fill=tk.X)
     btn_save = create_icon_button(
-        btn_f, text=" ثبت اطلاعات ", icon_name="check", command=do_insert_member, font=FONT_BOLD, padx=10, pady=3
+        btn_f,
+        text=" ثبت اطلاعات ",
+        icon_name="check",
+        command=do_insert_member,
+        font=FONT_BOLD,
+        fg_color="#16a34a",
+        hover_color="#15803d",
+        width=120,
     )
     btn_save.pack(side=tk.RIGHT, padx=5)
     btn_cancel = create_icon_button(
-        btn_f, text=" انصراف ", icon_name="x", command=popup.destroy, font=FONT_NORMAL, padx=10, pady=3
+        btn_f,
+        text=" انصراف ",
+        icon_name="x",
+        command=popup.destroy,
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        width=90,
     )
     btn_cancel.pack(side=tk.LEFT, padx=5)
 
 
-add_member_btn.config(command=open_add_member_popup)
+add_member_btn.configure(command=open_add_member_popup)
 
 member_search_after_id = None
 
@@ -1298,43 +1579,55 @@ user_filter_settings = {
     "sort_dir": "ASC",
 }
 
-search_bar_frame_users = ttk.Frame(auth_users_frame)
-search_bar_frame_users.pack(fill=tk.X, padx=10, pady=10)
+search_bar_frame_users = ctk.CTkFrame(auth_users_frame, corner_radius=8, height=48)
+search_bar_frame_users.pack(fill=tk.X, padx=10, pady=(10, 6))
 search_bar_frame_users.columnconfigure(3, weight=1)
 
-sub_btn_users = create_icon_button(search_bar_frame_users, text=" جستجو ", icon_name="search", font=FONT_BOLD, padx=6)
-sub_btn_users.grid(row=0, column=0, padx=(0, 6))
+sub_btn_users = create_icon_button(search_bar_frame_users, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=90)
+sub_btn_users.grid(row=0, column=0, padx=(8, 4), pady=6)
 
 filter_btn_users = create_icon_button(
-    search_bar_frame_users, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, padx=6
+    search_bar_frame_users, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=90
 )
-filter_btn_users.grid(row=0, column=1, padx=(0, 6))
+filter_btn_users.grid(row=0, column=1, padx=4, pady=6)
 
 add_user_btn = create_icon_button(
-    search_bar_frame_users, text=" افزودن کاربر ", icon_name="user-plus", font=FONT_NORMAL, padx=6
+    search_bar_frame_users,
+    text=" افزودن کاربر ",
+    icon_name="user-plus",
+    font=FONT_NORMAL,
+    fg_color="#16a34a",
+    hover_color="#15803d",
+    width=110,
 )
-add_user_btn.grid(row=0, column=2, padx=(0, 6))
+add_user_btn.grid(row=0, column=2, padx=4, pady=6)
 
-entry_search_users = tk.Entry(search_bar_frame_users, font=FONT_NORMAL, justify="right")
-entry_search_users.grid(row=0, column=3, sticky="ew")
+entry_search_users = ctk.CTkEntry(
+    search_bar_frame_users,
+    placeholder_text="جستجو در کاربران سامانه (نام کاربری، شماره تماس، نقش و ...)",
+    font=FONT_NORMAL,
+    justify="right",
+    height=36,
+)
+entry_search_users.grid(row=0, column=3, sticky="ew", padx=(4, 8), pady=6)
 
-users_tree_frame = tk.Frame(auth_users_frame)
+users_tree_frame = ctk.CTkFrame(auth_users_frame, corner_radius=8)
 users_tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
 
-users_scrollbar = tk.Scrollbar(users_tree_frame)
-users_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+users_scrollbar = ctk.CTkScrollbar(users_tree_frame)
+users_scrollbar.pack(side=tk.LEFT, fill=tk.Y, padx=(4, 0), pady=4)
 
 users_tree = ttk.Treeview(
     users_tree_frame, yscrollcommand=users_scrollbar.set, columns=user_columns, show="headings", height=15
 )
-users_scrollbar.config(command=users_tree.yview)
+users_scrollbar.configure(command=users_tree.yview)
 for col in user_columns:
     users_tree.heading(col, text=tr(col), anchor=tk.CENTER)
     users_tree.column(col, anchor=tk.CENTER)
 users_tree["displaycolumns"] = rtl_display_order(
     user_columns, ["id", "username", "phone_number", "role", "telegram_chat_id", "is_active", "created_at"]
 )
-users_tree.pack(side=tk.RIGHT, fill="both", expand=True, padx=10, pady=10)
+users_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=4)
 
 
 def update_user_filter_indicator():
@@ -1345,9 +1638,9 @@ def update_user_filter_indicator():
         or user_filter_settings["sort_dir"] != "ASC"
     )
     if is_custom:
-        filter_btn_users.config(text=" فیلترها (فعال) ", fg="#0d6efd")
+        filter_btn_users.configure(text=" فیلترها (فعال) ", fg_color="#2563eb")
     else:
-        filter_btn_users.config(text=" فیلترها ", fg="black")
+        filter_btn_users.configure(text=" فیلترها ", fg_color=ctk.ThemeManager.theme["CTkButton"]["fg_color"])
 
 
 def search_users(event=None):
@@ -1418,13 +1711,13 @@ def search_users(event=None):
         temp_conn.close()
 
 
-sub_btn_users.config(command=search_users)
+sub_btn_users.configure(command=search_users)
 
 
 def open_users_filter_popup():
-    popup = tk.Toplevel(root)
+    popup = ctk.CTkToplevel(root)
     popup.title("فیلترهای کاربران سامانه")
-    popup.geometry("400x380")
+    popup.geometry("420x420")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -1440,8 +1733,8 @@ def open_users_filter_popup():
     ry = root.winfo_rooty()
     rw = root.winfo_width()
     rh = root.winfo_height()
-    px = max(50, rx + (rw - 400) // 2)
-    py = max(50, ry + (rh - 380) // 2)
+    px = max(50, rx + (rw - 420) // 2)
+    py = max(50, ry + (rh - 420) // 2)
     popup.geometry(f"+{px}+{py}")
 
     col_var = tk.StringVar(value=user_filter_settings["column"])
@@ -1449,59 +1742,56 @@ def open_users_filter_popup():
     sort_col_var = tk.StringVar(value=user_filter_settings["sort_col"])
     sort_dir_var = tk.StringVar(value=user_filter_settings["sort_dir"])
 
-    group_col = tk.LabelFrame(popup, text="جستجو در ستون", font=FONT_BOLD, padx=10, pady=5)
-    group_col.pack(fill=tk.X, padx=15, pady=(10, 5))
-    col_frame = tk.Frame(group_col)
-    col_frame.pack(fill=tk.X)
-    rb_all = tk.Radiobutton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL, anchor="e")
+    group_col = ctk.CTkFrame(popup, corner_radius=8)
+    group_col.pack(fill=tk.X, padx=15, pady=(12, 5))
+    ctk.CTkLabel(group_col, text="جستجو در ستون:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    col_frame = ctk.CTkFrame(group_col, fg_color="transparent")
+    col_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_all = ctk.CTkRadioButton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL)
     rb_all.pack(side=tk.RIGHT, padx=4)
     for col in ["username", "phone_number", "role"]:
-        rb = tk.Radiobutton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL, anchor="e")
+        rb = ctk.CTkRadioButton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL)
         rb.pack(side=tk.RIGHT, padx=4)
 
-    group_mode = tk.LabelFrame(popup, text="نوع تطابق جستجو", font=FONT_BOLD, padx=10, pady=5)
+    group_mode = ctk.CTkFrame(popup, corner_radius=8)
     group_mode.pack(fill=tk.X, padx=15, pady=5)
-    mode_frame = tk.Frame(group_mode)
-    mode_frame.pack(fill=tk.X)
-    rb_contains = tk.Radiobutton(
-        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL, anchor="e"
+    ctk.CTkLabel(group_mode, text="نوع تطابق جستجو:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    mode_frame = ctk.CTkFrame(group_mode, fg_color="transparent")
+    mode_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_contains = ctk.CTkRadioButton(
+        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL
     )
     rb_contains.pack(side=tk.RIGHT, padx=8)
-    rb_starts = tk.Radiobutton(
-        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL, anchor="e"
+    rb_starts = ctk.CTkRadioButton(
+        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL
     )
     rb_starts.pack(side=tk.RIGHT, padx=8)
-    rb_exact = tk.Radiobutton(
-        mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL, anchor="e"
-    )
+    rb_exact = ctk.CTkRadioButton(mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL)
     rb_exact.pack(side=tk.RIGHT, padx=8)
 
-    group_sort = tk.LabelFrame(popup, text="مرتب‌سازی نتایج", font=FONT_BOLD, padx=10, pady=5)
+    group_sort = ctk.CTkFrame(popup, corner_radius=8)
     group_sort.pack(fill=tk.X, padx=15, pady=5)
-    sort_frame = tk.Frame(group_sort)
-    sort_frame.pack(fill=tk.X, pady=3)
+    ctk.CTkLabel(group_sort, text="مرتب‌سازی نتایج:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    sort_frame = ctk.CTkFrame(group_sort, fg_color="transparent")
+    sort_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
 
-    tk.Label(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
+    ctk.CTkLabel(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
     sort_cols_avail = ["id", "username", "role"]
-    sort_col_cb = ttk.Combobox(
+    sort_col_cb = ctk.CTkOptionMenu(
         sort_frame,
-        state="readonly",
-        width=12,
+        width=130,
         font=FONT_NORMAL,
-        justify="right",
         values=[tr(c) for c in sort_cols_avail],
     )
     sort_col_cb.set(tr(sort_col_var.get()))
     sort_col_cb.pack(side=tk.RIGHT, padx=5)
 
-    tk.Label(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
-    sort_dir_cb = ttk.Combobox(
-        sort_frame, state="readonly", width=9, font=FONT_NORMAL, justify="right", values=["صعودی", "نزولی"]
-    )
+    ctk.CTkLabel(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
+    sort_dir_cb = ctk.CTkOptionMenu(sort_frame, width=100, font=FONT_NORMAL, values=["صعودی", "نزولی"])
     sort_dir_cb.set("صعودی" if sort_dir_var.get() == "ASC" else "نزولی")
     sort_dir_cb.pack(side=tk.RIGHT, padx=5)
 
-    action_frame = tk.Frame(popup)
+    action_frame = ctk.CTkFrame(popup, fg_color="transparent")
     action_frame.pack(fill=tk.X, padx=15, pady=(15, 10))
 
     def apply_user_filters():
@@ -1532,8 +1822,8 @@ def open_users_filter_popup():
         text=" اعمال فیلتر ",
         icon_name="check",
         font=FONT_BOLD,
-        padx=6,
-        pady=2,
+        fg_color="#2563eb",
+        hover_color="#1d4ed8",
         command=apply_user_filters,
     )
     btn_apply.pack(side=tk.RIGHT, padx=4)
@@ -1543,19 +1833,25 @@ def open_users_filter_popup():
         text=" تنظیم مجدد ",
         icon_name="rotate-ccw",
         font=FONT_NORMAL,
-        padx=6,
-        pady=2,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
         command=reset_user_filters,
     )
     btn_reset.pack(side=tk.RIGHT, padx=4)
 
     btn_cancel = create_icon_button(
-        action_frame, text=" انصراف ", icon_name="x", font=FONT_NORMAL, padx=6, pady=2, command=popup.destroy
+        action_frame,
+        text=" انصراف ",
+        icon_name="x",
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        command=popup.destroy,
     )
     btn_cancel.pack(side=tk.LEFT, padx=4)
 
 
-filter_btn_users.config(command=open_users_filter_popup)
+filter_btn_users.configure(command=open_users_filter_popup)
 
 
 def open_create_user_popup():
@@ -1567,9 +1863,9 @@ def open_create_user_popup():
         messagebox.showerror("عدم دسترسی", "فقط نقش مدیر یا سرپرست مجاز به ایجاد کاربر جدید است.", parent=root)
         return
 
-    popup = tk.Toplevel(root)
+    popup = ctk.CTkToplevel(root)
     popup.title("ثبت کاربر جدید در سامانه")
-    popup.geometry("400x480")
+    popup.geometry("420x500")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -1585,39 +1881,49 @@ def open_create_user_popup():
     ry = root.winfo_rooty()
     rw = root.winfo_width()
     rh = root.winfo_height()
-    px = max(50, rx + (rw - 400) // 2)
-    py = max(50, ry + (rh - 480) // 2)
+    px = max(50, rx + (rw - 420) // 2)
+    py = max(50, ry + (rh - 500) // 2)
     popup.geometry(f"+{px}+{py}")
 
-    tk.Label(popup, text="ثبت کاربر جدید (سامانه)", font=FONT_TITLE).pack(pady=10)
+    ctk.CTkLabel(popup, text="ثبت کاربر جدید (سامانه)", font=FONT_TITLE).pack(pady=(15, 10))
 
-    tk.Label(popup, text="نام کاربری:", font=FONT_NORMAL).pack(pady=3)
-    u_name_ent = tk.Entry(popup, width=28, font=FONT_NORMAL, justify="right")
-    u_name_ent.pack(pady=3)
+    r1 = ctk.CTkFrame(popup, fg_color="transparent")
+    r1.pack(fill=tk.X, padx=25, pady=4)
+    ctk.CTkLabel(r1, text="نام کاربری:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
+    u_name_ent = ctk.CTkEntry(r1, font=FONT_NORMAL, justify="right", height=32)
+    u_name_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
-    tk.Label(popup, text="شماره تلفن:", font=FONT_NORMAL).pack(pady=3)
-    u_phone_ent = tk.Entry(popup, width=28, font=FONT_NORMAL, justify="right")
-    u_phone_ent.pack(pady=3)
+    r2 = ctk.CTkFrame(popup, fg_color="transparent")
+    r2.pack(fill=tk.X, padx=25, pady=4)
+    ctk.CTkLabel(r2, text="شماره تلفن:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
+    u_phone_ent = ctk.CTkEntry(r2, font=FONT_NORMAL, justify="right", height=32)
+    u_phone_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
-    tk.Label(popup, text="شناسه چت تلگرام (اختیاری):", font=FONT_NORMAL).pack(pady=3)
-    u_tg_ent = tk.Entry(popup, width=28, font=FONT_NORMAL, justify="right")
-    u_tg_ent.pack(pady=3)
+    r3 = ctk.CTkFrame(popup, fg_color="transparent")
+    r3.pack(fill=tk.X, padx=25, pady=4)
+    ctk.CTkLabel(r3, text="شناسه چت تلگرام (اختیاری):", font=FONT_NORMAL, width=130, anchor="e").pack(
+        side=tk.RIGHT, padx=(5, 0)
+    )
+    u_tg_ent = ctk.CTkEntry(r3, font=FONT_NORMAL, justify="right", height=32)
+    u_tg_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
-    tk.Label(popup, text="نقش کاربر:", font=FONT_NORMAL).pack(pady=3)
-    u_role_combo = ttk.Combobox(
-        popup,
+    r4 = ctk.CTkFrame(popup, fg_color="transparent")
+    r4.pack(fill=tk.X, padx=25, pady=4)
+    ctk.CTkLabel(r4, text="نقش کاربر:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
+    u_role_combo = ctk.CTkOptionMenu(
+        r4,
         font=FONT_NORMAL,
-        justify="right",
-        state="readonly",
         values=["super admin", "admin", "librarian", "user"],
-        width=26,
+        height=32,
     )
     u_role_combo.set("librarian")
-    u_role_combo.pack(pady=3)
+    u_role_combo.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
-    tk.Label(popup, text="رمز عبور:", font=FONT_NORMAL).pack(pady=3)
-    u_pwd_ent = tk.Entry(popup, width=28, font=FONT_NORMAL, justify="right", show="*")
-    u_pwd_ent.pack(pady=3)
+    r5 = ctk.CTkFrame(popup, fg_color="transparent")
+    r5.pack(fill=tk.X, padx=25, pady=4)
+    ctk.CTkLabel(r5, text="رمز عبور:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
+    u_pwd_ent = ctk.CTkEntry(r5, font=FONT_NORMAL, justify="right", height=32, show="*")
+    u_pwd_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
     def do_create_user():
         uname = u_name_ent.get().strip()
@@ -1658,19 +1964,33 @@ def open_create_user_popup():
         else:
             messagebox.showerror("خطا", msg, parent=popup)
 
-    btn_f = tk.Frame(popup)
-    btn_f.pack(pady=15)
+    btn_f = ctk.CTkFrame(popup, fg_color="transparent")
+    btn_f.pack(pady=20, padx=20, fill=tk.X)
     btn_save = create_icon_button(
-        btn_f, text=" ثبت کاربر ", icon_name="check", command=do_create_user, font=FONT_BOLD, padx=10, pady=3
+        btn_f,
+        text=" ثبت کاربر ",
+        icon_name="check",
+        command=do_create_user,
+        font=FONT_BOLD,
+        fg_color="#16a34a",
+        hover_color="#15803d",
+        width=120,
     )
     btn_save.pack(side=tk.RIGHT, padx=5)
     btn_cancel = create_icon_button(
-        btn_f, text=" انصراف ", icon_name="x", command=popup.destroy, font=FONT_NORMAL, padx=10, pady=3
+        btn_f,
+        text=" انصراف ",
+        icon_name="x",
+        command=popup.destroy,
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        width=90,
     )
     btn_cancel.pack(side=tk.LEFT, padx=5)
 
 
-add_user_btn.config(command=open_create_user_popup)
+add_user_btn.configure(command=open_create_user_popup)
 
 users_search_after_id = None
 
@@ -1713,53 +2033,67 @@ loans_filter_settings = {
     "sort_dir": "ASC",
 }
 
-search_bar_frame_loans = ttk.Frame(tabel_frame)
-search_bar_frame_loans.pack(fill=tk.X, padx=10, pady=10)
+search_bar_frame_loans = ctk.CTkFrame(tabel_frame, corner_radius=8, height=48)
+search_bar_frame_loans.pack(fill=tk.X, padx=10, pady=(10, 6))
 search_bar_frame_loans.columnconfigure(4, weight=1)
 
-sub_btn_loans = create_icon_button(search_bar_frame_loans, text=" جستجو ", icon_name="search", font=FONT_BOLD, padx=6)
-sub_btn_loans.grid(row=0, column=0, padx=(0, 6))
+sub_btn_loans = create_icon_button(search_bar_frame_loans, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=85)
+sub_btn_loans.grid(row=0, column=0, padx=(8, 4), pady=6)
 
 filter_btn_loans = create_icon_button(
-    search_bar_frame_loans, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, padx=6
+    search_bar_frame_loans, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=85
 )
-filter_btn_loans.grid(row=0, column=1, padx=(0, 6))
+filter_btn_loans.grid(row=0, column=1, padx=4, pady=6)
 
 add_loan_btn = create_icon_button(
-    search_bar_frame_loans, text=" ثبت امانت جدید ", icon_name="arrow-right-left", font=FONT_NORMAL, padx=6
+    search_bar_frame_loans,
+    text=" ثبت امانت جدید ",
+    icon_name="arrow-right-left",
+    font=FONT_NORMAL,
+    fg_color="#2563eb",
+    hover_color="#1d4ed8",
+    width=125,
 )
-add_loan_btn.grid(row=0, column=2, padx=(0, 6))
+add_loan_btn.grid(row=0, column=2, padx=4, pady=6)
 
 return_loan_btn = create_icon_button(
     search_bar_frame_loans,
     text=" ثبت بازگشت کتاب ",
     icon_name="check",
     font=FONT_BOLD,
-    padx=6,
+    fg_color="#16a34a",
+    hover_color="#15803d",
+    width=135,
     command=lambda: do_return_selected_loan(),
 )
-return_loan_btn.grid(row=0, column=3, padx=(0, 6))
+return_loan_btn.grid(row=0, column=3, padx=4, pady=6)
 
-entry_search_loans = tk.Entry(search_bar_frame_loans, font=FONT_NORMAL, justify="right")
-entry_search_loans.grid(row=0, column=4, sticky="ew")
+entry_search_loans = ctk.CTkEntry(
+    search_bar_frame_loans,
+    placeholder_text="جستجو در امانات (نام عضو، کتاب و ...)",
+    font=FONT_NORMAL,
+    justify="right",
+    height=36,
+)
+entry_search_loans.grid(row=0, column=4, sticky="ew", padx=(4, 8), pady=6)
 
-loans_tree_frame = tk.Frame(tabel_frame)
+loans_tree_frame = ctk.CTkFrame(tabel_frame, corner_radius=8)
 loans_tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
 
-scrollbar_2 = tk.Scrollbar(loans_tree_frame)
-scrollbar_2.pack(side=tk.LEFT, fill=tk.Y)
+scrollbar_2 = ctk.CTkScrollbar(loans_tree_frame)
+scrollbar_2.pack(side=tk.LEFT, fill=tk.Y, padx=(4, 0), pady=4)
 
 loans_tree = ttk.Treeview(
     loans_tree_frame, yscrollcommand=scrollbar_2.set, columns=loan_column, show="headings", height=15
 )
-scrollbar_2.config(command=loans_tree.yview)
+scrollbar_2.configure(command=loans_tree.yview)
 for col in loan_column:
     loans_tree.heading(col, text=tr(col), anchor=tk.CENTER)
     loans_tree.column(col, anchor=tk.CENTER)
 loans_tree["displaycolumns"] = rtl_display_order(
     loan_column, ["id", "member_name", "book_id", "borrow_date", "return_date", "borrowed"]
 )
-loans_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+loans_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=4)
 
 
 def do_return_selected_loan():
@@ -1850,9 +2184,9 @@ def update_loans_filter_indicator():
         or loans_filter_settings["sort_dir"] != "ASC"
     )
     if is_custom:
-        filter_btn_loans.config(text=" فیلترها (فعال) ", fg="#0d6efd")
+        filter_btn_loans.configure(text=" فیلترها (فعال) ", fg_color="#2563eb")
     else:
-        filter_btn_loans.config(text=" فیلترها ", fg="black")
+        filter_btn_loans.configure(text=" فیلترها ", fg_color=ctk.ThemeManager.theme["CTkButton"]["fg_color"])
 
 
 def search_loans(event=None):
@@ -1927,13 +2261,13 @@ def search_loans(event=None):
 
 
 refresh_loans_table = search_loans
-sub_btn_loans.config(command=search_loans)
+sub_btn_loans.configure(command=search_loans)
 
 
 def open_loans_filter_popup():
-    popup = tk.Toplevel(root)
+    popup = ctk.CTkToplevel(root)
     popup.title("فیلترهای جدول امانات")
-    popup.geometry("440x510")
+    popup.geometry("460x530")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -1949,8 +2283,8 @@ def open_loans_filter_popup():
     ry = root.winfo_rooty()
     rw = root.winfo_width()
     rh = root.winfo_height()
-    px = max(50, rx + (rw - 440) // 2)
-    py = max(50, ry + (rh - 510) // 2)
+    px = max(50, rx + (rw - 460) // 2)
+    py = max(50, ry + (rh - 530) // 2)
     popup.geometry(f"+{px}+{py}")
 
     col_var = tk.StringVar(value=loans_filter_settings["column"])
@@ -1959,56 +2293,56 @@ def open_loans_filter_popup():
     sort_col_var = tk.StringVar(value=loans_filter_settings["sort_col"])
     sort_dir_var = tk.StringVar(value=loans_filter_settings["sort_dir"])
 
-    group_col = tk.LabelFrame(popup, text="جستجو در ستون", font=FONT_BOLD, padx=10, pady=5)
-    group_col.pack(fill=tk.X, padx=15, pady=(10, 5))
-    col_frame = tk.Frame(group_col)
-    col_frame.pack(fill=tk.X)
-    rb_all = tk.Radiobutton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL, anchor="e")
+    group_col = ctk.CTkFrame(popup, corner_radius=8)
+    group_col.pack(fill=tk.X, padx=15, pady=(12, 5))
+    ctk.CTkLabel(group_col, text="جستجو در ستون:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    col_frame = ctk.CTkFrame(group_col, fg_color="transparent")
+    col_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_all = ctk.CTkRadioButton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL)
     rb_all.pack(side=tk.RIGHT, padx=4)
     for col in ["member_name", "book_id", "id"]:
-        rb = tk.Radiobutton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL, anchor="e")
+        rb = ctk.CTkRadioButton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL)
         rb.pack(side=tk.RIGHT, padx=4)
 
-    group_mode = tk.LabelFrame(popup, text="نوع تطابق جستجو", font=FONT_BOLD, padx=10, pady=5)
+    group_mode = ctk.CTkFrame(popup, corner_radius=8)
     group_mode.pack(fill=tk.X, padx=15, pady=5)
-    mode_frame = tk.Frame(group_mode)
-    mode_frame.pack(fill=tk.X)
-    rb_contains = tk.Radiobutton(
-        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL, anchor="e"
+    ctk.CTkLabel(group_mode, text="نوع تطابق جستجو:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    mode_frame = ctk.CTkFrame(group_mode, fg_color="transparent")
+    mode_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_contains = ctk.CTkRadioButton(
+        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL
     )
     rb_contains.pack(side=tk.RIGHT, padx=8)
-    rb_starts = tk.Radiobutton(
-        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL, anchor="e"
+    rb_starts = ctk.CTkRadioButton(
+        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL
     )
     rb_starts.pack(side=tk.RIGHT, padx=8)
-    rb_exact = tk.Radiobutton(
-        mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL, anchor="e"
-    )
+    rb_exact = ctk.CTkRadioButton(mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL)
     rb_exact.pack(side=tk.RIGHT, padx=8)
 
-    group_status = tk.LabelFrame(popup, text="وضعیت امانت", font=FONT_BOLD, padx=10, pady=5)
+    group_status = ctk.CTkFrame(popup, corner_radius=8)
     group_status.pack(fill=tk.X, padx=15, pady=5)
-    status_frame = tk.Frame(group_status)
-    status_frame.pack(fill=tk.X)
-    rb_st_all = tk.Radiobutton(
-        status_frame, text="همه امانات", variable=status_var, value="all", font=FONT_NORMAL, anchor="e"
+    ctk.CTkLabel(group_status, text="وضعیت امانت:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    status_frame = ctk.CTkFrame(group_status, fg_color="transparent")
+    status_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_st_all = ctk.CTkRadioButton(status_frame, text="همه امانات", variable=status_var, value="all", font=FONT_NORMAL)
+    rb_st_all.pack(side=tk.RIGHT, padx=6)
+    rb_st_borrowed = ctk.CTkRadioButton(
+        status_frame, text="فقط در امانت", variable=status_var, value="borrowed", font=FONT_NORMAL
     )
-    rb_st_all.pack(side=tk.RIGHT, padx=8)
-    rb_st_borrowed = tk.Radiobutton(
-        status_frame, text="فقط در امانت", variable=status_var, value="borrowed", font=FONT_NORMAL, anchor="e"
+    rb_st_borrowed.pack(side=tk.RIGHT, padx=6)
+    rb_st_returned = ctk.CTkRadioButton(
+        status_frame, text="فقط بازگردانده شده", variable=status_var, value="returned", font=FONT_NORMAL
     )
-    rb_st_borrowed.pack(side=tk.RIGHT, padx=8)
-    rb_st_returned = tk.Radiobutton(
-        status_frame, text="فقط بازگردانده شده", variable=status_var, value="returned", font=FONT_NORMAL, anchor="e"
-    )
-    rb_st_returned.pack(side=tk.RIGHT, padx=8)
+    rb_st_returned.pack(side=tk.RIGHT, padx=6)
 
-    group_sort = tk.LabelFrame(popup, text="مرتب‌سازی نتایج", font=FONT_BOLD, padx=10, pady=5)
+    group_sort = ctk.CTkFrame(popup, corner_radius=8)
     group_sort.pack(fill=tk.X, padx=15, pady=5)
-    sort_frame = tk.Frame(group_sort)
-    sort_frame.pack(fill=tk.X, pady=3)
+    ctk.CTkLabel(group_sort, text="مرتب‌سازی نتایج:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    sort_frame = ctk.CTkFrame(group_sort, fg_color="transparent")
+    sort_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
 
-    tk.Label(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
+    ctk.CTkLabel(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
     sort_options = {
         "مدت امانت": "duration",
         "تاریخ بازگشت": "return_date",
@@ -2019,21 +2353,22 @@ def open_loans_filter_popup():
     }
     rev_sort_options = {v: k for k, v in sort_options.items()}
 
-    sort_col_cb = ttk.Combobox(
-        sort_frame, state="readonly", width=14, font=FONT_NORMAL, justify="right", values=list(sort_options.keys())
+    sort_col_cb = ctk.CTkOptionMenu(
+        sort_frame,
+        width=130,
+        font=FONT_NORMAL,
+        values=list(sort_options.keys()),
     )
     current_sort_label = rev_sort_options.get(sort_col_var.get(), "مدت امانت")
     sort_col_cb.set(current_sort_label)
     sort_col_cb.pack(side=tk.RIGHT, padx=5)
 
     tk.Label(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
-    sort_dir_cb = ttk.Combobox(
-        sort_frame, state="readonly", width=9, font=FONT_NORMAL, justify="right", values=["صعودی", "نزولی"]
-    )
+    sort_dir_cb = ctk.CTkOptionMenu(sort_frame, width=100, font=FONT_NORMAL, values=["صعودی", "نزولی"])
     sort_dir_cb.set("صعودی" if sort_dir_var.get() == "ASC" else "نزولی")
     sort_dir_cb.pack(side=tk.RIGHT, padx=5)
 
-    action_frame = tk.Frame(popup)
+    action_frame = ctk.CTkFrame(popup, fg_color="transparent")
     action_frame.pack(fill=tk.X, padx=15, pady=(15, 10))
 
     def apply_loans_filters():
@@ -2063,8 +2398,8 @@ def open_loans_filter_popup():
         text=" اعمال فیلتر ",
         icon_name="check",
         font=FONT_BOLD,
-        padx=6,
-        pady=2,
+        fg_color="#2563eb",
+        hover_color="#1d4ed8",
         command=apply_loans_filters,
     )
     btn_apply.pack(side=tk.RIGHT, padx=4)
@@ -2074,25 +2409,31 @@ def open_loans_filter_popup():
         text=" تنظیم مجدد ",
         icon_name="rotate-ccw",
         font=FONT_NORMAL,
-        padx=6,
-        pady=2,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
         command=reset_loans_filters,
     )
     btn_reset.pack(side=tk.RIGHT, padx=4)
 
     btn_cancel = create_icon_button(
-        action_frame, text=" انصراف ", icon_name="x", font=FONT_NORMAL, padx=6, pady=2, command=popup.destroy
+        action_frame,
+        text=" انصراف ",
+        icon_name="x",
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        command=popup.destroy,
     )
     btn_cancel.pack(side=tk.LEFT, padx=4)
 
 
-filter_btn_loans.config(command=open_loans_filter_popup)
+filter_btn_loans.configure(command=open_loans_filter_popup)
 
 
 def open_add_loan_popup(initial_book_title=""):
-    popup = tk.Toplevel(root)
+    popup = ctk.CTkToplevel(root)
     popup.title("ثبت امانت کتاب")
-    popup.geometry("460x600")
+    popup.geometry("480x640")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -2108,16 +2449,16 @@ def open_add_loan_popup(initial_book_title=""):
     ry = root.winfo_rooty()
     rw = root.winfo_width()
     rh = root.winfo_height()
-    px = max(50, rx + (rw - 460) // 2)
-    py = max(50, ry + (rh - 600) // 2)
+    px = max(50, rx + (rw - 480) // 2)
+    py = max(50, ry + (rh - 640) // 2)
     popup.geometry(f"+{px}+{py}")
 
-    tk.Label(popup, text="ثبت اطلاعات امانت کتاب", font=FONT_TITLE).pack(pady=8)
+    ctk.CTkLabel(popup, text="ثبت اطلاعات امانت کتاب", font=FONT_TITLE).pack(pady=(12, 6))
 
     # 1. Member selection
-    tk.Label(popup, text="نام کاربر (عضو):", font=FONT_NORMAL).pack(pady=2)
-    member_entry = tk.Entry(popup, width=35, font=FONT_NORMAL, justify="right")
-    member_entry.pack(pady=2)
+    ctk.CTkLabel(popup, text="نام کاربر (عضو):", font=FONT_NORMAL, anchor="e").pack(fill=tk.X, padx=25, pady=(2, 0))
+    member_entry = ctk.CTkEntry(popup, font=FONT_NORMAL, justify="right", height=32)
+    member_entry.pack(fill=tk.X, padx=25, pady=2)
 
     mem_conn = get_db_connection(db_p)
     try:
@@ -2127,8 +2468,20 @@ def open_add_loan_popup(initial_book_title=""):
     finally:
         mem_conn.close()
 
-    mem_listbox = tk.Listbox(popup, width=35, height=3, font=FONT_NORMAL, justify="right")
-    mem_listbox.pack(pady=2)
+    mem_listbox = tk.Listbox(
+        popup,
+        height=3,
+        font=(FONT_FAMILY, 9),
+        justify="right",
+        bg="#242424",
+        fg="#f8fafc",
+        selectbackground="#1f538d",
+        selectforeground="#ffffff",
+        relief="flat",
+        highlightthickness=1,
+        highlightbackground="#374151",
+    )
+    mem_listbox.pack(fill=tk.X, padx=25, pady=2)
     for item in members_data[:10]:
         mem_listbox.insert(tk.END, item)
 
@@ -2149,13 +2502,13 @@ def open_add_loan_popup(initial_book_title=""):
     mem_listbox.bind("<Double-Button-1>", select_member)
 
     # 2. Book selection
-    tk.Label(popup, text="عنوان کتاب:", font=FONT_NORMAL).pack(pady=2)
-    book_entry = tk.Entry(popup, width=35, font=FONT_NORMAL, justify="right")
-    book_entry.pack(pady=2)
+    ctk.CTkLabel(popup, text="عنوان کتاب:", font=FONT_NORMAL, anchor="e").pack(fill=tk.X, padx=25, pady=(4, 0))
+    book_entry = ctk.CTkEntry(popup, font=FONT_NORMAL, justify="right", height=32)
+    book_entry.pack(fill=tk.X, padx=25, pady=2)
 
     if initial_book_title:
         book_entry.insert(0, initial_book_title)
-        book_entry.config(state="readonly")
+        book_entry.configure(state="readonly")
     else:
         bk_conn = get_db_connection(db_p)
         try:
@@ -2170,8 +2523,20 @@ def open_add_loan_popup(initial_book_title=""):
         finally:
             bk_conn.close()
 
-        bk_listbox = tk.Listbox(popup, width=35, height=3, font=FONT_NORMAL, justify="right")
-        bk_listbox.pack(pady=2)
+        bk_listbox = tk.Listbox(
+            popup,
+            height=3,
+            font=(FONT_FAMILY, 9),
+            justify="right",
+            bg="#242424",
+            fg="#f8fafc",
+            selectbackground="#1f538d",
+            selectforeground="#ffffff",
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground="#374151",
+        )
+        bk_listbox.pack(fill=tk.X, padx=25, pady=2)
         for item in books_data[:10]:
             bk_listbox.insert(tk.END, item)
 
@@ -2197,9 +2562,11 @@ def open_add_loan_popup(initial_book_title=""):
     c_days_20 = cur_today + jdatetime.timedelta(days=20)
     c_days_30 = cur_today + jdatetime.timedelta(days=30)
 
-    tk.Label(popup, text="تاریخ امانت کتاب (YYYY-MM-DD):", font=FONT_NORMAL).pack(pady=2)
-    borrow_entry = tk.Entry(popup, width=35, font=FONT_NORMAL, justify="right")
-    borrow_entry.pack(pady=2)
+    ctk.CTkLabel(popup, text="تاریخ امانت کتاب (YYYY-MM-DD):", font=FONT_NORMAL, anchor="e").pack(
+        fill=tk.X, padx=25, pady=(4, 0)
+    )
+    borrow_entry = ctk.CTkEntry(popup, font=FONT_NORMAL, justify="right", height=32)
+    borrow_entry.pack(fill=tk.X, padx=25, pady=2)
 
     var_auto_date = tk.IntVar(value=1)
     borrow_entry.insert(0, str(cur_today))
@@ -2211,14 +2578,18 @@ def open_add_loan_popup(initial_book_title=""):
         else:
             borrow_entry.delete(0, tk.END)
 
-    tk.Checkbutton(
-        popup, text="ثبت خودکار تاریخ امروز", variable=var_auto_date, command=toggle_borrow_date, font=FONT_NORMAL
-    ).pack(pady=2)
+    chk_f = ctk.CTkFrame(popup, fg_color="transparent")
+    chk_f.pack(fill=tk.X, padx=25, pady=2)
+    ctk.CTkCheckBox(
+        chk_f, text="ثبت خودکار تاریخ امروز", variable=var_auto_date, command=toggle_borrow_date, font=FONT_NORMAL
+    ).pack(side=tk.RIGHT)
 
     # 4. Return Date
-    tk.Label(popup, text="تاریخ بازگشت کتاب (YYYY-MM-DD):", font=FONT_NORMAL).pack(pady=2)
-    return_entry = tk.Entry(popup, width=35, font=FONT_NORMAL, justify="right")
-    return_entry.pack(pady=2)
+    ctk.CTkLabel(popup, text="تاریخ بازگشت کتاب (YYYY-MM-DD):", font=FONT_NORMAL, anchor="e").pack(
+        fill=tk.X, padx=25, pady=(4, 0)
+    )
+    return_entry = ctk.CTkEntry(popup, font=FONT_NORMAL, justify="right", height=32)
+    return_entry.pack(fill=tk.X, padx=25, pady=2)
 
     selected_days = tk.StringVar(value="option1")
     return_entry.insert(0, str(c_days_10))
@@ -2233,36 +2604,21 @@ def open_add_loan_popup(initial_book_title=""):
         elif choice == "option3":
             return_entry.insert(0, str(c_days_30))
 
-    days_frame = ttk.Frame(popup)
+    days_frame = ctk.CTkFrame(popup, fg_color="transparent")
     days_frame.pack(pady=4)
 
-    rb1 = ttk.Radiobutton(
-        days_frame,
-        text="10 روز",
-        variable=selected_days,
-        value="option1",
-        command=on_select_days,
-        style="Modern.TRadiobutton",
+    rb1 = ctk.CTkRadioButton(
+        days_frame, text="10 روز", variable=selected_days, value="option1", command=on_select_days, font=FONT_NORMAL
     )
-    rb2 = ttk.Radiobutton(
-        days_frame,
-        text="20 روز",
-        variable=selected_days,
-        value="option2",
-        command=on_select_days,
-        style="Modern.TRadiobutton",
+    rb2 = ctk.CTkRadioButton(
+        days_frame, text="20 روز", variable=selected_days, value="option2", command=on_select_days, font=FONT_NORMAL
     )
-    rb3 = ttk.Radiobutton(
-        days_frame,
-        text="30 روز",
-        variable=selected_days,
-        value="option3",
-        command=on_select_days,
-        style="Modern.TRadiobutton",
+    rb3 = ctk.CTkRadioButton(
+        days_frame, text="30 روز", variable=selected_days, value="option3", command=on_select_days, font=FONT_NORMAL
     )
-    rb1.pack(side=tk.RIGHT, padx=12)
-    rb2.pack(side=tk.RIGHT, padx=12)
-    rb3.pack(side=tk.RIGHT, padx=12)
+    rb1.pack(side=tk.RIGHT, padx=10)
+    rb2.pack(side=tk.RIGHT, padx=10)
+    rb3.pack(side=tk.RIGHT, padx=10)
 
     def do_insert_loan():
         m_name = member_entry.get().strip()
@@ -2333,19 +2689,33 @@ def open_add_loan_popup(initial_book_title=""):
         finally:
             ins_conn.close()
 
-    btn_f = tk.Frame(popup)
-    btn_f.pack(pady=12)
+    btn_f = ctk.CTkFrame(popup, fg_color="transparent")
+    btn_f.pack(pady=16, padx=25, fill=tk.X)
     btn_save = create_icon_button(
-        btn_f, text=" ثبت امانت ", icon_name="arrow-right-left", font=FONT_BOLD, padx=10, pady=3, command=do_insert_loan
+        btn_f,
+        text=" ثبت امانت ",
+        icon_name="arrow-right-left",
+        font=FONT_BOLD,
+        fg_color="#2563eb",
+        hover_color="#1d4ed8",
+        width=120,
+        command=do_insert_loan,
     )
     btn_save.pack(side=tk.RIGHT, padx=5)
     btn_cancel = create_icon_button(
-        btn_f, text=" انصراف ", icon_name="x", font=FONT_NORMAL, padx=10, pady=3, command=popup.destroy
+        btn_f,
+        text=" انصراف ",
+        icon_name="x",
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        width=90,
+        command=popup.destroy,
     )
     btn_cancel.pack(side=tk.LEFT, padx=5)
 
 
-add_loan_btn.config(command=open_add_loan_popup)
+add_loan_btn.configure(command=open_add_loan_popup)
 
 
 def on_double_click(event):
@@ -2418,18 +2788,18 @@ bind_table_delete(
 )
 
 # ==================== راهنما و درباره نرم‌افزار (Help & About) ====================
-title_label_help = tk.Label(help_frame, text="راهنما و درباره نرم‌افزار", font=FONT_TITLE)
-title_label_help.pack(pady=(15, 4))
+title_label_help = ctk.CTkLabel(help_frame, text="راهنما و درباره نرم‌افزار", font=FONT_TITLE)
+title_label_help.pack(pady=(16, 4))
 
-subtitle_label_help = tk.Label(
+subtitle_label_help = ctk.CTkLabel(
     help_frame,
     text="سیستم مدیریت کتابخانه باقرالعلوم",
     font=FONT_NORMAL,
-    fg="#666666",
+    text_color="#94a3b8",
 )
 subtitle_label_help.pack(pady=(0, 10))
 
-help_content = ttk.Frame(help_frame)
+help_content = ctk.CTkScrollableFrame(help_frame, corner_radius=10, fg_color="transparent")
 help_content.pack(fill=tk.BOTH, expand=True, padx=25, pady=5)
 
 
@@ -2440,8 +2810,11 @@ def open_url(url: str):
         messagebox.showerror("خطا", f"امکان باز کردن پیوند در مرورگر وجود ندارد:\n{e}", parent=root)
 
 
-dev_group = tk.LabelFrame(help_content, text=" توسعه‌دهندگان ", font=FONT_BOLD, padx=15, pady=8)
-dev_group.pack(fill=tk.X, pady=(0, 8))
+dev_group = ctk.CTkFrame(help_content, corner_radius=10)
+dev_group.pack(fill=tk.X, pady=(0, 10))
+
+dev_title = ctk.CTkLabel(dev_group, text=" توسعه‌دهندگان سامانه ", font=FONT_HEADER, anchor="e")
+dev_title.pack(fill=tk.X, padx=16, pady=(12, 6))
 
 developers_info = [
     ("امیرحسین اسدی", "@amirkabir18", "https://github.com/amirkabir18"),
@@ -2450,96 +2823,110 @@ developers_info = [
 ]
 
 for name, handle, profile_url in developers_info:
-    row = tk.Frame(dev_group)
-    row.pack(fill=tk.X, pady=2)
+    row = ctk.CTkFrame(dev_group, fg_color="transparent")
+    row.pack(fill=tk.X, padx=16, pady=3)
 
-    lbl_name = tk.Label(row, text=f"• {name}", font=FONT_NORMAL, anchor="e")
+    lbl_name = ctk.CTkLabel(row, text=f"• {name}", font=FONT_NORMAL, anchor="e")
     lbl_name.pack(side=tk.RIGHT, padx=5)
 
-    lbl_handle = tk.Label(
+    btn_h = ctk.CTkButton(
         row,
         text=handle,
         font=FONT_NORMAL,
-        fg="#0d6efd",
-        cursor="hand2",
-        anchor="w",
+        fg_color="transparent",
+        text_color=("#2563eb", "#38bdf8"),
+        hover_color=("#e2e8f0", "#1e293b"),
+        height=26,
+        width=110,
+        command=lambda u=profile_url: open_url(u),
     )
-    lbl_handle.pack(side=tk.LEFT, padx=5)
-    lbl_handle.bind("<Button-1>", lambda event, u=profile_url: open_url(u))
+    btn_h.pack(side=tk.LEFT, padx=5)
+
+dev_spacer = ctk.CTkLabel(dev_group, text="", font=FONT_SMALL)
+dev_spacer.pack(pady=2)
 
 repo_url = "https://github.com/amirkabir18/bager_library"
-repo_group = tk.LabelFrame(help_content, text=" مخزن گیت‌هاب پروژه ", font=FONT_BOLD, padx=15, pady=8)
-repo_group.pack(fill=tk.X, pady=(0, 8))
+repo_group = ctk.CTkFrame(help_content, corner_radius=10)
+repo_group.pack(fill=tk.X, pady=(0, 10))
 
-repo_desc = tk.Label(
+repo_title = ctk.CTkLabel(repo_group, text=" مخزن گیت‌هاب پروژه ", font=FONT_HEADER, anchor="e")
+repo_title.pack(fill=tk.X, padx=16, pady=(12, 4))
+
+repo_desc = ctk.CTkLabel(
     repo_group,
     text="سورس‌کد و مستندات پروژه در گیت‌هاب:",
     font=FONT_NORMAL,
     anchor="e",
 )
-repo_desc.pack(anchor="e", pady=(0, 4))
+repo_desc.pack(fill=tk.X, padx=16, pady=(0, 6))
 
-repo_row = tk.Frame(repo_group)
-repo_row.pack(fill=tk.X, pady=2)
+repo_row = ctk.CTkFrame(repo_group, fg_color="transparent")
+repo_row.pack(fill=tk.X, padx=16, pady=(0, 12))
 
 btn_repo = create_icon_button(
     repo_row,
     text=" مشاهده مخزن در گیت‌هاب ",
+    icon_name="bookmark",
     font=FONT_NORMAL,
     command=lambda: open_url(repo_url),
-    padx=10,
-    pady=3,
+    width=160,
+    height=32,
 )
 btn_repo.pack(side=tk.RIGHT, padx=5)
 
-lbl_repo_url = tk.Label(
+lbl_repo_url = ctk.CTkButton(
     repo_row,
     text=repo_url,
     font=FONT_NORMAL,
-    fg="#0d6efd",
-    cursor="hand2",
-    anchor="w",
+    fg_color="transparent",
+    text_color=("#2563eb", "#38bdf8"),
+    hover_color=("#e2e8f0", "#1e293b"),
+    height=28,
+    command=lambda: open_url(repo_url),
 )
 lbl_repo_url.pack(side=tk.LEFT, padx=5)
-lbl_repo_url.bind("<Button-1>", lambda event: open_url(repo_url))
 
 issue_url = "https://github.com/amirkabir18/bager_library/issues/new"
-issue_group = tk.LabelFrame(
-    help_content, text=" ثبت گزارش خطا یا پیشنهاد (New Issue) ", font=FONT_BOLD, padx=15, pady=8
-)
-issue_group.pack(fill=tk.X, pady=(0, 8))
+issue_group = ctk.CTkFrame(help_content, corner_radius=10)
+issue_group.pack(fill=tk.X, pady=(0, 10))
 
-issue_desc = tk.Label(
+issue_title = ctk.CTkLabel(issue_group, text=" ثبت گزارش خطا یا پیشنهاد (New Issue) ", font=FONT_HEADER, anchor="e")
+issue_title.pack(fill=tk.X, padx=16, pady=(12, 4))
+
+issue_desc = ctk.CTkLabel(
     issue_group,
     text="برای گزارش باگ‌ها، مشکلات یا ثبت پیشنهادات، یک Issue جدید در گیت‌هاب باز کنید:",
     font=FONT_NORMAL,
     anchor="e",
 )
-issue_desc.pack(anchor="e", pady=(0, 4))
+issue_desc.pack(fill=tk.X, padx=16, pady=(0, 6))
 
-issue_row = tk.Frame(issue_group)
-issue_row.pack(fill=tk.X, pady=2)
+issue_row = ctk.CTkFrame(issue_group, fg_color="transparent")
+issue_row.pack(fill=tk.X, padx=16, pady=(0, 12))
 
 btn_issue = create_icon_button(
     issue_row,
     text=" ثبت Issue جدید در گیت‌هاب ",
     font=FONT_BOLD,
+    fg_color="#2563eb",
+    hover_color="#1d4ed8",
     command=lambda: open_url(issue_url),
-    padx=10,
-    pady=3,
+    width=170,
+    height=32,
 )
 btn_issue.pack(side=tk.RIGHT, padx=5)
 
-lbl_issue_url = tk.Label(
+lbl_issue_url = ctk.CTkButton(
     issue_row,
     text=issue_url,
     font=FONT_NORMAL,
-    fg="#0d6efd",
-    cursor="hand2",
-    anchor="w",
+    fg_color="transparent",
+    text_color=("#2563eb", "#38bdf8"),
+    hover_color=("#e2e8f0", "#1e293b"),
+    height=28,
+    command=lambda: open_url(issue_url),
 )
 lbl_issue_url.pack(side=tk.LEFT, padx=5)
-lbl_issue_url.bind("<Button-1>", lambda event: open_url(issue_url))
 
 app_info = load_app_info()
 app_version = app_info.get("version", "0.1.0")
@@ -2549,34 +2936,38 @@ update_checker = UpdateChecker(
 )
 download_manager = DownloadManager()
 
-update_group = tk.LabelFrame(help_content, text=" بروزرسانی نرم‌افزار ", font=FONT_BOLD, padx=15, pady=8)
-update_group.pack(fill=tk.X, pady=(0, 8))
+update_group = ctk.CTkFrame(help_content, corner_radius=10)
+update_group.pack(fill=tk.X, pady=(0, 10))
 
-info_row = tk.Frame(update_group)
-info_row.pack(fill=tk.X, pady=2)
+update_title = ctk.CTkLabel(update_group, text=" بروزرسانی نرم‌افزار ", font=FONT_HEADER, anchor="e")
+update_title.pack(fill=tk.X, padx=16, pady=(12, 4))
 
-lbl_current_ver = tk.Label(info_row, text=f"نسخه فعلی: {app_version}", font=FONT_NORMAL, anchor="e")
+info_row = ctk.CTkFrame(update_group, fg_color="transparent")
+info_row.pack(fill=tk.X, padx=16, pady=4)
+
+lbl_current_ver = ctk.CTkLabel(info_row, text=f"نسخه فعلی: {app_version}", font=FONT_NORMAL, anchor="e")
 lbl_current_ver.pack(side=tk.RIGHT, padx=(0, 15))
 
-lbl_update_status = tk.Label(
+lbl_update_status = ctk.CTkLabel(
     info_row,
     text="وضعیت: در حال بررسی...",
     font=FONT_NORMAL,
-    fg="#0d6efd",
+    text_color="#38bdf8",
     anchor="e",
 )
 lbl_update_status.pack(side=tk.RIGHT, padx=5)
 
-progress_row = tk.Frame(update_group)
+progress_row = ctk.CTkFrame(update_group, fg_color="transparent")
 
-update_progress = ttk.Progressbar(progress_row, orient="horizontal", mode="determinate")
+update_progress = ctk.CTkProgressBar(progress_row, mode="determinate")
+update_progress.set(0.0)
 update_progress.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
 
-lbl_progress_text = tk.Label(progress_row, text="", font=FONT_NORMAL, fg="#475569", width=26, anchor="w")
+lbl_progress_text = ctk.CTkLabel(progress_row, text="", font=FONT_NORMAL, text_color="#94a3b8", width=180, anchor="w")
 lbl_progress_text.pack(side=tk.LEFT, padx=(0, 5))
 
-actions_row = tk.Frame(update_group)
-actions_row.pack(fill=tk.X, pady=2)
+actions_row = ctk.CTkFrame(update_group, fg_color="transparent")
+actions_row.pack(fill=tk.X, padx=16, pady=(6, 12))
 
 latest_update_info: dict = {}
 
@@ -2587,11 +2978,11 @@ def on_check_finished(res: dict, interactive: bool):
 
     if res.get("update_available"):
         latest_ver = res.get("latest_version", "")
-        lbl_update_status.config(
+        lbl_update_status.configure(
             text=f"وضعیت: نسخه جدید {latest_ver} موجود است!",
-            fg="#16a34a",
+            text_color="#16a34a",
         )
-        btn_update_action.config(
+        btn_update_action.configure(
             state="normal",
             text=f" دریافت و نصب نسخه {latest_ver} ",
             command=start_update_download,
@@ -2604,9 +2995,9 @@ def on_check_finished(res: dict, interactive: bool):
                 parent=root,
             )
     else:
-        lbl_update_status.config(
+        lbl_update_status.configure(
             text="وضعیت: نرم‌افزار به‌روز است.",
-            fg="#16a34a",
+            text_color="#16a34a",
         )
         progress_row.pack_forget()
         btn_update_action.pack_forget()
@@ -2619,22 +3010,22 @@ def on_check_failed(error_msg: str, interactive: bool):
     progress_row.pack_forget()
     btn_cancel_update.pack_forget()
     if interactive:
-        btn_update_action.config(
+        btn_update_action.configure(
             state="normal",
             text=" تلاش مجدد برای بررسی ",
             command=lambda: perform_check(interactive=True),
         )
         btn_update_action.pack(side=tk.RIGHT, padx=5)
-        lbl_update_status.config(text="وضعیت: خطا در بررسی بروزرسانی", fg="#dc2626")
+        lbl_update_status.configure(text="وضعیت: خطا در بررسی بروزرسانی", text_color="#dc2626")
         messagebox.showerror("خطا در بررسی بروزرسانی", f"خطا در ارتباط با سرور بروزرسانی:\n{error_msg}", parent=root)
     else:
         btn_update_action.pack_forget()
-        lbl_update_status.config(text="وضعیت: نرم‌افزار به‌روز است.", fg="#16a34a")
+        lbl_update_status.configure(text="وضعیت: نرم‌افزار به‌روز است.", text_color="#16a34a")
 
 
 def perform_check(interactive: bool = True):
-    lbl_update_status.config(text="وضعیت: در حال بررسی آخرین نسخه...", fg="#0d6efd")
-    btn_update_action.config(state="disabled")
+    lbl_update_status.configure(text="وضعیت: در حال بررسی آخرین نسخه...", text_color="#38bdf8")
+    btn_update_action.configure(state="disabled")
 
     def _worker():
         try:
@@ -2654,18 +3045,18 @@ def start_update_download():
         return
 
     dest_path = os.path.join(tempfile.gettempdir(), "bager_library_new.exe")
-    btn_update_action.config(state="disabled")
+    btn_update_action.configure(state="disabled")
     btn_cancel_update.pack(side=tk.RIGHT, padx=5)
-    lbl_update_status.config(text="وضعیت: در حال دانلود فایل بروزرسانی...", fg="#0d6efd")
-    progress_row.pack(fill=tk.X, pady=4, before=actions_row)
-    update_progress["value"] = 0
+    lbl_update_status.configure(text="وضعیت: در حال دانلود فایل بروزرسانی...", text_color="#38bdf8")
+    progress_row.pack(fill=tk.X, padx=16, pady=4, before=actions_row)
+    update_progress.set(0.0)
 
     def _update_prog_ui(downloaded, total, pct, speed):
-        update_progress["value"] = pct
+        update_progress.set(min(1.0, max(0.0, pct / 100.0)))
         speed_str = format_speed(speed)
         down_str = format_size(downloaded)
         total_str = format_size(total) if total > 0 else "نامشخص"
-        lbl_progress_text.config(text=f"{pct:.0f}% ({down_str} / {total_str}) {speed_str}")
+        lbl_progress_text.configure(text=f"{pct:.0f}% ({down_str} / {total_str}) {speed_str}")
 
     def _prompt_install(path):
         confirm = messagebox.askyesno(
@@ -2688,40 +3079,40 @@ def start_update_download():
 
     def _finish_download_ui(path):
         btn_cancel_update.pack_forget()
-        btn_update_action.config(
+        btn_update_action.configure(
             state="normal",
             text=" نصب بروزرسانی ",
             command=lambda: _prompt_install(path),
         )
         btn_update_action.pack(side=tk.RIGHT, padx=5)
-        update_progress["value"] = 100
-        lbl_update_status.config(text="وضعیت: دانلود با موفقیت انجام شد.", fg="#16a34a")
-        lbl_progress_text.config(text="دانلود کامل شد")
+        update_progress.set(1.0)
+        lbl_update_status.configure(text="وضعیت: دانلود با موفقیت انجام شد.", text_color="#16a34a")
+        lbl_progress_text.configure(text="دانلود کامل شد")
         _prompt_install(path)
 
     def _error_download_ui(err):
         btn_cancel_update.pack_forget()
-        btn_update_action.config(
+        btn_update_action.configure(
             state="normal",
             text=" تلاش مجدد برای دریافت ",
             command=start_update_download,
         )
         btn_update_action.pack(side=tk.RIGHT, padx=5)
-        lbl_update_status.config(text="وضعیت: خطا در دانلود بروزرسانی", fg="#dc2626")
+        lbl_update_status.configure(text="وضعیت: خطا در دانلود بروزرسانی", text_color="#dc2626")
         messagebox.showerror("خطا در دانلود", f"خطا در حین دانلود فایل بروزرسانی:\n{err}", parent=root)
 
     def _cancelled_download_ui():
         btn_cancel_update.pack_forget()
-        btn_update_action.config(
+        btn_update_action.configure(
             state="normal",
             text=" دریافت و نصب نسخه جدید ",
             command=start_update_download,
         )
         btn_update_action.pack(side=tk.RIGHT, padx=5)
         progress_row.pack_forget()
-        update_progress["value"] = 0
-        lbl_progress_text.config(text="")
-        lbl_update_status.config(text="وضعیت: دانلود لغو شد.", fg="#64748b")
+        update_progress.set(0.0)
+        lbl_progress_text.configure(text="")
+        lbl_update_status.configure(text="وضعیت: دانلود لغو شد.", text_color="#64748b")
 
     download_manager.download_async(
         url=download_url,
@@ -2738,8 +3129,8 @@ btn_update_action = create_icon_button(
     text=" بررسی بروزرسانی ",
     font=FONT_BOLD,
     command=lambda: perform_check(interactive=True),
-    padx=10,
-    pady=3,
+    width=140,
+    height=32,
 )
 btn_update_action.pack(side=tk.RIGHT, padx=5)
 
@@ -2747,91 +3138,107 @@ btn_cancel_update = create_icon_button(
     actions_row,
     text=" لغو دانلود ",
     font=FONT_NORMAL,
+    fg_color="transparent",
+    hover_color=("#e2e8f0", "#1e293b"),
     command=download_manager.cancel,
-    padx=10,
-    pady=3,
+    width=100,
+    height=32,
 )
 
 # ==================== تنظیمات و اعلان‌ها (Settings & Notifications) ====================
-title_label_settings = tk.Label(settings_frame, text="تنظیمات سیستم و اعلان‌ها", font=FONT_TITLE)
-title_label_settings.pack(pady=(12, 4))
+title_label_settings = ctk.CTkLabel(settings_frame, text="تنظیمات سیستم و اعلان‌ها", font=FONT_TITLE)
+title_label_settings.pack(pady=(16, 4))
 
-subtitle_label_settings = tk.Label(
+subtitle_label_settings = ctk.CTkLabel(
     settings_frame,
     text="مدیریت ترجیحات یادآوری، هشدارهای سررسید و مشاهده تاریخچه اعلان‌ها",
     font=FONT_NORMAL,
-    fg="#666666",
+    text_color="#94a3b8",
 )
 subtitle_label_settings.pack(pady=(0, 8))
 
-settings_container = ttk.Frame(settings_frame)
+settings_container = ctk.CTkScrollableFrame(settings_frame, corner_radius=10, fg_color="transparent")
 settings_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=5)
 
 # --- Preferences Card ---
-pref_card = tk.LabelFrame(
-    settings_container,
-    text=" ترجیحات اعلان‌ها و یادآوری ",
-    font=FONT_BOLD,
-    padx=15,
-    pady=10,
+pref_card = ctk.CTkFrame(settings_container, corner_radius=10)
+pref_card.pack(fill=tk.X, pady=(0, 12))
+
+ctk.CTkLabel(pref_card, text=" ترجیحات اعلان‌ها و یادآوری ", font=FONT_HEADER, anchor="e").pack(
+    fill=tk.X, padx=16, pady=(12, 6)
 )
-pref_card.pack(fill=tk.X, pady=(0, 10))
 
 var_notif_enabled = tk.BooleanVar(value=True)
 var_notif_sound = tk.BooleanVar(value=True)
 
-pref_row1 = tk.Frame(pref_card)
-pref_row1.pack(fill=tk.X, pady=4)
+pref_row1 = ctk.CTkFrame(pref_card, fg_color="transparent")
+pref_row1.pack(fill=tk.X, padx=16, pady=4)
 
-chk_enable_notif = tk.Checkbutton(
+chk_enable_notif = ctk.CTkSwitch(
     pref_row1,
     text="فعال‌سازی اعلان‌های دسکتاپ سیستم",
     variable=var_notif_enabled,
     font=FONT_NORMAL,
-    anchor="e",
 )
 chk_enable_notif.pack(side=tk.RIGHT, padx=10)
 
-chk_enable_sound = tk.Checkbutton(
+chk_enable_sound = ctk.CTkSwitch(
     pref_row1,
     text="پخش صدای هشدار هنگام نمایش اعلان",
     variable=var_notif_sound,
     font=FONT_NORMAL,
-    anchor="e",
 )
 chk_enable_sound.pack(side=tk.RIGHT, padx=10)
 
-pref_row2 = tk.Frame(pref_card)
-pref_row2.pack(fill=tk.X, pady=6)
+pref_row2 = ctk.CTkFrame(pref_card, fg_color="transparent")
+pref_row2.pack(fill=tk.X, padx=16, pady=6)
 
-lbl_advance_days = tk.Label(pref_row2, text="ارسال یادآوری سررسید (چند روز قبل):", font=FONT_NORMAL)
-lbl_advance_days.pack(side=tk.RIGHT, padx=5)
+ctk.CTkLabel(pref_row2, text="ارسال یادآوری سررسید (چند روز قبل):", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=5)
 
-combo_advance_days = ttk.Combobox(
+combo_advance_days = ctk.CTkOptionMenu(
     pref_row2,
     values=["1", "2", "3", "5", "7"],
-    state="readonly",
-    width=6,
-    justify="center",
+    width=80,
 )
 combo_advance_days.set("2")
 combo_advance_days.pack(side=tk.RIGHT, padx=10)
 
-lbl_check_interval = tk.Label(pref_row2, text="فاصله زمانی بررسی خودکار امانات (دقیقه):", font=FONT_NORMAL)
-lbl_check_interval.pack(side=tk.RIGHT, padx=(20, 5))
+ctk.CTkLabel(pref_row2, text="فاصله بررسی خودکار (دقیقه):", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(20, 5))
 
-combo_interval = ttk.Combobox(
+combo_interval = ctk.CTkOptionMenu(
     pref_row2,
     values=["15", "30", "60", "120", "360"],
-    state="readonly",
-    width=6,
-    justify="center",
+    width=80,
 )
 combo_interval.set("30")
-combo_interval.pack(side=tk.RIGHT, padx=5)
+combo_interval.pack(side=tk.RIGHT, padx=10)
 
-pref_row3 = tk.Frame(pref_card)
-pref_row3.pack(fill=tk.X, pady=(8, 4))
+ctk.CTkLabel(pref_row2, text="حالت تم:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(20, 5))
+
+
+def change_theme_mode(choice):
+    if "روشن" in choice:
+        ctk.set_appearance_mode("light")
+        apply_treeview_styling("light")
+    elif "سیستم" in choice:
+        ctk.set_appearance_mode("system")
+        apply_treeview_styling("dark")
+    else:
+        ctk.set_appearance_mode("dark")
+        apply_treeview_styling("dark")
+
+
+combo_theme = ctk.CTkOptionMenu(
+    pref_row2,
+    values=["تیره (Dark)", "روشن (Light)", "سیستم (System)"],
+    width=130,
+    command=change_theme_mode,
+)
+combo_theme.set("تیره (Dark)")
+combo_theme.pack(side=tk.RIGHT, padx=5)
+
+pref_row3 = ctk.CTkFrame(pref_card, fg_color="transparent")
+pref_row3.pack(fill=tk.X, padx=16, pady=(10, 14))
 
 
 def save_settings_ui():
@@ -2890,9 +3297,11 @@ btn_save_settings = create_icon_button(
     text=" ذخیره تنظیمات ",
     icon_name="check",
     font=FONT_BOLD,
+    fg_color="#16a34a",
+    hover_color="#15803d",
     command=save_settings_ui,
-    padx=12,
-    pady=3,
+    width=130,
+    height=34,
 )
 btn_save_settings.pack(side=tk.RIGHT, padx=5)
 
@@ -2901,8 +3310,8 @@ btn_test_notif = create_icon_button(
     text=" ارسال اعلان آزمایشی ",
     font=FONT_NORMAL,
     command=trigger_test_notification,
-    padx=10,
-    pady=3,
+    width=150,
+    height=34,
 )
 btn_test_notif.pack(side=tk.RIGHT, padx=5)
 
@@ -2911,30 +3320,29 @@ btn_check_now = create_icon_button(
     text=" بررسی فوری امانات ",
     icon_name="rotate-ccw",
     font=FONT_NORMAL,
+    fg_color="transparent",
+    hover_color=("#e2e8f0", "#1e293b"),
     command=trigger_check_now,
-    padx=10,
-    pady=3,
+    width=150,
+    height=34,
 )
 btn_check_now.pack(side=tk.RIGHT, padx=5)
 
 
 # --- Audit Log Viewer Card ---
-log_card = tk.LabelFrame(
-    settings_container,
-    text=" تاریخچه و لاگ اعلان‌ها ",
-    font=FONT_BOLD,
-    padx=15,
-    pady=8,
-)
+log_card = ctk.CTkFrame(settings_container, corner_radius=10)
 log_card.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
 
-filter_row = tk.Frame(log_card)
-filter_row.pack(fill=tk.X, pady=(0, 6))
+ctk.CTkLabel(log_card, text=" تاریخچه و لاگ اعلان‌ها ", font=FONT_HEADER, anchor="e").pack(
+    fill=tk.X, padx=16, pady=(12, 6)
+)
 
-lbl_log_search = tk.Label(filter_row, text="جستجو:", font=FONT_NORMAL)
-lbl_log_search.pack(side=tk.RIGHT, padx=(10, 2))
+filter_row = ctk.CTkFrame(log_card, fg_color="transparent")
+filter_row.pack(fill=tk.X, padx=16, pady=(0, 8))
 
-entry_log_search = tk.Entry(filter_row, font=FONT_NORMAL, width=16)
+entry_log_search = ctk.CTkEntry(
+    filter_row, placeholder_text="جستجو در لاگ‌ها...", font=FONT_NORMAL, width=170, height=32
+)
 entry_log_search.pack(side=tk.RIGHT, padx=5)
 
 btn_search_logs = create_icon_button(
@@ -2943,22 +3351,34 @@ btn_search_logs = create_icon_button(
     icon_name="search",
     font=FONT_BOLD,
     command=lambda: load_notification_logs_ui(),
-    padx=6,
-    pady=2,
+    width=85,
+    height=32,
 )
 btn_search_logs.pack(side=tk.RIGHT, padx=4)
 
-lbl_log_type = tk.Label(filter_row, text="نوع اعلان:", font=FONT_NORMAL)
-lbl_log_type.pack(side=tk.RIGHT, padx=(8, 2))
+ctk.CTkLabel(filter_row, text="نوع اعلان:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(10, 4))
 
-combo_log_type = ttk.Combobox(
+
+def on_combo_log_type_changed(choice=None):
+    sel_type = combo_log_type.get().strip()
+    type_code_map = {
+        "همه": "all",
+        "یادآوری سررسید": "due_reminder",
+        "هشدار دیرکرد": "overdue",
+        "اعلان آزمایشی": "test",
+    }
+    audit_log_filter_settings["notification_type"] = type_code_map.get(sel_type, "all")
+    update_audit_log_filter_indicator()
+    load_notification_logs_ui()
+
+
+combo_log_type = ctk.CTkOptionMenu(
     filter_row,
     values=["همه", "یادآوری سررسید", "هشدار دیرکرد", "اعلان آزمایشی"],
-    state="readonly",
-    width=14,
-    justify="center",
+    width=140,
+    command=on_combo_log_type_changed,
 )
-combo_log_type.current(0)
+combo_log_type.set("همه")
 combo_log_type.pack(side=tk.RIGHT, padx=5)
 
 btn_filter_logs = create_icon_button(
@@ -2967,8 +3387,8 @@ btn_filter_logs = create_icon_button(
     icon_name="filter",
     font=FONT_NORMAL,
     command=lambda: open_audit_log_filter_popup(),
-    padx=6,
-    pady=2,
+    width=85,
+    height=32,
 )
 btn_filter_logs.pack(side=tk.RIGHT, padx=4)
 
@@ -2977,9 +3397,11 @@ btn_refresh_logs = create_icon_button(
     text=" تازه‌سازی ",
     icon_name="rotate-ccw",
     font=FONT_NORMAL,
+    fg_color="transparent",
+    hover_color=("#e2e8f0", "#1e293b"),
     command=lambda: refresh_notification_logs(),
-    padx=6,
-    pady=2,
+    width=90,
+    height=32,
 )
 btn_refresh_logs.pack(side=tk.RIGHT, padx=4)
 
@@ -2988,28 +3410,30 @@ btn_clear_logs = create_icon_button(
     text=" پاک‌سازی تاریخچه ",
     icon_name="x",
     font=FONT_NORMAL,
+    fg_color="#dc2626",
+    hover_color="#b91c1c",
     command=lambda: clear_logs_ui(),
-    padx=6,
-    pady=2,
+    width=130,
+    height=32,
 )
 btn_clear_logs.pack(side=tk.LEFT, padx=5)
 
 log_columns = ["id", "notification_type", "book_title", "member_name", "loan_id", "sent_date", "created_at"]
 
-log_tree_frame = ttk.Frame(log_card)
-log_tree_frame.pack(fill=tk.BOTH, expand=True, pady=4)
+log_tree_frame = ctk.CTkFrame(log_card, corner_radius=8)
+log_tree_frame.pack(fill=tk.BOTH, expand=True, padx=16, pady=(0, 12))
 
-log_scrollbar = ttk.Scrollbar(log_tree_frame, orient=tk.VERTICAL)
-log_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+log_scrollbar = ctk.CTkScrollbar(log_tree_frame)
+log_scrollbar.pack(side=tk.LEFT, fill=tk.Y, padx=(4, 0), pady=4)
 
 log_tree = ttk.Treeview(
     log_tree_frame,
     yscrollcommand=log_scrollbar.set,
     columns=log_columns,
     show="headings",
-    height=8,
+    height=9,
 )
-log_scrollbar.config(command=log_tree.yview)
+log_scrollbar.configure(command=log_tree.yview)
 
 for col in log_columns:
     log_tree.heading(col, text=tr(col), anchor=tk.CENTER)
@@ -3026,7 +3450,7 @@ log_tree.column("created_at", width=135)
 log_tree["displaycolumns"] = rtl_display_order(
     log_columns, ["id", "notification_type", "book_title", "member_name", "loan_id", "sent_date", "created_at"]
 )
-log_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+log_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=4)
 
 
 def _format_shamsi_date(date_str: str) -> str:
@@ -3070,9 +3494,9 @@ def update_audit_log_filter_indicator():
         or audit_log_filter_settings["sort_dir"] != "DESC"
     )
     if is_custom:
-        btn_filter_logs.config(text=" فیلترها (فعال) ", fg="#0d6efd")
+        btn_filter_logs.configure(text=" فیلترها (فعال) ", fg_color="#2563eb")
     else:
-        btn_filter_logs.config(text=" فیلترها ", fg="black")
+        btn_filter_logs.configure(text=" فیلترها ", fg_color=ctk.ThemeManager.theme["CTkButton"]["fg_color"])
 
 
 def load_notification_logs_ui():
@@ -3135,9 +3559,9 @@ def load_notification_logs_ui():
 
 
 def open_audit_log_filter_popup():
-    popup = tk.Toplevel(root)
+    popup = ctk.CTkToplevel(root)
     popup.title("فیلترهای تاریخچه اعلان‌ها")
-    popup.geometry("450x520")
+    popup.geometry("460x530")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -3153,8 +3577,8 @@ def open_audit_log_filter_popup():
     ry = root.winfo_rooty()
     rw = root.winfo_width()
     rh = root.winfo_height()
-    px = max(50, rx + (rw - 450) // 2)
-    py = max(50, ry + (rh - 520) // 2)
+    px = max(50, rx + (rw - 460) // 2)
+    py = max(50, ry + (rh - 530) // 2)
     popup.geometry(f"+{px}+{py}")
 
     col_var = tk.StringVar(value=audit_log_filter_settings["column"])
@@ -3163,79 +3587,69 @@ def open_audit_log_filter_popup():
     sort_col_var = tk.StringVar(value=audit_log_filter_settings["sort_col"])
     sort_dir_var = tk.StringVar(value=audit_log_filter_settings["sort_dir"])
 
-    group_col = tk.LabelFrame(popup, text="جستجو در ستون", font=FONT_BOLD, padx=10, pady=5)
-    group_col.pack(fill=tk.X, padx=15, pady=(10, 5))
+    group_col = ctk.CTkFrame(popup, corner_radius=8)
+    group_col.pack(fill=tk.X, padx=15, pady=(12, 5))
+    ctk.CTkLabel(group_col, text="جستجو در ستون:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
 
-    col_frame_1 = tk.Frame(group_col)
-    col_frame_1.pack(fill=tk.X, pady=2)
-    rb_all = tk.Radiobutton(col_frame_1, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL, anchor="e")
+    col_frame_1 = ctk.CTkFrame(group_col, fg_color="transparent")
+    col_frame_1.pack(fill=tk.X, padx=6, pady=2)
+    rb_all = ctk.CTkRadioButton(col_frame_1, text="همه", variable=col_var, value="all", font=FONT_NORMAL)
     rb_all.pack(side=tk.RIGHT, padx=4)
-    rb_bt = tk.Radiobutton(
-        col_frame_1, text="عنوان کتاب", variable=col_var, value="book_title", font=FONT_NORMAL, anchor="e"
-    )
+    rb_bt = ctk.CTkRadioButton(col_frame_1, text="کتاب", variable=col_var, value="book_title", font=FONT_NORMAL)
     rb_bt.pack(side=tk.RIGHT, padx=4)
-    rb_mn = tk.Radiobutton(
-        col_frame_1, text="نام کاربر", variable=col_var, value="member_name", font=FONT_NORMAL, anchor="e"
-    )
+    rb_mn = ctk.CTkRadioButton(col_frame_1, text="کاربر", variable=col_var, value="member_name", font=FONT_NORMAL)
     rb_mn.pack(side=tk.RIGHT, padx=4)
 
-    col_frame_2 = tk.Frame(group_col)
-    col_frame_2.pack(fill=tk.X, pady=2)
-    rb_lid = tk.Radiobutton(
-        col_frame_2, text="شناسه امانت", variable=col_var, value="loan_id", font=FONT_NORMAL, anchor="e"
-    )
+    col_frame_2 = ctk.CTkFrame(group_col, fg_color="transparent")
+    col_frame_2.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_lid = ctk.CTkRadioButton(col_frame_2, text="شناسه امانت", variable=col_var, value="loan_id", font=FONT_NORMAL)
     rb_lid.pack(side=tk.RIGHT, padx=4)
-    rb_sd = tk.Radiobutton(
-        col_frame_2, text="تاریخ ارسال", variable=col_var, value="sent_date", font=FONT_NORMAL, anchor="e"
-    )
+    rb_sd = ctk.CTkRadioButton(col_frame_2, text="تاریخ ارسال", variable=col_var, value="sent_date", font=FONT_NORMAL)
     rb_sd.pack(side=tk.RIGHT, padx=4)
-    rb_id = tk.Radiobutton(col_frame_2, text="شناسه", variable=col_var, value="id", font=FONT_NORMAL, anchor="e")
+    rb_id = ctk.CTkRadioButton(col_frame_2, text="شناسه", variable=col_var, value="id", font=FONT_NORMAL)
     rb_id.pack(side=tk.RIGHT, padx=4)
 
-    group_mode = tk.LabelFrame(popup, text="نوع تطابق جستجو", font=FONT_BOLD, padx=10, pady=5)
+    group_mode = ctk.CTkFrame(popup, corner_radius=8)
     group_mode.pack(fill=tk.X, padx=15, pady=5)
-    mode_frame = tk.Frame(group_mode)
-    mode_frame.pack(fill=tk.X)
-    rb_contains = tk.Radiobutton(
-        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL, anchor="e"
+    ctk.CTkLabel(group_mode, text="نوع تطابق جستجو:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    mode_frame = ctk.CTkFrame(group_mode, fg_color="transparent")
+    mode_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_contains = ctk.CTkRadioButton(
+        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL
     )
     rb_contains.pack(side=tk.RIGHT, padx=8)
-    rb_starts = tk.Radiobutton(
-        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL, anchor="e"
+    rb_starts = ctk.CTkRadioButton(
+        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL
     )
     rb_starts.pack(side=tk.RIGHT, padx=8)
-    rb_exact = tk.Radiobutton(
-        mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL, anchor="e"
-    )
+    rb_exact = ctk.CTkRadioButton(mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL)
     rb_exact.pack(side=tk.RIGHT, padx=8)
 
-    group_type = tk.LabelFrame(popup, text="نوع اعلان", font=FONT_BOLD, padx=10, pady=5)
+    group_type = ctk.CTkFrame(popup, corner_radius=8)
     group_type.pack(fill=tk.X, padx=15, pady=5)
-    type_frame = tk.Frame(group_type)
-    type_frame.pack(fill=tk.X)
-    rb_t_all = tk.Radiobutton(
-        type_frame, text="همه اعلان‌ها", variable=type_var, value="all", font=FONT_NORMAL, anchor="e"
-    )
+    ctk.CTkLabel(group_type, text="نوع اعلان:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    type_frame = ctk.CTkFrame(group_type, fg_color="transparent")
+    type_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+    rb_t_all = ctk.CTkRadioButton(type_frame, text="همه", variable=type_var, value="all", font=FONT_NORMAL)
     rb_t_all.pack(side=tk.RIGHT, padx=6)
-    rb_t_due = tk.Radiobutton(
-        type_frame, text="یادآوری سررسید", variable=type_var, value="due_reminder", font=FONT_NORMAL, anchor="e"
+    rb_t_due = ctk.CTkRadioButton(
+        type_frame, text="یادآوری سررسید", variable=type_var, value="due_reminder", font=FONT_NORMAL
     )
     rb_t_due.pack(side=tk.RIGHT, padx=6)
-    rb_t_overdue = tk.Radiobutton(
-        type_frame, text="هشدار دیرکرد", variable=type_var, value="overdue", font=FONT_NORMAL, anchor="e"
+    rb_t_overdue = ctk.CTkRadioButton(
+        type_frame, text="هشدار دیرکرد", variable=type_var, value="overdue", font=FONT_NORMAL
     )
     rb_t_overdue.pack(side=tk.RIGHT, padx=6)
-    rb_t_test = tk.Radiobutton(
-        type_frame, text="اعلان آزمایشی", variable=type_var, value="test", font=FONT_NORMAL, anchor="e"
-    )
+    rb_t_test = ctk.CTkRadioButton(type_frame, text="اعلان آزمایشی", variable=type_var, value="test", font=FONT_NORMAL)
     rb_t_test.pack(side=tk.RIGHT, padx=6)
 
-    group_sort = tk.LabelFrame(popup, text="مرتب‌سازی نتایج", font=FONT_BOLD, padx=10, pady=5)
+    group_sort = ctk.CTkFrame(popup, corner_radius=8)
     group_sort.pack(fill=tk.X, padx=15, pady=5)
-    sort_frame = tk.Frame(group_sort)
-    sort_frame.pack(fill=tk.X, pady=3)
+    ctk.CTkLabel(group_sort, text="مرتب‌سازی نتایج:", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
+    sort_frame = ctk.CTkFrame(group_sort, fg_color="transparent")
+    sort_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
 
-    tk.Label(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
+    ctk.CTkLabel(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
     sort_options = {
         "شناسه": "id",
         "تاریخ ارسال": "sent_date",
@@ -3246,26 +3660,27 @@ def open_audit_log_filter_popup():
     }
     rev_sort_options = {v: k for k, v in sort_options.items()}
 
-    sort_col_cb = ttk.Combobox(
-        sort_frame, state="readonly", width=14, font=FONT_NORMAL, justify="right", values=list(sort_options.keys())
+    sort_col_cb = ctk.CTkOptionMenu(
+        sort_frame,
+        width=130,
+        font=FONT_NORMAL,
+        values=list(sort_options.keys()),
     )
     current_sort_label = rev_sort_options.get(sort_col_var.get(), "شناسه")
     sort_col_cb.set(current_sort_label)
     sort_col_cb.pack(side=tk.RIGHT, padx=5)
 
-    tk.Label(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
-    sort_dir_cb = ttk.Combobox(
+    ctk.CTkLabel(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
+    sort_dir_cb = ctk.CTkOptionMenu(
         sort_frame,
-        state="readonly",
-        width=14,
+        width=140,
         font=FONT_NORMAL,
-        justify="right",
         values=["نزولی (جدیدترین)", "صعودی (قدیمی‌ترین)"],
     )
     sort_dir_cb.set("نزولی (جدیدترین)" if sort_dir_var.get() == "DESC" else "صعودی (قدیمی‌ترین)")
     sort_dir_cb.pack(side=tk.RIGHT, padx=5)
 
-    action_frame = tk.Frame(popup)
+    action_frame = ctk.CTkFrame(popup, fg_color="transparent")
     action_frame.pack(fill=tk.X, padx=15, pady=(15, 10))
 
     def apply_audit_log_filters():
@@ -3294,7 +3709,7 @@ def open_audit_log_filter_popup():
         audit_log_filter_settings["sort_col"] = "id"
         audit_log_filter_settings["sort_dir"] = "DESC"
 
-        combo_log_type.current(0)
+        combo_log_type.set("همه")
         update_audit_log_filter_indicator()
         popup.destroy()
         load_notification_logs_ui()
@@ -3304,8 +3719,8 @@ def open_audit_log_filter_popup():
         text=" اعمال فیلتر ",
         icon_name="check",
         font=FONT_BOLD,
-        padx=6,
-        pady=2,
+        fg_color="#2563eb",
+        hover_color="#1d4ed8",
         command=apply_audit_log_filters,
     )
     btn_apply.pack(side=tk.RIGHT, padx=4)
@@ -3315,21 +3730,27 @@ def open_audit_log_filter_popup():
         text=" تنظیم مجدد ",
         icon_name="rotate-ccw",
         font=FONT_NORMAL,
-        padx=6,
-        pady=2,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
         command=reset_audit_log_filters,
     )
     btn_reset.pack(side=tk.RIGHT, padx=4)
 
     btn_cancel = create_icon_button(
-        action_frame, text=" انصراف ", icon_name="x", font=FONT_NORMAL, padx=6, pady=2, command=popup.destroy
+        action_frame,
+        text=" انصراف ",
+        icon_name="x",
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        command=popup.destroy,
     )
     btn_cancel.pack(side=tk.LEFT, padx=4)
 
 
 def refresh_notification_logs():
     entry_log_search.delete(0, tk.END)
-    combo_log_type.current(0)
+    combo_log_type.set("همه")
     audit_log_filter_settings["column"] = "all"
     audit_log_filter_settings["match_mode"] = "contains"
     audit_log_filter_settings["notification_type"] = "all"
@@ -3355,21 +3776,6 @@ def clear_logs_ui():
         messagebox.showerror("خطا", f"خطا در پاک‌سازی تاریخچه:\n{e}", parent=root)
 
 
-def on_combo_log_type_changed(event=None):
-    sel_type = combo_log_type.get().strip()
-    type_code_map = {
-        "همه": "all",
-        "یادآوری سررسید": "due_reminder",
-        "هشدار دیرکرد": "overdue",
-        "اعلان آزمایشی": "test",
-    }
-    audit_log_filter_settings["notification_type"] = type_code_map.get(sel_type, "all")
-    update_audit_log_filter_indicator()
-    load_notification_logs_ui()
-
-
-combo_log_type.bind("<<ComboboxSelected>>", on_combo_log_type_changed)
-
 audit_log_search_after_id = None
 
 
@@ -3387,7 +3793,7 @@ def on_log_search_key_release(event=None):
 
 entry_log_search.bind("<KeyRelease>", on_log_search_key_release)
 entry_log_search.bind("<Return>", lambda e: load_notification_logs_ui())
-btn_filter_logs.config(command=open_audit_log_filter_popup)
+btn_filter_logs.configure(command=open_audit_log_filter_popup)
 
 
 def load_settings_into_ui():
@@ -3402,12 +3808,12 @@ def load_settings_into_ui():
 
         var_notif_enabled.set(n_en)
         var_notif_sound.set(s_en)
-        if adv in combo_advance_days["values"]:
+        if adv in ["1", "2", "3", "5", "7"]:
             combo_advance_days.set(adv)
         else:
             combo_advance_days.set("2")
 
-        if inv in combo_interval["values"]:
+        if inv in ["15", "30", "60", "120", "360"]:
             combo_interval.set(inv)
         else:
             combo_interval.set("30")
@@ -3454,6 +3860,6 @@ entry_serch.bind("<Return>", search)
 tree.bind("<Double-Button-1>", on_double_click)
 
 show_login_view()
-root.geometry("800x600")
+root.geometry("1080x720")
 
 root.mainloop()
