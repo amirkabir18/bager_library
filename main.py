@@ -105,18 +105,29 @@ FONT_NORMAL = ctk.CTkFont(family=FONT_FAMILY, size=11)
 FONT_BOLD = ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold")
 FONT_SMALL = ctk.CTkFont(family=FONT_FAMILY, size=10)
 
-icons_cache: dict[tuple[str, int, int], ctk.CTkImage] = {}
+icons_cache: dict[tuple[str, int, int, bool], ctk.CTkImage] = {}
 
 
-def get_icon(name: str, size: tuple[int, int] = (18, 18)) -> ctk.CTkImage | None:
-    cache_key = (name, size[0], size[1])
+def get_icon(name: str, size: tuple[int, int] = (18, 18), white_only: bool = False) -> ctk.CTkImage | None:
+    cache_key = (name, size[0], size[1], white_only)
     if cache_key in icons_cache:
         return icons_cache[cache_key]
     icon_path = os.path.join(base_dir, "assets", "icons", "lucide", f"{name}.png")
     if os.path.exists(icon_path):
         try:
-            pil_img = Image.open(icon_path)
-            ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=size)
+            pil_img = Image.open(icon_path).convert("RGBA")
+            r, g, b, a = pil_img.split()
+            white_img = Image.merge(
+                "RGBA",
+                (
+                    Image.new("L", pil_img.size, 255),
+                    Image.new("L", pil_img.size, 255),
+                    Image.new("L", pil_img.size, 255),
+                    a,
+                ),
+            )
+            light_img = white_img if white_only else pil_img
+            ctk_img = ctk.CTkImage(light_image=light_img, dark_image=white_img, size=size)
             icons_cache[cache_key] = ctk_img
             return ctk_img
         except Exception:
@@ -137,7 +148,8 @@ def create_icon_button(
     corner_radius=8,
     **kwargs,
 ) -> ctk.CTkButton:
-    img = get_icon(icon_name) if icon_name else None
+    is_colored_btn = fg_color not in (None, "transparent")
+    img = get_icon(icon_name, white_only=is_colored_btn) if icon_name else None
     btn_kwargs = {
         "text": text,
         "command": command,
