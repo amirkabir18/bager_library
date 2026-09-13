@@ -103,6 +103,7 @@ TRANSLATIONS: dict[str, str] = {
     "id": "شناسه",
     "title": "عنوان کتاب",
     "author": "نویسنده",
+    "due": "رده بندی دیویی",
     "isbn": "شابک",
     "member_id": "نام کاربر",
     "phone_number": "شماره تلفن",
@@ -186,6 +187,7 @@ def init_database(connection: sqlite3.Connection | None = None):
             CREATE TABLE IF NOT EXISTS books (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 author VARCHAR(255),
+                due VARCHAR(255) UNIQUE,
                 isbn VARCHAR(255) UNIQUE,
                 title VARCHAR(255)
             )

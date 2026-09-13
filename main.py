@@ -814,7 +814,7 @@ scrollbar.configure(command=tree.yview)
 for col in columns:
     tree.heading(col, text=tr(col), anchor=tk.CENTER)
     tree.column(col, anchor=tk.CENTER)
-tree["displaycolumns"] = rtl_display_order(columns, ["id", "title", "author", "isbn"])
+tree["displaycolumns"] = rtl_display_order(columns, ["id", "title", "author", "due", "isbn"])
 tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=4)
 
 
@@ -938,7 +938,7 @@ def open_filter_popup():
     col_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
     rb_all = ctk.CTkRadioButton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL)
     rb_all.pack(side=tk.RIGHT, padx=4)
-    for col in ["title", "author", "isbn", "id"]:
+    for col in ["title", "author", "due", "isbn", "id"]:
         if col in columns:
             rb = ctk.CTkRadioButton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL)
             rb.pack(side=tk.RIGHT, padx=4)
@@ -1089,8 +1089,8 @@ def open_add_book_popup():
 
     ctk.CTkLabel(popup, text="ثبت کتاب جدید", font=FONT_TITLE).pack(pady=(15, 10))
 
-    book_cols = [c for c in ["title", "author", "isbn"] if c in columns] + [
-        c for c in columns if c not in ["id", "title", "author", "isbn"]
+    book_cols = [c for c in ["title", "author", "due", "isbn"] if c in columns] + [
+        c for c in columns if c not in ["id", "title", "author", "due", "isbn"]
     ]
     popup_entries = {}
     for col in book_cols:
