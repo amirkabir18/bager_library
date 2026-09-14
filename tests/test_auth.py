@@ -410,7 +410,9 @@ class TestAuthWithDatabase(unittest.TestCase):
         self.assertIn("آخرین مدیر", msg)
 
     def test_update_user(self):
-        ok, _, u1 = create_user("update_user_1", "09121112233", password="oldpassword", role="admin", database_path=self.db_path)
+        ok, _, u1 = create_user(
+            "update_user_1", "09121112233", password="oldpassword", role="admin", database_path=self.db_path
+        )
         self.assertTrue(ok)
         assert u1 is not None
 
@@ -430,7 +432,9 @@ class TestAuthWithDatabase(unittest.TestCase):
         # Update password and verify authentication
         up_ok, _, _ = update_user(u1["id"], password="newpassword123", database_path=self.db_path)
         self.assertTrue(up_ok)
-        auth_ok, _, auth_user = authenticate_with_password("updated_user_1", "newpassword123", database_path=self.db_path)
+        auth_ok, _, auth_user = authenticate_with_password(
+            "updated_user_1", "newpassword123", database_path=self.db_path
+        )
         self.assertTrue(auth_ok)
         self.assertIsNotNone(auth_user)
 

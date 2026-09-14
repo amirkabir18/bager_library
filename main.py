@@ -839,6 +839,7 @@ def open_edit_my_account_popup(user):
     u_name_ent = ctk.CTkEntry(r1, font=FONT_NORMAL, justify="right", height=32)
     u_name_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
     u_name_ent.insert(0, user.get("username", ""))
+    u_name_ent.configure(state="disabled")
 
     r2 = ctk.CTkFrame(popup, fg_color="transparent")
     r2.pack(fill=tk.X, padx=25, pady=4)
@@ -846,12 +847,11 @@ def open_edit_my_account_popup(user):
     u_phone_ent = ctk.CTkEntry(r2, font=FONT_NORMAL, justify="right", height=32)
     u_phone_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
     u_phone_ent.insert(0, user.get("phone_number", ""))
+    u_phone_ent.configure(state="disabled")
 
     r3 = ctk.CTkFrame(popup, fg_color="transparent")
     r3.pack(fill=tk.X, padx=25, pady=4)
-    ctk.CTkLabel(r3, text="شناسه چت تلگرام:", font=FONT_NORMAL, width=130, anchor="e").pack(
-        side=tk.RIGHT, padx=(5, 0)
-    )
+    ctk.CTkLabel(r3, text="شناسه چت تلگرام:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
     u_tg_ent = ctk.CTkEntry(r3, font=FONT_NORMAL, justify="right", height=32)
     u_tg_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
     if user.get("telegram_chat_id"):
@@ -871,8 +871,8 @@ def open_edit_my_account_popup(user):
     u_pwd_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
     def do_save_account():
-        uname = u_name_ent.get().strip()
-        phone = u_phone_ent.get().strip()
+        uname = u_name_ent.get().strip() or str(user.get("username", ""))
+        phone = u_phone_ent.get().strip() or str(user.get("phone_number", ""))
         tg = u_tg_ent.get().strip() or None
         pwd = u_pwd_ent.get().strip() or None
 
