@@ -849,9 +849,7 @@ def open_edit_my_account_popup(user):
 
     r3 = ctk.CTkFrame(popup, fg_color="transparent")
     r3.pack(fill=tk.X, padx=25, pady=4)
-    ctk.CTkLabel(r3, text="شناسه چت تلگرام:", font=FONT_NORMAL, width=130, anchor="e").pack(
-        side=tk.RIGHT, padx=(5, 0)
-    )
+    ctk.CTkLabel(r3, text="شناسه چت تلگرام:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
     u_tg_ent = ctk.CTkEntry(r3, font=FONT_NORMAL, justify="right", height=32)
     u_tg_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
     if user.get("telegram_chat_id"):
