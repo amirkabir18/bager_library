@@ -25,6 +25,7 @@ from auth import (
     mask_phone_number,
     normalize_digits,
     normalize_phone_number,
+    update_user,
     update_user_telegram_chat_id,
     verify_otp_hash,
     verify_password,
@@ -407,6 +408,56 @@ class TestAuthWithDatabase(unittest.TestCase):
         del_ok, msg = delete_user(u2["id"], database_path=self.db_path)
         self.assertFalse(del_ok)
         self.assertIn("آخرین مدیر", msg)
+
+    def test_update_user(self):
+        ok, _, u1 = create_user("update_user_1", "09121112233", password="oldpassword", role="admin", database_path=self.db_path)
+        self.assertTrue(ok)
+        assert u1 is not None
+
+        # Successful update of username and phone
+        up_ok, msg, updated = update_user(
+            u1["id"],
+            username="updated_user_1",
+            phone_number="09129990011",
+            telegram_chat_id="998877",
+            database_path=self.db_path,
+        )
+        self.assertTrue(up_ok)
+        self.assertEqual(updated["username"], "updated_user_1")
+        self.assertEqual(updated["phone_number"], "09129990011")
+        self.assertEqual(updated["telegram_chat_id"], "998877")
+
+        # Update password and verify authentication
+        up_ok, _, _ = update_user(u1["id"], password="newpassword123", database_path=self.db_path)
+        self.assertTrue(up_ok)
+        auth_ok, _, auth_user = authenticate_with_password("updated_user_1", "newpassword123", database_path=self.db_path)
+        self.assertTrue(auth_ok)
+        self.assertIsNotNone(auth_user)
+
+        # Duplicate username prevention
+        ok2, _, u2 = create_user("another_user", "09124445566", database_path=self.db_path)
+        self.assertTrue(ok2)
+        assert u2 is not None
+        dup_ok, dup_msg, _ = update_user(u2["id"], username="updated_user_1", database_path=self.db_path)
+        self.assertFalse(dup_ok)
+        self.assertIn("قبلاً ثبت شده است", dup_msg)
+
+        # Duplicate phone prevention
+        dup_ph_ok, dup_ph_msg, _ = update_user(u2["id"], phone_number="09129990011", database_path=self.db_path)
+        self.assertFalse(dup_ph_ok)
+        self.assertIn("قبلاً ثبت شده است", dup_ph_msg)
+
+        # Invalid phone format
+        inv_ok, _, _ = update_user(u2["id"], phone_number="123", database_path=self.db_path)
+        self.assertFalse(inv_ok)
+
+        # Empty username
+        emp_ok, _, _ = update_user(u2["id"], username="   ", database_path=self.db_path)
+        self.assertFalse(emp_ok)
+
+        # Non-existent user
+        non_ok, _, _ = update_user(99999, username="ghost", database_path=self.db_path)
+        self.assertFalse(non_ok)
 
 
 if __name__ == "__main__":

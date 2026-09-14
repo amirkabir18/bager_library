@@ -221,6 +221,118 @@ def update_user_telegram_chat_id(phone_number: str, telegram_chat_id: str, datab
         conn.close()
 
 
+def update_user(
+    user_id: int,
+    username: str | None = None,
+    phone_number: str | None = None,
+    password: str | None = None,
+    role: str | None = None,
+    telegram_chat_id: str | None = None,
+    is_active: bool | None = None,
+    database_path: str | None = None,
+) -> tuple[bool, str, dict[str, Any] | None]:
+    conn = get_db_connection(database_path=database_path)
+    try:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM auth_users WHERE id = ?", (user_id,))
+        current_row = cur.fetchone()
+        if not current_row:
+            return False, "کاربر یافت نشد.", None
+
+        current = dict(current_row)
+
+        updates: list[str] = []
+        params: list[Any] = []
+
+        if username is not None:
+            clean_username = username.strip()
+            if not clean_username:
+                return False, "نام کاربری نمی‌تواند خالی باشد.", None
+            cur.execute(
+                "SELECT id FROM auth_users WHERE username = ? COLLATE NOCASE AND id != ?",
+                (clean_username, user_id),
+            )
+            if cur.fetchone():
+                return False, f"نام کاربری '{clean_username}' قبلاً ثبت شده است.", None
+            updates.append("username = ?")
+            params.append(clean_username)
+
+        if phone_number is not None:
+            norm_phone = normalize_phone_number(phone_number)
+            if len(norm_phone) != 11 or not norm_phone.startswith("09"):
+                return False, "فرمت شماره تلفن نامعتبر است. مثال: 09123456789", None
+            cur.execute(
+                "SELECT id FROM auth_users WHERE phone_number = ? AND id != ?",
+                (norm_phone, user_id),
+            )
+            if cur.fetchone():
+                return False, f"شماره تلفن '{norm_phone}' قبلاً ثبت شده است.", None
+            updates.append("phone_number = ?")
+            params.append(norm_phone)
+
+        if telegram_chat_id is not None:
+            clean_tg = str(telegram_chat_id).strip() if str(telegram_chat_id).strip() else None
+            updates.append("telegram_chat_id = ?")
+            params.append(clean_tg)
+
+        if role is not None:
+            clean_role = role.strip()
+            is_currently_admin = str(current.get("role", "")).lower() in ("admin", "super admin", "superadmin")
+            will_be_admin = clean_role.lower() in ("admin", "super admin", "superadmin")
+            if is_currently_admin and not will_be_admin:
+                cur.execute(
+                    "SELECT COUNT(*) FROM auth_users WHERE role IN ('admin', 'super admin', 'superadmin') AND is_active = 1 AND id != ?",
+                    (user_id,),
+                )
+                admin_count = cur.fetchone()[0]
+                if admin_count < 1:
+                    return False, "نمی‌توانید نقش آخرین مدیر فعال را تغییر دهید.", None
+            updates.append("role = ?")
+            params.append(clean_role)
+
+        if is_active is not None:
+            is_currently_admin = str(current.get("role", "")).lower() in ("admin", "super admin", "superadmin")
+            if is_currently_admin and not is_active:
+                cur.execute(
+                    "SELECT COUNT(*) FROM auth_users WHERE role IN ('admin', 'super admin', 'superadmin') AND is_active = 1 AND id != ?",
+                    (user_id,),
+                )
+                admin_count = cur.fetchone()[0]
+                if admin_count < 1:
+                    return False, "نمی‌توانید آخرین مدیر فعال را غیرفعال کنید.", None
+            updates.append("is_active = ?")
+            params.append(1 if is_active else 0)
+
+        if password is not None and str(password).strip():
+            pwd_hash = hash_password(password.strip())
+            updates.append("password_hash = ?")
+            params.append(pwd_hash)
+
+        if not updates:
+            return True, "هیچ تغییری اعمال نشد.", current
+
+        params.append(user_id)
+        cur.execute(f"UPDATE auth_users SET {', '.join(updates)} WHERE id = ?", params)
+        conn.commit()
+
+        cur.execute("SELECT * FROM auth_users WHERE id = ?", (user_id,))
+        updated_row = cur.fetchone()
+        updated_dict = dict(updated_row) if updated_row else current
+        return True, "مشخصات حساب کاربری با موفقیت بروزرسانی شد.", updated_dict
+    except sqlite3.IntegrityError as e:
+        err_msg = str(e)
+        if "auth_users.username" in err_msg or "UNIQUE constraint failed: auth_users.username" in err_msg:
+            return False, "این نام کاربری قبلاً ثبت شده است.", None
+        if "auth_users.phone_number" in err_msg or "UNIQUE constraint failed: auth_users.phone_number" in err_msg:
+            return False, "این شماره تلفن قبلاً ثبت شده است.", None
+        return False, f"خطای یکتایی در بروزرسانی کاربر: {err_msg}", None
+    except Exception as e:
+        return False, f"خطا در بروزرسانی مشخصات کاربر: {str(e)}", None
+    finally:
+        conn.close()
+
+
 def list_users(database_path: str | None = None) -> list[dict[str, Any]]:
     conn = get_db_connection(database_path=database_path)
     try:

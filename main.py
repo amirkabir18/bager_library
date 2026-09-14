@@ -52,6 +52,7 @@ from auth import (
     get_user_by_identifier,
     mask_phone_number,
     normalize_phone_number,
+    update_user,
 )
 from database import (
     clear_notification_logs,
@@ -98,6 +99,11 @@ if os.path.exists(icon_p):
 
 available_families = tkfont.families(root)
 FONT_FAMILY = "IRANSansWeb(FaNum)" if "IRANSansWeb(FaNum)" in available_families else "Tahoma"
+
+try:
+    ctk.ThemeManager.theme["CTkFont"]["family"] = FONT_FAMILY
+except Exception:
+    pass
 
 FONT_TITLE = ctk.CTkFont(family=FONT_FAMILY, size=15, weight="bold")
 FONT_HEADER = ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold")
@@ -458,6 +464,150 @@ def rebuild_tabs():
 rebuild_tabs()
 
 
+def open_edit_my_account_popup(user):
+    popup = ctk.CTkToplevel(root)
+    popup.title("ویرایش مشخصات حساب کاربری")
+    popup.geometry("440x460")
+    popup.resizable(False, False)
+    if os.path.exists(icon_p):
+        try:
+            popup.iconbitmap(icon_p)
+        except Exception:
+            pass
+
+    popup.transient(root)
+    popup.grab_set()
+
+    root.update_idletasks()
+    rx = root.winfo_rootx()
+    ry = root.winfo_rooty()
+    rw = root.winfo_width()
+    rh = root.winfo_height()
+    px = max(50, rx + (rw - 440) // 2)
+    py = max(50, ry + (rh - 460) // 2)
+    popup.geometry(f"+{px}+{py}")
+
+    ctk.CTkLabel(popup, text="ویرایش مشخصات حساب من", font=FONT_TITLE).pack(pady=(16, 12))
+
+    r1 = ctk.CTkFrame(popup, fg_color="transparent")
+    r1.pack(fill=tk.X, padx=25, pady=4)
+    ctk.CTkLabel(r1, text="نام کاربری:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
+    u_name_ent = ctk.CTkEntry(r1, font=FONT_NORMAL, justify="right", height=32)
+    u_name_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+    u_name_ent.insert(0, user.get("username", ""))
+
+    r2 = ctk.CTkFrame(popup, fg_color="transparent")
+    r2.pack(fill=tk.X, padx=25, pady=4)
+    ctk.CTkLabel(r2, text="شماره تلفن:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
+    u_phone_ent = ctk.CTkEntry(r2, font=FONT_NORMAL, justify="right", height=32)
+    u_phone_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+    u_phone_ent.insert(0, user.get("phone_number", ""))
+
+    r3 = ctk.CTkFrame(popup, fg_color="transparent")
+    r3.pack(fill=tk.X, padx=25, pady=4)
+    ctk.CTkLabel(r3, text="شناسه چت تلگرام:", font=FONT_NORMAL, width=130, anchor="e").pack(
+        side=tk.RIGHT, padx=(5, 0)
+    )
+    u_tg_ent = ctk.CTkEntry(r3, font=FONT_NORMAL, justify="right", height=32)
+    u_tg_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+    if user.get("telegram_chat_id"):
+        u_tg_ent.insert(0, str(user.get("telegram_chat_id", "")))
+
+    r4 = ctk.CTkFrame(popup, fg_color="transparent")
+    r4.pack(fill=tk.X, padx=25, pady=4)
+    ctk.CTkLabel(r4, text="رمز عبور جدید:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
+    u_pwd_ent = ctk.CTkEntry(
+        r4,
+        font=FONT_NORMAL,
+        justify="right",
+        height=32,
+        show="*",
+        placeholder_text="در صورت عدم تغییر خالی بگذارید",
+    )
+    u_pwd_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+
+    def do_save_account():
+        uname = u_name_ent.get().strip()
+        phone = u_phone_ent.get().strip()
+        tg = u_tg_ent.get().strip() or None
+        pwd = u_pwd_ent.get().strip() or None
+
+        if not uname:
+            messagebox.showwarning("خطا", "لطفاً نام کاربری را وارد کنید!", parent=popup)
+            u_name_ent.focus()
+            return
+        if not phone:
+            messagebox.showwarning("خطا", "لطفاً شماره تلفن را وارد کنید!", parent=popup)
+            u_phone_ent.focus()
+            return
+
+        norm_phone = normalize_phone_number(phone)
+        if len(norm_phone) != 11 or not norm_phone.startswith("09"):
+            messagebox.showerror("خطا", "فرمت شماره تلفن نامعتبر است!\nمثال: 09123456789", parent=popup)
+            u_phone_ent.focus()
+            return
+
+        uid = user.get("id")
+        if not uid:
+            existing = get_user_by_identifier(user.get("username", ""), database_path=db_p)
+            if existing:
+                uid = existing.get("id")
+        if not uid:
+            messagebox.showerror("خطا", "شناسه حساب کاربری یافت نشد.", parent=popup)
+            return
+
+        success, msg, updated_user = update_user(
+            user_id=uid,
+            username=uname,
+            phone_number=norm_phone,
+            password=pwd,
+            telegram_chat_id=tg,
+            database_path=db_p,
+        )
+
+        if success and updated_user:
+            global current_user
+            current_user = updated_user
+            messagebox.showinfo("موفق", msg, parent=popup)
+            popup.destroy()
+            u_role = tr(str(current_user.get("role", "")))
+            u_name = str(current_user.get("username", ""))
+            lbl_user_badge.configure(text=f"{u_name} ({u_role})")
+            show_logged_in_view(current_user)
+            if "search_users" in globals():
+                try:
+                    search_users()
+                except Exception:
+                    pass
+        else:
+            messagebox.showerror("خطا", msg, parent=popup)
+
+    btn_f = ctk.CTkFrame(popup, fg_color="transparent")
+    btn_f.pack(pady=20, padx=20, fill=tk.X)
+    btn_save = create_icon_button(
+        btn_f,
+        text=" ذخیره تغییرات ",
+        icon_name="check",
+        command=do_save_account,
+        font=FONT_BOLD,
+        fg_color="#16a34a",
+        hover_color="#15803d",
+        width=130,
+    )
+    btn_save.pack(side=tk.RIGHT, padx=5)
+    btn_cancel = create_icon_button(
+        btn_f,
+        text=" انصراف ",
+        icon_name="x",
+        command=popup.destroy,
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        width=90,
+    )
+    btn_cancel.pack(side=tk.LEFT, padx=5)
+
+
 def show_logged_in_view(user):
     for widget in login_frame.winfo_children():
         widget.destroy()
@@ -492,8 +642,22 @@ def show_logged_in_view(user):
     else:
         ctk.CTkLabel(info_card, text="", font=FONT_SMALL).pack(pady=4)
 
+    btn_row = ctk.CTkFrame(login_frame, fg_color="transparent")
+    btn_row.pack(pady=20)
+
+    edit_account_btn = create_icon_button(
+        btn_row,
+        text=" ویرایش مشخصات من ",
+        font=FONT_BOLD,
+        fg_color="#2563eb",
+        hover_color="#1d4ed8",
+        height=38,
+        command=lambda: open_edit_my_account_popup(user),
+    )
+    edit_account_btn.pack(side=tk.RIGHT, padx=6)
+
     logout_btn = create_icon_button(
-        login_frame,
+        btn_row,
         text=" خروج از حساب کاربری ",
         icon_name="x",
         font=FONT_BOLD,
@@ -502,7 +666,7 @@ def show_logged_in_view(user):
         height=38,
         command=logout,
     )
-    logout_btn.pack(pady=20)
+    logout_btn.pack(side=tk.LEFT, padx=6)
 
 
 def show_login_view():
@@ -3208,6 +3372,8 @@ combo_advance_days = ctk.CTkOptionMenu(
     pref_row2,
     values=["1", "2", "3", "5", "7"],
     width=80,
+    font=FONT_NORMAL,
+    dropdown_font=FONT_NORMAL,
 )
 combo_advance_days.set("2")
 combo_advance_days.pack(side=tk.RIGHT, padx=10)
@@ -3218,6 +3384,8 @@ combo_interval = ctk.CTkOptionMenu(
     pref_row2,
     values=["15", "30", "60", "120", "360"],
     width=80,
+    font=FONT_NORMAL,
+    dropdown_font=FONT_NORMAL,
 )
 combo_interval.set("30")
 combo_interval.pack(side=tk.RIGHT, padx=10)
@@ -3242,6 +3410,8 @@ combo_theme = ctk.CTkOptionMenu(
     values=["تیره (Dark)", "روشن (Light)", "سیستم (System)"],
     width=130,
     command=change_theme_mode,
+    font=FONT_NORMAL,
+    dropdown_font=FONT_NORMAL,
 )
 combo_theme.set("تیره (Dark)")
 combo_theme.pack(side=tk.RIGHT, padx=5)
@@ -3386,6 +3556,8 @@ combo_log_type = ctk.CTkOptionMenu(
     values=["همه", "یادآوری سررسید", "هشدار دیرکرد", "اعلان آزمایشی"],
     width=140,
     command=on_combo_log_type_changed,
+    font=FONT_NORMAL,
+    dropdown_font=FONT_NORMAL,
 )
 combo_log_type.set("همه")
 combo_log_type.pack(side=tk.RIGHT, padx=5)
@@ -3673,6 +3845,7 @@ def open_audit_log_filter_popup():
         sort_frame,
         width=130,
         font=FONT_NORMAL,
+        dropdown_font=FONT_NORMAL,
         values=list(sort_options.keys()),
     )
     current_sort_label = rev_sort_options.get(sort_col_var.get(), "شناسه")
@@ -3684,6 +3857,7 @@ def open_audit_log_filter_popup():
         sort_frame,
         width=140,
         font=FONT_NORMAL,
+        dropdown_font=FONT_NORMAL,
         values=["نزولی (جدیدترین)", "صعودی (قدیمی‌ترین)"],
     )
     sort_dir_cb.set("نزولی (جدیدترین)" if sort_dir_var.get() == "DESC" else "صعودی (قدیمی‌ترین)")
