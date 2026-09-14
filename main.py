@@ -109,6 +109,7 @@ FONT_HEADER = ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold")
 FONT_NORMAL = ctk.CTkFont(family=FONT_FAMILY, size=11)
 FONT_BOLD = ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold")
 FONT_SMALL = ctk.CTkFont(family=FONT_FAMILY, size=10)
+MAX_BORROWED_BOOKS = 3
 
 icons_cache: dict[tuple[str, int, int, bool], ctk.CTkImage] = {}
 
@@ -3257,12 +3258,21 @@ def open_add_loan_popup(initial_book_title=""):
         ins_conn = get_db_connection(db_p)
         try:
             ins_cur = ins_conn.cursor()
+                # messagebox.showwarning(
+                #     "سقف مجاز امانت",
+                #     f"کاربر «{m_name}» در حال حاضر {current_borrowed} کتاب در امانت دارد.\n"
+                #     f"حداکثر سقف مجاز امانت همزمان: {MAX_BORROWED_BOOKS} کتاب می‌باشد.",
+                #     parent=popup,
+                # )
             ins_cur.execute(
-                "SELECT COUNT(*) FROM loans WHERE book_id = ? AND (borrowed = 1 OR borrowed = '1')", (b_title,)
+                "SELECT COUNT(*) FROM loans WHERE member_name = ? AND (borrowed = 1 OR borrowed = '1')",
+                (m_name,)
             )
-            if ins_cur.fetchone()[0] > 0:
+            current_borrowed = ins_cur.fetchone()[0]
+            if current_borrowed >= MAX_BORROWED_BOOKS:
                 messagebox.showerror(
-                    "خطا", f"کتاب «{b_title}» در حال حاضر در امانت است و امکان امانت مجدد آن وجود ندارد!", parent=popup
+                    "خطا", f"کاربر «{m_name}» در حال حاضر {current_borrowed} کتاب به امانت برده.\n"
+                    f"حداکثر سقف مجاز امانت همزمان: {MAX_BORROWED_BOOKS} کتاب می‌باشد.", parent=popup
                 )
                 return
 
