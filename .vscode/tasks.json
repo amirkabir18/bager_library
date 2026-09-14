@@ -74,6 +74,11 @@
           "value": "app_info.json;.",
           "quoting": "strong"
         },
+        "--add-data",
+        {
+          "value": "data;data",
+          "quoting": "strong"
+        },
         "--hidden-import",
         "jdatetime",
         "--hidden-import",
@@ -117,6 +122,11 @@
         "--add-data",
         {
           "value": "app_info.json;.",
+          "quoting": "strong"
+        },
+        "--add-data",
+        {
+          "value": "data;data",
           "quoting": "strong"
         },
         "--hidden-import",

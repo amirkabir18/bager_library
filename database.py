@@ -103,7 +103,11 @@ TRANSLATIONS: dict[str, str] = {
     "id": "شناسه",
     "title": "عنوان کتاب",
     "author": "نویسنده",
-    "due": "رده بندی دیویی",
+    "dewey_code": "کد دیویی",
+    "dewey_class": "رده اصلی",
+    "dewey_subject": "موضوع دیویی",
+    "dewey_confidence": "درجه اطمینان",
+    "dewey_source": "منبع رده",
     "isbn": "شابک",
     "member_id": "نام کاربر",
     "phone_number": "شماره تلفن",
@@ -171,6 +175,23 @@ def get_db_connection(database_path: str | None = None, enable_foreign_keys: boo
     c = sqlite3.connect(target_path)
     if enable_foreign_keys:
         c.execute("PRAGMA foreign_keys = ON")
+
+    try:
+        from services.dewey_service import dewey_sort_key
+
+        def dewey_collation(a: str, b: str) -> int:
+            ka = dewey_sort_key(a)
+            kb = dewey_sort_key(b)
+            if ka < kb:
+                return -1
+            elif ka > kb:
+                return 1
+            return 0
+
+        c.create_collation("dewey", dewey_collation)
+    except Exception:
+        pass
+
     return c
 
 
@@ -187,9 +208,13 @@ def init_database(connection: sqlite3.Connection | None = None):
             CREATE TABLE IF NOT EXISTS books (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 author VARCHAR(255),
-                due VARCHAR(255) UNIQUE,
                 isbn VARCHAR(255) UNIQUE,
-                title VARCHAR(255)
+                title VARCHAR(255),
+                dewey_code VARCHAR(50),
+                dewey_class VARCHAR(255),
+                dewey_subject VARCHAR(255),
+                dewey_confidence REAL,
+                dewey_source VARCHAR(50)
             )
         """)
 
@@ -295,6 +320,64 @@ def init_database(connection: sqlite3.Connection | None = None):
             cur.execute("ALTER TABLE books DROP COLUMN location")
         except Exception:
             pass
+
+        # Books table migration: ensure DDC columns exist and legacy due column is migrated and removed
+        cur.execute('PRAGMA table_info("books")')
+        existing_book_cols = {str(row[1]) for row in cur.fetchall()}
+        book_col_defs = {
+            "dewey_code": "VARCHAR(50)",
+            "dewey_class": "VARCHAR(255)",
+            "dewey_subject": "VARCHAR(255)",
+            "dewey_confidence": "REAL",
+            "dewey_source": "VARCHAR(50)",
+        }
+        for col_name, col_def in book_col_defs.items():
+            if col_name not in existing_book_cols:
+                try:
+                    cur.execute(f"ALTER TABLE books ADD COLUMN {col_name} {col_def}")
+                except Exception:
+                    pass
+
+        if "due" in existing_book_cols:
+            try:
+                cur.execute(
+                    "UPDATE books SET dewey_code = due WHERE (dewey_code IS NULL OR dewey_code = '') AND due IS NOT NULL"
+                )
+            except Exception:
+                pass
+            try:
+                cur.execute("ALTER TABLE books DROP COLUMN due")
+            except Exception:
+                try:
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS books_migration_nodue (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            author VARCHAR(255),
+                            isbn VARCHAR(255) UNIQUE,
+                            title VARCHAR(255),
+                            dewey_code VARCHAR(50),
+                            dewey_class VARCHAR(255),
+                            dewey_subject VARCHAR(255),
+                            dewey_confidence REAL,
+                            dewey_source VARCHAR(50)
+                        )
+                    """)
+                    cur.execute("""
+                        INSERT INTO books_migration_nodue (
+                            id, author, isbn, title, dewey_code, dewey_class, dewey_subject, dewey_confidence, dewey_source
+                        )
+                        SELECT
+                            id, author, isbn, title,
+                            COALESCE(dewey_code, due),
+                            dewey_class, dewey_subject, dewey_confidence, dewey_source
+                        FROM books
+                    """)
+                    cur.execute("DROP TABLE books")
+                    cur.execute("ALTER TABLE books_migration_nodue RENAME TO books")
+                except Exception:
+                    pass
+
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_books_dewey_code ON books(dewey_code)")
 
         cur.execute('PRAGMA table_info("auth_users")')
         existing_user_cols = {str(row[1]) for row in cur.fetchall()}
@@ -691,3 +774,19 @@ def log_notification(
     finally:
         if should_close:
             conn.close()
+
+
+def reclassify_book(book_id: int, force: bool = False, conn_or_path: sqlite3.Connection | str | None = None):
+    """Reclassifies a single book by ID using DeweyService."""
+    from services.book_service import BookService
+
+    service = BookService()
+    return service.reclassify_book(book_id, force=force, conn_or_path=conn_or_path)
+
+
+def reclassify_all_books(force: bool = False, conn_or_path: sqlite3.Connection | str | None = None) -> dict[str, int]:
+    """Reclassifies all books in the library database."""
+    from services.book_service import BookService
+
+    service = BookService()
+    return service.reclassify_all_books(force=force, conn_or_path=conn_or_path)
