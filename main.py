@@ -416,7 +416,7 @@ def open_user_profile_popover():
     bx = btn_user_profile.winfo_rootx()
     by = btn_user_profile.winfo_rooty() + btn_user_profile.winfo_height() + 6
     p_w = 310
-    p_h = 365 if raw_role in ("super admin", "superadmin", "admin") else 330
+    p_h = 415 if raw_role in ("super admin", "superadmin", "admin") else 380
     popover.geometry(f"{p_w}x{p_h}+{bx}+{by}")
 
     card = ctk.CTkFrame(
@@ -554,6 +554,20 @@ def open_user_profile_popover():
         command=go_to_settings,
     )
     btn_set.pack(fill=tk.X, padx=12, pady=2)
+
+    edit_account_btn = ctk.CTkButton(
+        card,
+        text=" ویرایش مشخصات من ",
+        compound="right",
+        font=FONT_NORMAL,
+        height=32,
+        fg_color="#2563eb",
+        hover_color="#1d4ed8",
+        text_color="#ffffff",
+        anchor="center",
+        command=lambda: open_edit_my_account_popup(current_user),
+    )
+    edit_account_btn.pack(fill=tk.X, padx=14, pady=(6, 12))
 
     btn_out = ctk.CTkButton(
         card,
