@@ -3262,14 +3262,15 @@ def open_add_loan_popup(initial_book_title=""):
             ins_cur = conn.cursor()
 
             ins_cur.execute(
-                "SELECT COUNT(*) FROM loans WHERE member_name = ? AND (borrowed = 1 OR borrowed = '1')",
-                (m_name,)
+                "SELECT COUNT(*) FROM loans WHERE member_name = ? AND (borrowed = 1 OR borrowed = '1')", (m_name,)
             )
             current_borrowed = ins_cur.fetchone()[0]
             if current_borrowed >= mln:
                 messagebox.showerror(
-                    "خطا", f"کاربر «{m_name}» در حال حاضر {current_borrowed} کتاب به امانت برده.\n"
-                    f"حداکثر سقف مجاز امانت همزمان: {mln} کتاب می‌باشد.", parent=popup
+                    "خطا",
+                    f"کاربر «{m_name}» در حال حاضر {current_borrowed} کتاب به امانت برده.\n"
+                    f"حداکثر سقف مجاز امانت همزمان: {mln} کتاب می‌باشد.",
+                    parent=popup,
                 )
                 return
 
@@ -3807,7 +3808,7 @@ ctk.CTkLabel(pref_row2, text="حداکثر تعداد امانت برای هر �
 
 combo_max_loans = ctk.CTkOptionMenu(
     pref_row2,
-    values=["1", "2", "3", "4", "5","6", "7", "8", "9", "10"],
+    values=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
     width=80,
 )
 combo_max_loans.set("4")
@@ -3853,8 +3854,8 @@ pref_row3.pack(fill=tk.X, padx=16, pady=(10, 14))
 
 
 def save_settings_ui():
-    notif_val = "true" if var_notif_enabled.get() else "false" 
-    sound_val = "true" if var_notif_sound.get() else "false" 
+    notif_val = "true" if var_notif_enabled.get() else "false"
+    sound_val = "true" if var_notif_sound.get() else "false"
     adv_days = str(combo_advance_days.get()).strip() or "2"
     max_loans = str(combo_max_loans.get()).strip() or "4"
     interval = str(combo_interval.get()).strip() or "30"
