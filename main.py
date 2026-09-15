@@ -3840,15 +3840,23 @@ def open_add_loan_popup(initial_book_title=""):
             messagebox.showerror("خطا", "تاریخ بازگشت نمی‌تواند پیش از تاریخ امانت باشد!", parent=popup)
             return
 
-        ins_conn = get_db_connection(db_p)
+        with get_db_connection(db_p) as conn:
+            settings = get_all_settings(conn)
+        mln = int(settings.get("max_loans", "3"))
+        print(mln)
         try:
-            ins_cur = ins_conn.cursor()
+            ins_cur = conn.cursor()
+
             ins_cur.execute(
-                "SELECT COUNT(*) FROM loans WHERE book_id = ? AND (borrowed = 1 OR borrowed = '1')", (b_title,)
+                "SELECT COUNT(*) FROM loans WHERE member_name = ? AND (borrowed = 1 OR borrowed = '1')", (m_name,)
             )
-            if ins_cur.fetchone()[0] > 0:
+            current_borrowed = ins_cur.fetchone()[0]
+            if current_borrowed >= mln:
                 messagebox.showerror(
-                    "خطا", f"کتاب «{b_title}» در حال حاضر در امانت است و امکان امانت مجدد آن وجود ندارد!", parent=popup
+                    "خطا",
+                    f"کاربر «{m_name}» در حال حاضر {current_borrowed} کتاب به امانت برده.\n"
+                    f"حداکثر سقف مجاز امانت همزمان: {mln} کتاب می‌باشد.",
+                    parent=popup,
                 )
                 return
 
@@ -3856,7 +3864,6 @@ def open_add_loan_popup(initial_book_title=""):
                 "INSERT INTO loans (member_name, book_id, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
                 (m_name, b_title, return_gregorian, borrow_gregorian),
             )
-            ins_conn.commit()
             notification_engine.show("ثبت موفق امانت", f"کتاب «{b_title}» با موفقیت برای {m_name} ثبت شد.")
 
             messagebox.showinfo("موفقیت", "اطلاعات امانت با موفقیت ذخیره شد!", parent=popup)
@@ -3866,7 +3873,8 @@ def open_add_loan_popup(initial_book_title=""):
         except sqlite3.Error as e:
             messagebox.showerror("خطا در پایگاه داده", f"خطا در ذخیره اطلاعات: {e}", parent=popup)
         finally:
-            ins_conn.close()
+            conn.commit()
+            conn.close()
 
     btn_f = ctk.CTkFrame(popup, fg_color="transparent")
     btn_f.pack(pady=16, padx=25, fill=tk.X)
@@ -4577,6 +4585,17 @@ combo_advance_days = ctk.CTkOptionMenu(
 combo_advance_days.set("2")
 combo_advance_days.pack(side=tk.RIGHT, padx=10)
 
+ctk.CTkLabel(pref_row2, text="حداکثر تعداد امانت برای هر کاربر", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=5)
+
+combo_max_loans = ctk.CTkOptionMenu(
+    pref_row2,
+    values=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+    width=80,
+)
+combo_max_loans.set("4")
+combo_max_loans.pack(side=tk.RIGHT, padx=10)
+
+
 ctk.CTkLabel(pref_row2, text="فاصله بررسی خودکار (دقیقه):", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(20, 5))
 
 combo_interval = ctk.CTkOptionMenu(
@@ -4623,10 +4642,12 @@ def save_settings_ui():
     notif_val = "true" if var_notif_enabled.get() else "false"
     sound_val = "true" if var_notif_sound.get() else "false"
     adv_days = str(combo_advance_days.get()).strip() or "2"
+    max_loans = str(combo_max_loans.get()).strip() or "4"
     interval = str(combo_interval.get()).strip() or "30"
 
     try:
         with get_db_connection(db_p) as conn:
+            set_setting(conn, "max_loans", max_loans)
             set_setting(conn, "notifications_enabled", notif_val)
             set_setting(conn, "notification_sound", sound_val)
             set_setting(conn, "notification_advance_days", adv_days)
@@ -5313,6 +5334,8 @@ def load_settings_into_ui():
         s_en = settings.get("notification_sound", "true").lower() == "true"
         adv = settings.get("notification_advance_days", "2")
         inv = settings.get("notification_check_interval_mins", "30")
+        mln = int(settings.get("max_loans", "2"))
+        combo_max_loans.set(str(mln))
 
         var_notif_enabled.set(n_en)
         var_notif_sound.set(s_en)
