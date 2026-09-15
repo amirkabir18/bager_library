@@ -63,19 +63,6 @@ DEFAULT_SUBDIVISIONS: dict[str, dict[str, str]] = {
     "955": {"class": "900", "subject_fa": "تاریخ ایران", "subject_en": "History of Iran"},
 }
 
-DEFAULT_SUBJECT_TO_DDC: dict[str, str] = {
-    "mathematics": "510",
-    "math": "510",
-    "physics": "530",
-    "chemistry": "540",
-    "biology": "570",
-    "computer science": "004",
-    "programming": "005",
-    "psychology": "150",
-    "philosophy": "100",
-    "history": "900",
-}
-
 
 def get_data_file_path() -> str:
     """Resolve absolute path to dewey_data.json supporting PyInstaller frozen bundles."""
@@ -90,14 +77,13 @@ def get_data_file_path() -> str:
     return candidate
 
 
-def load_dewey_dataset() -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]], dict[str, str]]:
+def load_dewey_dataset() -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
     """
-    Loads classes, subdivisions, and subject mappings from JSON dataset file.
+    Loads classes and subdivisions from JSON dataset file.
     Falls back to built-in defaults if the file cannot be loaded.
     """
     classes = dict(DEFAULT_CLASSES)
     subdivisions = dict(DEFAULT_SUBDIVISIONS)
-    subject_map = dict(DEFAULT_SUBJECT_TO_DDC)
 
     path = get_data_file_path()
     if os.path.exists(path):
@@ -108,9 +94,7 @@ def load_dewey_dataset() -> tuple[dict[str, dict[str, str]], dict[str, dict[str,
                     classes.update(data["classes"])
                 if "subdivisions" in data and isinstance(data["subdivisions"], dict):
                     subdivisions.update(data["subdivisions"])
-                if "subject_to_ddc" in data and isinstance(data["subject_to_ddc"], dict):
-                    subject_map.update(data["subject_to_ddc"])
         except Exception as e:
             logger.warning(f"Could not load dewey dataset from {path}: {e}")
 
-    return classes, subdivisions, subject_map
+    return classes, subdivisions

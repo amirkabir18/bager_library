@@ -1,628 +1,571 @@
 {
-  "classes": {
-    "000": {
-      "fa": "کلیات، علوم رایانه و اطلاعات",
-      "en": "Computer science, information & general works"
+    "classes": {
+        "000": {
+            "fa": "کلیات، علوم رایانه و اطلاعات",
+            "en": "Computer science, information & general works"
+        },
+        "100": {
+            "fa": "فلسفه و روان‌شناسی",
+            "en": "Philosophy & psychology"
+        },
+        "200": {
+            "fa": "دین و الهیات",
+            "en": "Religion"
+        },
+        "300": {
+            "fa": "علوم اجتماعی",
+            "en": "Social sciences"
+        },
+        "400": {
+            "fa": "زبان و زبان‌شناسی",
+            "en": "Language"
+        },
+        "500": {
+            "fa": "علوم محض و طبیعی",
+            "en": "Science"
+        },
+        "600": {
+            "fa": "فناوری و علوم کاربردی",
+            "en": "Technology"
+        },
+        "700": {
+            "fa": "هنر و سرگرمی",
+            "en": "Arts & recreation"
+        },
+        "800": {
+            "fa": "ادبیات",
+            "en": "Literature"
+        },
+        "900": {
+            "fa": "تاریخ و جغرافیا",
+            "en": "History & geography"
+        }
     },
-    "100": {
-      "fa": "فلسفه و روان‌شناسی",
-      "en": "Philosophy & psychology"
-    },
-    "200": {
-      "fa": "دین و الهیات",
-      "en": "Religion"
-    },
-    "300": {
-      "fa": "علوم اجتماعی",
-      "en": "Social sciences"
-    },
-    "400": {
-      "fa": "زبان و زبان‌شناسی",
-      "en": "Language"
-    },
-    "500": {
-      "fa": "علوم محض و طبیعی",
-      "en": "Science"
-    },
-    "600": {
-      "fa": "فناوری و علوم کاربردی",
-      "en": "Technology"
-    },
-    "700": {
-      "fa": "هنر و سرگرمی",
-      "en": "Arts & recreation"
-    },
-    "800": {
-      "fa": "ادبیات",
-      "en": "Literature"
-    },
-    "900": {
-      "fa": "تاریخ و جغرافیا",
-      "en": "History & geography"
+    "subdivisions": {
+        "004": {
+            "class": "000",
+            "subject_fa": "علوم کامپیوتر و پردازش داده",
+            "subject_en": "Computer science & data processing"
+        },
+        "005": {
+            "class": "000",
+            "subject_fa": "برنامه‌نویسی و نرم‌افزار",
+            "subject_en": "Computer programming & software"
+        },
+        "006": {
+            "class": "000",
+            "subject_fa": "هوش مصنوعی و رسانه‌های دیجیتال",
+            "subject_en": "Artificial intelligence & digital media"
+        },
+        "010": {
+            "class": "000",
+            "subject_fa": "کتابشناسی",
+            "subject_en": "Bibliography"
+        },
+        "020": {
+            "class": "000",
+            "subject_fa": "کتابداری و علوم اطلاعات",
+            "subject_en": "Library & information sciences"
+        },
+        "030": {
+            "class": "000",
+            "subject_fa": "دانشنامه‌ها",
+            "subject_en": "Encyclopedias & books of facts"
+        },
+        "070": {
+            "class": "000",
+            "subject_fa": "روزنامه‌نگاری و رسانه",
+            "subject_en": "Journalism & news media"
+        },
+        "100": {
+            "class": "100",
+            "subject_fa": "فلسفه",
+            "subject_en": "Philosophy"
+        },
+        "110": {
+            "class": "100",
+            "subject_fa": "متافیزیک",
+            "subject_en": "Metaphysics"
+        },
+        "120": {
+            "class": "100",
+            "subject_fa": "معرفت‌شناسی",
+            "subject_en": "Epistemology"
+        },
+        "130": {
+            "class": "100",
+            "subject_fa": "فراروان‌شناسی و علوم غریبه",
+            "subject_en": "Parapsychology & occultism"
+        },
+        "140": {
+            "class": "100",
+            "subject_fa": "مکاتب فلسفی",
+            "subject_en": "Philosophical schools"
+        },
+        "150": {
+            "class": "100",
+            "subject_fa": "روان‌شناسی",
+            "subject_en": "Psychology"
+        },
+        "160": {
+            "class": "100",
+            "subject_fa": "منطق",
+            "subject_en": "Logic"
+        },
+        "170": {
+            "class": "100",
+            "subject_fa": "اخلاق",
+            "subject_en": "Ethics"
+        },
+        "180": {
+            "class": "100",
+            "subject_fa": "فلسفه باستان، قرون وسطی و شرق",
+            "subject_en": "Ancient, medieval & eastern philosophy"
+        },
+        "190": {
+            "class": "100",
+            "subject_fa": "فلسفه مدرن غرب",
+            "subject_en": "Modern western philosophy"
+        },
+        "200": {
+            "class": "200",
+            "subject_fa": "دین",
+            "subject_en": "Religion"
+        },
+        "210": {
+            "class": "200",
+            "subject_fa": "فلسفه و نظریه دین",
+            "subject_en": "Philosophy & theory of religion"
+        },
+        "220": {
+            "class": "200",
+            "subject_fa": "کتاب مقدس",
+            "subject_en": "Bible"
+        },
+        "230": {
+            "class": "200",
+            "subject_fa": "مسیحیت",
+            "subject_en": "Christianity"
+        },
+        "240": {
+            "class": "200",
+            "subject_fa": "الهیات اخلاقی و عبادی مسیحی",
+            "subject_en": "Christian moral & devotional theology"
+        },
+        "250": {
+            "class": "200",
+            "subject_fa": "فرقه‌ها و کلیسای محلی مسیحی",
+            "subject_en": "Christian orders & local church"
+        },
+        "260": {
+            "class": "200",
+            "subject_fa": "الهیات اجتماعی و کلیسایی مسیحی",
+            "subject_en": "Christian social & ecclesiastical theology"
+        },
+        "270": {
+            "class": "200",
+            "subject_fa": "تاریخ مسیحیت",
+            "subject_en": "History of Christianity"
+        },
+        "280": {
+            "class": "200",
+            "subject_fa": "فرقه‌های مسیحی",
+            "subject_en": "Christian denominations"
+        },
+        "290": {
+            "class": "200",
+            "subject_fa": "ادیان دیگر",
+            "subject_en": "Other religions"
+        },
+        "297": {
+            "class": "200",
+            "subject_fa": "اسلام و علوم قرآنی",
+            "subject_en": "Islam"
+        },
+        "300": {
+            "class": "300",
+            "subject_fa": "علوم اجتماعی",
+            "subject_en": "Social sciences"
+        },
+        "310": {
+            "class": "300",
+            "subject_fa": "آمار عمومی",
+            "subject_en": "Collections of general statistics"
+        },
+        "320": {
+            "class": "300",
+            "subject_fa": "علوم سیاسی",
+            "subject_en": "Political science"
+        },
+        "330": {
+            "class": "300",
+            "subject_fa": "اقتصاد",
+            "subject_en": "Economics"
+        },
+        "340": {
+            "class": "300",
+            "subject_fa": "حقوق",
+            "subject_en": "Law"
+        },
+        "350": {
+            "class": "300",
+            "subject_fa": "مدیریت دولتی و علوم نظامی",
+            "subject_en": "Public administration & military science"
+        },
+        "360": {
+            "class": "300",
+            "subject_fa": "مشکلات و خدمات اجتماعی",
+            "subject_en": "Social problems & social services"
+        },
+        "370": {
+            "class": "300",
+            "subject_fa": "آموزش و پرورش",
+            "subject_en": "Education"
+        },
+        "380": {
+            "class": "300",
+            "subject_fa": "بازرگانی، ارتباطات و حمل‌ونقل",
+            "subject_en": "Commerce, communications & transportation"
+        },
+        "390": {
+            "class": "300",
+            "subject_fa": "آداب و رسوم، فولکلور",
+            "subject_en": "Customs, etiquette & folklore"
+        },
+        "400": {
+            "class": "400",
+            "subject_fa": "زبان",
+            "subject_en": "Language"
+        },
+        "410": {
+            "class": "400",
+            "subject_fa": "زبان‌شناسی",
+            "subject_en": "Linguistics"
+        },
+        "420": {
+            "class": "400",
+            "subject_fa": "زبان انگلیسی",
+            "subject_en": "English language"
+        },
+        "430": {
+            "class": "400",
+            "subject_fa": "زبان آلمانی",
+            "subject_en": "German & related languages"
+        },
+        "440": {
+            "class": "400",
+            "subject_fa": "زبان فرانسوی",
+            "subject_en": "French & related languages"
+        },
+        "450": {
+            "class": "400",
+            "subject_fa": "زبان ایتالیایی",
+            "subject_en": "Italian, Romanian & related languages"
+        },
+        "460": {
+            "class": "400",
+            "subject_fa": "زبان اسپانیایی",
+            "subject_en": "Spanish, Portuguese, Galician"
+        },
+        "470": {
+            "class": "400",
+            "subject_fa": "زبان لاتین",
+            "subject_en": "Latin & Italic languages"
+        },
+        "480": {
+            "class": "400",
+            "subject_fa": "زبان یونانی",
+            "subject_en": "Classical & modern Greek languages"
+        },
+        "490": {
+            "class": "400",
+            "subject_fa": "سایر زبان‌ها",
+            "subject_en": "Other languages"
+        },
+        "491.55": {
+            "class": "400",
+            "subject_fa": "زبان فارسی",
+            "subject_en": "Persian language"
+        },
+        "492.7": {
+            "class": "400",
+            "subject_fa": "زبان عربی",
+            "subject_en": "Arabic language"
+        },
+        "500": {
+            "class": "500",
+            "subject_fa": "علوم طبیعی و ریاضی",
+            "subject_en": "Science"
+        },
+        "510": {
+            "class": "500",
+            "subject_fa": "ریاضیات",
+            "subject_en": "Mathematics"
+        },
+        "519.5": {
+            "class": "500",
+            "subject_fa": "آمار ریاضی",
+            "subject_en": "Mathematical statistics"
+        },
+        "520": {
+            "class": "500",
+            "subject_fa": "نجوم و کیهان‌شناسی",
+            "subject_en": "Astronomy"
+        },
+        "530": {
+            "class": "500",
+            "subject_fa": "فیزیک",
+            "subject_en": "Physics"
+        },
+        "540": {
+            "class": "500",
+            "subject_fa": "شیمی",
+            "subject_en": "Chemistry"
+        },
+        "550": {
+            "class": "500",
+            "subject_fa": "علوم زمین و زمین‌شناسی",
+            "subject_en": "Earth sciences"
+        },
+        "560": {
+            "class": "500",
+            "subject_fa": "دیرین‌شناسی",
+            "subject_en": "Paleontology"
+        },
+        "570": {
+            "class": "500",
+            "subject_fa": "زیست‌شناسی",
+            "subject_en": "Biology"
+        },
+        "580": {
+            "class": "500",
+            "subject_fa": "گیاه‌شناسی",
+            "subject_en": "Botany"
+        },
+        "590": {
+            "class": "500",
+            "subject_fa": "جانورشناسی",
+            "subject_en": "Zoology"
+        },
+        "600": {
+            "class": "600",
+            "subject_fa": "فناوری و علوم کاربردی",
+            "subject_en": "Technology"
+        },
+        "610": {
+            "class": "600",
+            "subject_fa": "پزشکی و سلامت",
+            "subject_en": "Medicine & health"
+        },
+        "620": {
+            "class": "600",
+            "subject_fa": "مهندسی",
+            "subject_en": "Engineering"
+        },
+        "621.3": {
+            "class": "600",
+            "subject_fa": "مهندسی برق و الکترونیک",
+            "subject_en": "Electrical engineering"
+        },
+        "630": {
+            "class": "600",
+            "subject_fa": "کشاورزی",
+            "subject_en": "Agriculture"
+        },
+        "640": {
+            "class": "600",
+            "subject_fa": "مدیریت خانه و خانواده",
+            "subject_en": "Home & family management"
+        },
+        "641.5": {
+            "class": "600",
+            "subject_fa": "آشپزی",
+            "subject_en": "Cooking"
+        },
+        "650": {
+            "class": "600",
+            "subject_fa": "مدیریت و کسب‌وکار",
+            "subject_en": "Management & business"
+        },
+        "660": {
+            "class": "600",
+            "subject_fa": "مهندسی شیمی",
+            "subject_en": "Chemical engineering"
+        },
+        "670": {
+            "class": "600",
+            "subject_fa": "ساخت و تولید",
+            "subject_en": "Manufacturing"
+        },
+        "680": {
+            "class": "600",
+            "subject_fa": "تولید برای مصارف خاص",
+            "subject_en": "Manufacture for specific uses"
+        },
+        "690": {
+            "class": "600",
+            "subject_fa": "ساختمان و معماری ساختمان",
+            "subject_en": "Building & construction"
+        },
+        "700": {
+            "class": "700",
+            "subject_fa": "هنر",
+            "subject_en": "The Arts"
+        },
+        "710": {
+            "class": "700",
+            "subject_fa": "محوطه‌سازی و برنامه‌ریزی منطقه‌ای",
+            "subject_en": "Landscaping & area planning"
+        },
+        "720": {
+            "class": "700",
+            "subject_fa": "معماری",
+            "subject_en": "Architecture"
+        },
+        "730": {
+            "class": "700",
+            "subject_fa": "مجسمه‌سازی، سرامیک و فلزکاری",
+            "subject_en": "Sculpture, ceramics & metalwork"
+        },
+        "740": {
+            "class": "700",
+            "subject_fa": "طراحی و هنرهای تزئینی",
+            "subject_en": "Drawing & decorative arts"
+        },
+        "750": {
+            "class": "700",
+            "subject_fa": "نقاشی",
+            "subject_en": "Painting"
+        },
+        "760": {
+            "class": "700",
+            "subject_fa": "هنرهای گرافیک و چاپ",
+            "subject_en": "Graphic arts"
+        },
+        "770": {
+            "class": "700",
+            "subject_fa": "عکاسی و هنرهای رایانه‌ای",
+            "subject_en": "Photography & computer art"
+        },
+        "780": {
+            "class": "700",
+            "subject_fa": "موسیقی",
+            "subject_en": "Music"
+        },
+        "790": {
+            "class": "700",
+            "subject_fa": "ورزش، بازی و سرگرمی",
+            "subject_en": "Sports, games & entertainment"
+        },
+        "800": {
+            "class": "800",
+            "subject_fa": "ادبیات",
+            "subject_en": "Literature"
+        },
+        "810": {
+            "class": "800",
+            "subject_fa": "ادبیات آمریکایی",
+            "subject_en": "American literature"
+        },
+        "820": {
+            "class": "800",
+            "subject_fa": "ادبیات انگلیسی",
+            "subject_en": "English literature"
+        },
+        "830": {
+            "class": "800",
+            "subject_fa": "ادبیات آلمانی",
+            "subject_en": "German & related literatures"
+        },
+        "840": {
+            "class": "800",
+            "subject_fa": "ادبیات فرانسوی",
+            "subject_en": "French & related literatures"
+        },
+        "850": {
+            "class": "800",
+            "subject_fa": "ادبیات ایتالیایی",
+            "subject_en": "Italian, Romanian & related literatures"
+        },
+        "860": {
+            "class": "800",
+            "subject_fa": "ادبیات اسپانیایی",
+            "subject_en": "Spanish, Portuguese, Galician literatures"
+        },
+        "870": {
+            "class": "800",
+            "subject_fa": "ادبیات لاتین",
+            "subject_en": "Latin & Italic literatures"
+        },
+        "880": {
+            "class": "800",
+            "subject_fa": "ادبیات یونانی",
+            "subject_en": "Classical & modern Greek literatures"
+        },
+        "890": {
+            "class": "800",
+            "subject_fa": "سایر ادبیات‌ها",
+            "subject_en": "Other literatures"
+        },
+        "891.55": {
+            "class": "800",
+            "subject_fa": "ادبیات فارسی",
+            "subject_en": "Persian literature"
+        },
+        "900": {
+            "class": "900",
+            "subject_fa": "تاریخ و جغرافیا",
+            "subject_en": "History & geography"
+        },
+        "910": {
+            "class": "900",
+            "subject_fa": "جغرافیا و جهانگردی",
+            "subject_en": "Geography & travel"
+        },
+        "920": {
+            "class": "900",
+            "subject_fa": "زندگینامه و شجره‌نامه",
+            "subject_en": "Biography & genealogy"
+        },
+        "930": {
+            "class": "900",
+            "subject_fa": "تاریخ دنیای باستان و باستان‌شناسی",
+            "subject_en": "History of ancient world & archaeology"
+        },
+        "940": {
+            "class": "900",
+            "subject_fa": "تاریخ اروپا",
+            "subject_en": "History of Europe"
+        },
+        "950": {
+            "class": "900",
+            "subject_fa": "تاریخ آسیا",
+            "subject_en": "History of Asia"
+        },
+        "960": {
+            "class": "900",
+            "subject_fa": "تاریخ آفریقا",
+            "subject_en": "History of Africa"
+        },
+        "970": {
+            "class": "900",
+            "subject_fa": "تاریخ آمریکای شمالی",
+            "subject_en": "History of North America"
+        },
+        "980": {
+            "class": "900",
+            "subject_fa": "تاریخ آمریکای جنوبی",
+            "subject_en": "History of South America"
+        },
+        "990": {
+            "class": "900",
+            "subject_fa": "تاریخ سایر مناطق",
+            "subject_en": "History of other areas"
+        },
+        "955": {
+            "class": "900",
+            "subject_fa": "تاریخ ایران",
+            "subject_en": "History of Iran"
+        }
     }
-  },
-  "subdivisions": {
-    "004": {
-      "class": "000",
-      "subject_fa": "علوم کامپیوتر و پردازش داده",
-      "subject_en": "Computer science & data processing"
-    },
-    "005": {
-      "class": "000",
-      "subject_fa": "برنامه‌نویسی و نرم‌افزار",
-      "subject_en": "Computer programming & software"
-    },
-    "006": {
-      "class": "000",
-      "subject_fa": "هوش مصنوعی و رسانه‌های دیجیتال",
-      "subject_en": "Artificial intelligence & digital media"
-    },
-    "020": {
-      "class": "000",
-      "subject_fa": "کتابداری و علوم اطلاعات",
-      "subject_en": "Library & information sciences"
-    },
-    "070": {
-      "class": "000",
-      "subject_fa": "روزنامه‌نگاری و رسانه",
-      "subject_en": "Journalism & news media"
-    },
-    "100": {
-      "class": "100",
-      "subject_fa": "فلسفه",
-      "subject_en": "Philosophy"
-    },
-    "150": {
-      "class": "100",
-      "subject_fa": "روان‌شناسی",
-      "subject_en": "Psychology"
-    },
-    "160": {
-      "class": "100",
-      "subject_fa": "منطق",
-      "subject_en": "Logic"
-    },
-    "170": {
-      "class": "100",
-      "subject_fa": "اخلاق",
-      "subject_en": "Ethics"
-    },
-    "200": {
-      "class": "200",
-      "subject_fa": "دین",
-      "subject_en": "Religion"
-    },
-    "297": {
-      "class": "200",
-      "subject_fa": "اسلام و علوم قرآنی",
-      "subject_en": "Islam"
-    },
-    "300": {
-      "class": "300",
-      "subject_fa": "علوم اجتماعی",
-      "subject_en": "Social sciences"
-    },
-    "320": {
-      "class": "300",
-      "subject_fa": "علوم سیاسی",
-      "subject_en": "Political science"
-    },
-    "330": {
-      "class": "300",
-      "subject_fa": "اقتصاد",
-      "subject_en": "Economics"
-    },
-    "340": {
-      "class": "300",
-      "subject_fa": "حقوق",
-      "subject_en": "Law"
-    },
-    "370": {
-      "class": "300",
-      "subject_fa": "آموزش و پرورش",
-      "subject_en": "Education"
-    },
-    "400": {
-      "class": "400",
-      "subject_fa": "زبان",
-      "subject_en": "Language"
-    },
-    "410": {
-      "class": "400",
-      "subject_fa": "زبان‌شناسی",
-      "subject_en": "Linguistics"
-    },
-    "420": {
-      "class": "400",
-      "subject_fa": "زبان انگلیسی",
-      "subject_en": "English language"
-    },
-    "491.55": {
-      "class": "400",
-      "subject_fa": "زبان فارسی",
-      "subject_en": "Persian language"
-    },
-    "492.7": {
-      "class": "400",
-      "subject_fa": "زبان عربی",
-      "subject_en": "Arabic language"
-    },
-    "500": {
-      "class": "500",
-      "subject_fa": "علوم طبیعی و ریاضی",
-      "subject_en": "Science"
-    },
-    "510": {
-      "class": "500",
-      "subject_fa": "ریاضیات",
-      "subject_en": "Mathematics"
-    },
-    "519.5": {
-      "class": "500",
-      "subject_fa": "آمار ریاضی",
-      "subject_en": "Mathematical statistics"
-    },
-    "520": {
-      "class": "500",
-      "subject_fa": "نجوم و کیهان‌شناسی",
-      "subject_en": "Astronomy"
-    },
-    "530": {
-      "class": "500",
-      "subject_fa": "فیزیک",
-      "subject_en": "Physics"
-    },
-    "540": {
-      "class": "500",
-      "subject_fa": "شیمی",
-      "subject_en": "Chemistry"
-    },
-    "550": {
-      "class": "500",
-      "subject_fa": "علوم زمین و زمین‌شناسی",
-      "subject_en": "Earth sciences"
-    },
-    "560": {
-      "class": "500",
-      "subject_fa": "دیرین‌شناسی",
-      "subject_en": "Paleontology"
-    },
-    "570": {
-      "class": "500",
-      "subject_fa": "زیست‌شناسی",
-      "subject_en": "Biology"
-    },
-    "580": {
-      "class": "500",
-      "subject_fa": "گیاه‌شناسی",
-      "subject_en": "Botany"
-    },
-    "590": {
-      "class": "500",
-      "subject_fa": "جانورشناسی",
-      "subject_en": "Zoology"
-    },
-    "600": {
-      "class": "600",
-      "subject_fa": "فناوری و علوم کاربردی",
-      "subject_en": "Technology"
-    },
-    "610": {
-      "class": "600",
-      "subject_fa": "پزشکی و سلامت",
-      "subject_en": "Medicine & health"
-    },
-    "620": {
-      "class": "600",
-      "subject_fa": "مهندسی",
-      "subject_en": "Engineering"
-    },
-    "621.3": {
-      "class": "600",
-      "subject_fa": "مهندسی برق و الکترونیک",
-      "subject_en": "Electrical engineering"
-    },
-    "630": {
-      "class": "600",
-      "subject_fa": "کشاورزی",
-      "subject_en": "Agriculture"
-    },
-    "641.5": {
-      "class": "600",
-      "subject_fa": "آشپزی",
-      "subject_en": "Cooking"
-    },
-    "650": {
-      "class": "600",
-      "subject_fa": "مدیریت و کسب‌وکار",
-      "subject_en": "Management & business"
-    },
-    "700": {
-      "class": "700",
-      "subject_fa": "هنر",
-      "subject_en": "The Arts"
-    },
-    "720": {
-      "class": "700",
-      "subject_fa": "معماری",
-      "subject_en": "Architecture"
-    },
-    "750": {
-      "class": "700",
-      "subject_fa": "نقاشی",
-      "subject_en": "Painting"
-    },
-    "770": {
-      "class": "700",
-      "subject_fa": "عکاسی",
-      "subject_en": "Photography"
-    },
-    "780": {
-      "class": "700",
-      "subject_fa": "موسیقی",
-      "subject_en": "Music"
-    },
-    "790": {
-      "class": "700",
-      "subject_fa": "ورزش و سرگرمی",
-      "subject_en": "Sports & recreation"
-    },
-    "800": {
-      "class": "800",
-      "subject_fa": "ادبیات",
-      "subject_en": "Literature"
-    },
-    "810": {
-      "class": "800",
-      "subject_fa": "ادبیات آمریکایی",
-      "subject_en": "American literature"
-    },
-    "820": {
-      "class": "800",
-      "subject_fa": "ادبیات انگلیسی",
-      "subject_en": "English literature"
-    },
-    "891.55": {
-      "class": "800",
-      "subject_fa": "ادبیات فارسی",
-      "subject_en": "Persian literature"
-    },
-    "900": {
-      "class": "900",
-      "subject_fa": "تاریخ و جغرافیا",
-      "subject_en": "History & geography"
-    },
-    "910": {
-      "class": "900",
-      "subject_fa": "جغرافیا و جهانگردی",
-      "subject_en": "Geography & travel"
-    },
-    "920": {
-      "class": "900",
-      "subject_fa": "زندگینامه",
-      "subject_en": "Biography"
-    },
-    "955": {
-      "class": "900",
-      "subject_fa": "تاریخ ایران",
-      "subject_en": "History of Iran"
-    }
-  },
-  "subject_to_ddc": {
-    "mathematics": "510",
-    "math": "510",
-    "maths": "510",
-    "ریاضی": "510",
-    "ریاضیات": "510",
-    "ریاضی دان": "510",
-    "حساب": "510",
-    "هندسه": "510",
-    "جبر": "510",
-    "حسابان": "510",
-    "دیفرانسیل": "510",
-    "آمار": "519.5",
-    "statistics": "519.5",
-    "probability": "519.5",
-    "احتمالات": "519.5",
-    "physics": "530",
-    "فیزیک": "530",
-    "مکانیک کوانتومی": "530",
-    "quantum mechanics": "530",
-    "الکترومغناطیس": "530",
-    "ترمودینامیک": "530",
-    "فیزیک مدرن": "530",
-    "فیزیک پایه": "530",
-    "chemistry": "540",
-    "شیمی": "540",
-    "شیمی آلی": "540",
-    "شیمی معدنی": "540",
-    "شیمی تجزیه": "540",
-    "شیمی فیزیک": "540",
-    "biology": "570",
-    "زیست": "570",
-    "زیست شناسی": "570",
-    "ژنتیک": "570",
-    "genetics": "570",
-    "میکروبیولوژی": "570",
-    "سلولی و مولکولی": "570",
-    "astronomy": "520",
-    "نجوم": "520",
-    "اخترشناسی": "520",
-    "ستاره شناسی": "520",
-    "کیهان شناسی": "520",
-    "earth science": "550",
-    "earth sciences": "550",
-    "geology": "550",
-    "زمین شناسی": "550",
-    "هواشناسی": "550",
-    "paleontology": "560",
-    "دیرین شناسی": "560",
-    "فسیل": "560",
-    "botany": "580",
-    "گیاه شناسی": "580",
-    "گیاهان": "580",
-    "zoology": "590",
-    "جانور شناسی": "590",
-    "حیوانات": "590",
-    "حیات وحش": "590",
-    "computer science": "004",
-    "علوم کامپیوتر": "004",
-    "کامپیوتر": "004",
-    "علوم رایانه": "004",
-    "انفورماتیک": "004",
-    "رایانه": "004",
-    "شبکه های کامپیوتری": "004",
-    "computer networking": "004",
-    "پایگاه داده": "005",
-    "database": "005",
-    "programming": "005",
-    "computer programming": "005",
-    "برنامه نویسی": "005",
-    "کدنویسی": "005",
-    "coding": "005",
-    "software": "005",
-    "نرم افزار": "005",
-    "مهندسی نرم افزار": "005",
-    "software engineering": "005",
-    "python": "005",
-    "پایتون": "005",
-    "java": "005",
-    "جاوا": "005",
-    "javascript": "005",
-    "جاوا اسکریپت": "005",
-    "c++": "005",
-    "سی پلاس پلاس": "005",
-    "الگوریتم": "005",
-    "algorithms": "005",
-    "طراحی الگوریتم": "005",
-    "artificial intelligence": "006",
-    "هوش مصنوعی": "006",
-    "machine learning": "006",
-    "یادگیری ماشین": "006",
-    "deep learning": "006",
-    "یادگیری عمیق": "006",
-    "library science": "020",
-    "کتابداری": "020",
-    "journalism": "070",
-    "روزنامه نگاری": "070",
-    "خبرنگاری": "070",
-    "مطبوعات": "070",
-    "psychology": "150",
-    "روانشناسی": "150",
-    "روانکاوی": "150",
-    "روان شناختی": "150",
-    "موفقیت": "150",
-    "انگیزشی": "150",
-    "رشد فردی": "150",
-    "خودشناسی": "150",
-    "philosophy": "100",
-    "فلسفه": "100",
-    "فلسفی": "100",
-    "logic": "160",
-    "منطق": "160",
-    "ethics": "170",
-    "اخلاق": "170",
-    "فلسفه اخلاق": "170",
-    "religion": "200",
-    "دین": "200",
-    "ادیان": "200",
-    "دینی": "200",
-    "مذهب": "200",
-    "الهیات": "200",
-    "islam": "297",
-    "اسلام": "297",
-    "اسلامی": "297",
-    "قرآن": "297",
-    "علوم قرآنی": "297",
-    "تفسیر قرآن": "297",
-    "نهج البلاغه": "297",
-    "صحیفه سجادیه": "297",
-    "حدیث": "297",
-    "احادیث": "297",
-    "فقه": "297",
-    "اصول فقه": "297",
-    "کلام": "297",
-    "شیعه": "297",
-    "اهل بیت": "297",
-    "social sciences": "300",
-    "علوم اجتماعی": "300",
-    "sociology": "300",
-    "جامعه شناسی": "300",
-    "جامعه": "300",
-    "political science": "320",
-    "politics": "320",
-    "علوم سیاسی": "320",
-    "سیاست": "320",
-    "روابط بین الملل": "320",
-    "دیپلماسی": "320",
-    "economics": "330",
-    "economy": "330",
-    "اقتصاد": "330",
-    "مالی": "330",
-    "بانکداری": "330",
-    "سرمایه گذاری": "330",
-    "بورس": "330",
-    "law": "340",
-    "حقوق": "340",
-    "قانون": "340",
-    "قضا": "340",
-    "وکالت": "340",
-    "حقوق جزا": "340",
-    "حقوق مدنی": "340",
-    "حقوق تجارت": "340",
-    "education": "370",
-    "آموزش": "370",
-    "آموزش و پرورش": "370",
-    "تعلیم و تربیت": "370",
-    "تدریس": "370",
-    "پداگوژی": "370",
-    "language": "400",
-    "languages": "400",
-    "زبان": "400",
-    "linguistics": "410",
-    "زبان شناسی": "410",
-    "دستور زبان": "410",
-    "گرامر": "410",
-    "لغت نامه": "410",
-    "فرهنگ لغت": "410",
-    "dictionary": "410",
-    "english": "420",
-    "زبان انگلیسی": "420",
-    "انگلیسی": "420",
-    "آموزش زبان انگلیسی": "420",
-    "persian language": "491.55",
-    "زبان فارسی": "491.55",
-    "فارسی": "491.55",
-    "ادبیات فارسی": "891.55",
-    "persian literature": "891.55",
-    "شعر فارسی": "891.55",
-    "داستان فارسی": "891.55",
-    "رمان فارسی": "891.55",
-    "شاهنامه": "891.55",
-    "حافظ": "891.55",
-    "سعدی": "891.55",
-    "مولوی": "891.55",
-    "فردوسی": "891.55",
-    "خیام": "891.55",
-    "نظامی": "891.55",
-    "عطار": "891.55",
-    "سهراب سپهری": "891.55",
-    "نیما یوشیج": "891.55",
-    "پروین اعتصامی": "891.55",
-    "arabic language": "492.7",
-    "زبان عربی": "492.7",
-    "عربی": "492.7",
-    "technology": "600",
-    "فناوری": "600",
-    "تکنولوژی": "600",
-    "engineering": "620",
-    "مهندسی": "620",
-    "مهندسی مکانیک": "620",
-    "مهندسی عمران": "620",
-    "مهندسی شیمی": "620",
-    "مهندسی صنایع": "620",
-    "electrical engineering": "621.3",
-    "مهندسی برق": "621.3",
-    "الکترونیک": "621.3",
-    "مخابرات": "621.3",
-    "medicine": "610",
-    "medical": "610",
-    "پزشکی": "610",
-    "سلامت": "610",
-    "بهداشت": "610",
-    "داروسازی": "610",
-    "دارو": "610",
-    "پرستاری": "610",
-    "بیماری": "610",
-    "آناتومی": "610",
-    "فیزیولوژی": "610",
-    "طب سنتی": "610",
-    "agriculture": "630",
-    "کشاورزی": "630",
-    "باغداری": "630",
-    "دامداری": "630",
-    "cooking": "641.5",
-    "cookery": "641.5",
-    "culinary": "641.5",
-    "آشپزی": "641.5",
-    "دستور پخت": "641.5",
-    "شیرینی پزی": "641.5",
-    "غذا": "641.5",
-    "management": "650",
-    "مدیریت": "650",
-    "کسب و کار": "650",
-    "کارآفرینی": "650",
-    "business": "650",
-    "marketing": "650",
-    "بازاریابی": "650",
-    "accounting": "650",
-    "حسابداری": "650",
-    "تبلیغات": "650",
-    "art": "700",
-    "arts": "700",
-    "هنر": "700",
-    "هنرها": "700",
-    "هنری": "700",
-    "architecture": "720",
-    "معماری": "720",
-    "طراحی معماری": "720",
-    "painting": "750",
-    "نقاشی": "750",
-    "طراحی": "750",
-    "photography": "770",
-    "عکاسی": "770",
-    "music": "780",
-    "موسیقی": "780",
-    "آهنگ": "780",
-    "ساز": "780",
-    "تئوری موسیقی": "780",
-    "sports": "790",
-    "sport": "790",
-    "ورزش": "790",
-    "تربیت بدنی": "790",
-    "فوتبال": "790",
-    "شنا": "790",
-    "سینما": "790",
-    "cinema": "790",
-    "تئاتر": "790",
-    "film": "790",
-    "literature": "800",
-    "ادبیات": "800",
-    "ادبی": "800",
-    "داستان": "800",
-    "داستان کوتاه": "800",
-    "رمان": "800",
-    "novel": "800",
-    "fiction": "800",
-    "poetry": "800",
-    "شعر": "800",
-    "مجموعه شعر": "800",
-    "نمایشنامه": "800",
-    "history": "900",
-    "تاریخ": "900",
-    "تاریخی": "900",
-    "تاریخ جهان": "900",
-    "world history": "900",
-    "تاریخ اسلام": "900",
-    "تاریخ معاصر": "900",
-    "تاریخ کهن": "900",
-    "history of iran": "955",
-    "تاریخ ایران": "955",
-    "ایران باستان": "955",
-    "قاجار": "955",
-    "پهلوی": "955",
-    "صفویه": "955",
-    "ساسانیان": "955",
-    "هخامنشیان": "955",
-    "geography": "910",
-    "جغرافیا": "910",
-    "گردشگری": "910",
-    "سفرنامه": "910",
-    "اطلس": "910",
-    "biography": "920",
-    "زندگینامه": "920",
-    "خاطرات": "920",
-    "شرح حال": "920",
-    "سرگذشت": "920"
-  }
 }

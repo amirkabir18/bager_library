@@ -730,7 +730,7 @@ def rebuild_tabs():
         )
         tabs_config = [
             ("login", "ورود به سامانه", "ورود", "user-plus"),
-            ("help", "راهنما و درباره", "راهنما", "bookmark"),
+            ("help", "راهنما", "راهنما", "bookmark"),
         ]
         default_tab = "login"
     else:
@@ -768,7 +768,7 @@ def rebuild_tabs():
         tabs_config.extend(
             [
                 ("settings", "تنظیمات و اعلان‌ها", "تنظیمات", "filter"),
-                ("help", "راهنما و درباره", "راهنما", "bookmark"),
+                ("help", "راهنما", "راهنما", "bookmark"),
             ]
         )
         default_tab = "books"
@@ -1725,12 +1725,11 @@ def open_add_book_popup():
     )
     ent_author.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
-    # Auto classify button
+    # Auto classify button (shown only if system has internet access)
     row_ai = ctk.CTkFrame(form_f, fg_color="transparent")
-    row_ai.pack(fill=tk.X, pady=(3, 5))
     btn_auto_ddc = create_icon_button(
         row_ai,
-        text=" پیشنهاد رده دیویی بر اساس عنوان ",
+        text=" پیشنهاد هوشمند رده دیویی با هوش مصنوعی ",
         icon_name="zap",
         font=FONT_NORMAL,
         height=30,
@@ -1775,6 +1774,18 @@ def open_add_book_popup():
     status_lbl.pack(fill=tk.X, pady=(1, 3))
 
     classification_meta = {"source": None, "confidence": 0.0}
+
+    def check_net_for_ai_button():
+        from services.dewey_ai_agent import check_internet_access
+
+        has_net = check_internet_access(timeout=1.2)
+        if has_net:
+            try:
+                popup.after(0, lambda: row_ai.pack(fill=tk.X, pady=(3, 5), before=row_dewey))
+            except Exception:
+                pass
+
+    threading.Thread(target=check_net_for_ai_button, daemon=True).start()
 
     def update_shelf_preview(*args):
         code = ent_dewey.get().strip()
@@ -1851,21 +1862,37 @@ def open_add_book_popup():
             messagebox.showwarning("خطا", "لطفاً ابتدا عنوان کتاب را وارد کنید!", parent=popup)
             ent_title.focus()
             return
-        c_res = dewey_service.classify(title=t, authors=[a] if a else None)
-        if c_res.dewey_code:
-            ent_dewey.delete(0, tk.END)
-            ent_dewey.insert(0, c_res.dewey_code)
-            ent_subject.delete(0, tk.END)
-            ent_subject.insert(0, c_res.dewey_subject or "")
-            classification_meta["source"] = c_res.dewey_source
-            classification_meta["confidence"] = c_res.dewey_confidence
-            update_shelf_preview()
-            status_lbl.configure(
-                text=f"رده پیشنهادی: {c_res.dewey_code} - {c_res.dewey_subject} ({int(c_res.dewey_confidence * 100)} درصد اطمینان)",
-                text_color="#16a34a",
-            )
-        else:
-            status_lbl.configure(text="رده قطعی بر اساس عنوان یافت نشد.", text_color="#d97706")
+        status_lbl.configure(text="در حال استعلام رده دیویی با هوش مصنوعی...", text_color="#38bdf8")
+        popup.update()
+
+        def _worker():
+            try:
+                c_res = book_service.dewey_service.detect_with_ai(title=t, author=a if a else None)
+
+                def _apply():
+                    if c_res and c_res.dewey_code:
+                        ent_dewey.delete(0, tk.END)
+                        ent_dewey.insert(0, c_res.dewey_code)
+                        ent_subject.delete(0, tk.END)
+                        ent_subject.insert(0, c_res.dewey_subject or "")
+                        classification_meta["source"] = c_res.dewey_source
+                        classification_meta["confidence"] = c_res.dewey_confidence
+                        update_shelf_preview()
+                        status_lbl.configure(
+                            text=f"رده پیشنهادی (هوش مصنوعی): {c_res.dewey_code} - {c_res.dewey_subject} ({int(c_res.dewey_confidence * 100)} درصد اطمینان)",
+                            text_color="#16a34a",
+                        )
+                    else:
+                        status_lbl.configure(text="رده قطعی بر اساس عنوان یافت نشد.", text_color="#d97706")
+
+                popup.after(0, _apply)
+            except Exception as ex:
+                err_msg = str(ex)
+                popup.after(
+                    0, lambda msg=err_msg: status_lbl.configure(text=f"خطا در هوش مصنوعی: {msg}", text_color="#ef4444")
+                )
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     btn_auto_ddc.configure(command=do_auto_classify_title)
 
@@ -2009,19 +2036,30 @@ def open_edit_book_popup(book_id: int | None = None):
     ent_i.insert(0, book.get("isbn") or "")
     ent_i.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
-    # Reclassify button
+    # Reclassify button (shown only if system has internet access)
     row_re = ctk.CTkFrame(form_f, fg_color="transparent")
-    row_re.pack(fill=tk.X, pady=(3, 5))
     btn_reclassify_single = create_icon_button(
         row_re,
-        text=" پیشنهاد مجدد رده دیویی بر اساس عنوان ",
-        icon_name="refresh-cw",
+        text=" پیشنهاد مجدد رده دیویی با هوش مصنوعی ",
+        icon_name="zap",
         font=FONT_NORMAL,
         height=30,
         fg_color="#0284c7",
         hover_color="#0369a1",
     )
     btn_reclassify_single.pack(fill=tk.X)
+
+    def check_net_for_reclassify_button():
+        from services.dewey_ai_agent import check_internet_access
+
+        has_net = check_internet_access(timeout=1.2)
+        if has_net:
+            try:
+                popup.after(0, lambda: row_re.pack(fill=tk.X, pady=(3, 5), before=row_d))
+            except Exception:
+                pass
+
+    threading.Thread(target=check_net_for_reclassify_button, daemon=True).start()
 
     # Dewey Code
     row_d = ctk.CTkFrame(form_f, fg_color="transparent")
@@ -2087,18 +2125,35 @@ def open_edit_book_popup(book_id: int | None = None):
     def do_reclassify():
         t = ent_t.get().strip()
         a = ent_a.get().strip()
-        c_res = dewey_service.classify(title=t, authors=[a] if a else None)
-        if c_res.dewey_code:
-            ent_d.delete(0, tk.END)
-            ent_d.insert(0, c_res.dewey_code)
-            ent_s.delete(0, tk.END)
-            ent_s.insert(0, c_res.dewey_subject or "")
-            update_shelf_lbl()
-            new_src_fa = DEWEY_SOURCE_FA.get(str(c_res.dewey_source).lower(), "سیستمی")
-            new_conf = int(c_res.dewey_confidence * 100)
-            meta_lbl.configure(text=f"منبع جدید: {new_src_fa}  |  درجه اطمینان: {new_conf} درصد")
-        else:
-            messagebox.showinfo("رده‌بندی", "رده مشخصی برای این کتاب پیدا نشد.", parent=popup)
+        if not t:
+            messagebox.showwarning("خطا", "لطفاً ابتدا عنوان کتاب را وارد کنید!", parent=popup)
+            return
+
+        def _worker():
+            try:
+                c_res = dewey_service.detect_with_ai(title=t, author=a if a else None)
+
+                def _apply():
+                    if c_res and c_res.dewey_code:
+                        ent_d.delete(0, tk.END)
+                        ent_d.insert(0, c_res.dewey_code)
+                        ent_s.delete(0, tk.END)
+                        ent_s.insert(0, c_res.dewey_subject or "")
+                        update_shelf_lbl()
+                        new_src_fa = DEWEY_SOURCE_FA.get(str(c_res.dewey_source).lower(), "هوش مصنوعی")
+                        new_conf = int(c_res.dewey_confidence * 100)
+                        meta_lbl.configure(text=f"منبع جدید: {new_src_fa}  |  درجه اطمینان: {new_conf} درصد")
+                    else:
+                        messagebox.showinfo("رده‌بندی", "رده مشخصی برای این کتاب پیدا نشد.", parent=popup)
+
+                popup.after(0, _apply)
+            except Exception as ex:
+                err_msg = str(ex)
+                popup.after(
+                    0, lambda msg=err_msg: messagebox.showerror("خطا", f"خطا در هوش مصنوعی: {msg}", parent=popup)
+                )
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     btn_reclassify_single.configure(command=do_reclassify)
 
@@ -4576,6 +4631,9 @@ def save_settings_ui():
             set_setting(conn, "notification_sound", sound_val)
             set_setting(conn, "notification_advance_days", adv_days)
             set_setting(conn, "notification_check_interval_mins", interval)
+            set_setting(conn, "openai_url", entry_ai_url.get().strip())
+            set_setting(conn, "openai_key", entry_ai_key.get().strip())
+            set_setting(conn, "openai_model", entry_ai_model.get().strip())
 
         try:
             reminder_manager.reschedule()
@@ -4650,6 +4708,129 @@ btn_check_now = create_icon_button(
     height=34,
 )
 btn_check_now.pack(side=tk.RIGHT, padx=5)
+
+# --- AI Provider Settings Card ---
+ai_card = ctk.CTkFrame(settings_container, corner_radius=10)
+ai_card.pack(fill=tk.X, pady=(0, 12))
+
+ai_header_row = ctk.CTkFrame(ai_card, fg_color="transparent")
+ai_header_row.pack(fill=tk.X, padx=16, pady=(12, 6))
+
+ctk.CTkLabel(
+    ai_header_row,
+    text=" تنظیمات ارائه‌دهنده هوش مصنوعی (AI Provider) ",
+    font=FONT_HEADER,
+    anchor="e",
+).pack(side=tk.RIGHT)
+
+lbl_ai_status = ctk.CTkLabel(
+    ai_header_row,
+    text="",
+    font=FONT_SMALL,
+    text_color="#38bdf8",
+    anchor="w",
+)
+lbl_ai_status.pack(side=tk.LEFT)
+
+ai_row1 = ctk.CTkFrame(ai_card, fg_color="transparent")
+ai_row1.pack(fill=tk.X, padx=16, pady=4)
+
+ctk.CTkLabel(ai_row1, text="آدرس سرور (Base URL):", font=FONT_NORMAL, width=145, anchor="e").pack(
+    side=tk.RIGHT, padx=(5, 0)
+)
+entry_ai_url = ctk.CTkEntry(
+    ai_row1, font=FONT_NORMAL, justify="left", height=32, placeholder_text="مثال: http://localhost:20128/v1"
+)
+entry_ai_url.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=5)
+
+ai_row2 = ctk.CTkFrame(ai_card, fg_color="transparent")
+ai_row2.pack(fill=tk.X, padx=16, pady=4)
+
+ctk.CTkLabel(ai_row2, text="کلید API (اختیاری):", font=FONT_NORMAL, width=145, anchor="e").pack(
+    side=tk.RIGHT, padx=(5, 0)
+)
+entry_ai_key = ctk.CTkEntry(
+    ai_row2, font=FONT_NORMAL, justify="left", height=32, show="*", placeholder_text="sk-... (در صورت نیاز به کلید)"
+)
+entry_ai_key.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=5)
+
+ai_row3 = ctk.CTkFrame(ai_card, fg_color="transparent")
+ai_row3.pack(fill=tk.X, padx=16, pady=4)
+
+ctk.CTkLabel(ai_row3, text="مدل زبانی (Model):", font=FONT_NORMAL, width=145, anchor="e").pack(
+    side=tk.RIGHT, padx=(5, 0)
+)
+entry_ai_model = ctk.CTkEntry(
+    ai_row3,
+    font=FONT_NORMAL,
+    justify="left",
+    height=32,
+    placeholder_text="مثال: claude-flash-3.6 یا openai/gpt-4o-mini",
+)
+entry_ai_model.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=5)
+
+ai_row4 = ctk.CTkFrame(ai_card, fg_color="transparent")
+ai_row4.pack(fill=tk.X, padx=16, pady=(6, 12))
+
+
+def test_ai_connection_ui():
+    url = entry_ai_url.get().strip() or "http://localhost:20128"
+    key = entry_ai_key.get().strip()
+    lbl_ai_status.configure(text="در حال بررسی اتصال به سرویس هوش مصنوعی...", text_color="#38bdf8")
+
+    def _test():
+        try:
+            from services.dewey_ai_agent import DeweyAIAgent, check_internet_access
+
+            net_ok = check_internet_access()
+            agent = DeweyAIAgent(base_url=url, api_key=key)
+            is_alive = agent.is_available()
+            if is_alive:
+                msg = "اتصال به سرویس هوش مصنوعی برقرار و سرور فعال است."
+                if net_ok:
+                    msg += " (اینترنت متصل است)"
+                root.after(
+                    0,
+                    lambda: (
+                        lbl_ai_status.configure(text=f"🟢 {msg}", text_color="#16a34a"),
+                        messagebox.showinfo("تست اتصال هوش مصنوعی", msg, parent=root),
+                    ),
+                )
+            else:
+                root.after(
+                    0,
+                    lambda: (
+                        lbl_ai_status.configure(text="🔴 سرور هوش مصنوعی در این آدرس پاسخ نداد.", text_color="#dc2626"),
+                        messagebox.showwarning(
+                            "تست اتصال هوش مصنوعی",
+                            "سرور هوش مصنوعی در این آدرس پاسخ نداد. لطفاً از روشن بودن سرور هوش مصنوعی اطمینان حاصل کنید.",
+                            parent=root,
+                        ),
+                    ),
+                )
+        except Exception as ex:
+            err_text = str(ex)
+            root.after(
+                0,
+                lambda msg=err_text: (
+                    lbl_ai_status.configure(text=f"🔴 خطا: {msg}", text_color="#dc2626"),
+                    messagebox.showerror("خطا در تست هوش مصنوعی", msg, parent=root),
+                ),
+            )
+
+    threading.Thread(target=_test, daemon=True).start()
+
+
+btn_test_ai = create_icon_button(
+    ai_row4,
+    text=" تست اتصال به هوش مصنوعی ",
+    icon_name="zap",
+    font=FONT_NORMAL,
+    command=test_ai_connection_ui,
+    width=180,
+    height=32,
+)
+btn_test_ai.pack(side=tk.RIGHT, padx=5)
 
 
 # --- Audit Log Viewer Card ---
@@ -5144,6 +5325,19 @@ def load_settings_into_ui():
             combo_interval.set(inv)
         else:
             combo_interval.set("30")
+
+        r_url = settings.get("openai_url") or "http://localhost:20128"
+        r_key = settings.get("openai_key") or ""
+        r_model = settings.get("openai_model") or "gemini-3.8-flash"
+
+        entry_ai_url.delete(0, tk.END)
+        entry_ai_url.insert(0, r_url)
+
+        entry_ai_key.delete(0, tk.END)
+        entry_ai_key.insert(0, r_key)
+
+        entry_ai_model.delete(0, tk.END)
+        entry_ai_model.insert(0, r_model)
     except Exception:
         pass
 

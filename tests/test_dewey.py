@@ -4,11 +4,19 @@ Persian normalization, DDC validation, sorting, manual overrides,
 reclassification, shelf placement, and backward compatibility.
 """
 
+import json
 import sqlite3
 import unittest
+from unittest.mock import MagicMock, patch
 
 import database
 from services.book_service import BookService
+from services.dewey_ai_agent import (
+    DeweyAIAgent,
+    SearchResult,
+    check_internet_access,
+    get_openai_config,
+)
 from services.dewey_service import (
     DeweyService,
     dewey_sort_key,
@@ -48,11 +56,39 @@ class TestDeweyValidation(unittest.TestCase):
         self.assertIsNone(normalize_dewey_code("invalid"))
 
 
-class TestDeweyMapping(unittest.TestCase):
-    """Test subject-to-DDC mapping (Section 5 & 19)."""
+class TestDeweyClassification(unittest.TestCase):
+    """Test AI Agent classification and direct metadata handling."""
 
     def setUp(self):
-        self.service = DeweyService()
+        self.mock_agent = MagicMock()
+
+        def fake_detect(topic, author=None, description=None, timeout=12.0):
+            mapping = {
+                "mathematics": ("510", "علوم محض", "ریاضیات"),
+                "physics": ("530", "علوم محض", "فیزیک"),
+                "psychology": ("150", "فلسفه و روان‌شناسی", "روان‌شناسی"),
+                "history": ("900", "تاریخ و جغرافیا", "تاریخ"),
+                "programming": ("005", "کلیات و کامپیوتر", "برنامه‌نویسی"),
+                "Python Programming for Beginners": ("005", "کلیات و کامپیوتر", "برنامه‌نویسی"),
+                "Introduction to Quantum Mechanics": ("530", "علوم محض", "فیزیک کوانتوم"),
+            }
+            for k, (code, c_fa, s_fa) in mapping.items():
+                if k.lower() in str(topic).lower():
+                    return SearchResult(
+                        code=code,
+                        class_code=code[:1] + "00",
+                        subject_fa=s_fa,
+                        subject_en=k,
+                        class_fa=c_fa,
+                        class_en=c_fa,
+                        score=0.95,
+                        match_type="ai_agent",
+                        reason=f"Matched {k}",
+                    )
+            return None
+
+        self.mock_agent.detect_ddc.side_effect = fake_detect
+        self.service = DeweyService(ai_agent=self.mock_agent)
 
     def test_standard_subject_mappings(self):
         test_cases = [
@@ -70,14 +106,27 @@ class TestDeweyMapping(unittest.TestCase):
                     expected_code,
                     f"Expected category '{subject}' to map to {expected_code}, got {result.dewey_code}",
                 )
+                self.assertEqual(result.dewey_source, "ai")
 
-    def test_keyword_matching_in_title(self):
+    def test_ai_classification_in_title(self):
         result = self.service.classify(title="Python Programming for Beginners")
         self.assertEqual(result.dewey_code, "005")
-        self.assertEqual(result.dewey_source, "keyword")
+        self.assertEqual(result.dewey_source, "ai")
 
         result2 = self.service.classify(title="Introduction to Quantum Mechanics")
         self.assertEqual(result2.dewey_code, "530")
+        self.assertEqual(result2.dewey_source, "ai")
+
+    def test_direct_api_metadata_priority(self):
+        result = self.service.classify(title="Any title", existing_dewey="510")
+        self.assertEqual(result.dewey_code, "510")
+        self.assertEqual(result.dewey_source, "api")
+        self.mock_agent.detect_ddc.assert_not_called()
+
+    def test_unclassified_fallback(self):
+        result = self.service.classify(title="unknown random 12345")
+        self.assertIsNone(result.dewey_code)
+        self.assertEqual(result.dewey_source, "unknown")
 
 
 class TestPersianNormalization(unittest.TestCase):
@@ -97,16 +146,10 @@ class TestPersianNormalization(unittest.TestCase):
         s2 = normalize_persian("روان شناسی")
         self.assertEqual(s1, s2)
 
-    def test_persian_variants_produce_same_classification(self):
-        # ریاضی, رياضيات, ریاضیات must yield the exact same classification
-        variants = ["ریاضی", "رياضيات", "ریاضیات"]
-        codes = []
-        for v in variants:
-            res = self.service.classify(title=v)
-            codes.append(res.dewey_code)
-
-        self.assertEqual(len(set(codes)), 1, f"Variants {variants} produced different codes: {codes}")
-        self.assertEqual(codes[0], "510")
+    def test_persian_variants_produce_consistent_normalization(self):
+        self.assertEqual(normalize_persian("رياضيات"), "ریاضیات")
+        self.assertEqual(normalize_persian("فيزيك"), "فیزیک")
+        self.assertEqual(normalize_persian("كتاب"), "کتاب")
 
 
 class TestDeweySorting(unittest.TestCase):
@@ -159,7 +202,38 @@ class TestManualOverrideAndReclassification(unittest.TestCase):
     def setUp(self):
         self.conn = sqlite3.connect(":memory:")
         database.init_database(self.conn)
-        self.book_service = BookService()
+        self.mock_agent = MagicMock()
+
+        def fake_detect(topic, author=None, description=None, timeout=12.0):
+            if "فیزیک" in str(topic):
+                return SearchResult(
+                    code="530",
+                    class_code="500",
+                    subject_fa="فیزیک",
+                    subject_en="Physics",
+                    class_fa="علوم محض و طبیعی",
+                    class_en="Science",
+                    score=0.95,
+                    match_type="ai_agent",
+                    reason="فیزیک",
+                )
+            if "ریاضی" in str(topic):
+                return SearchResult(
+                    code="510",
+                    class_code="500",
+                    subject_fa="ریاضیات",
+                    subject_en="Mathematics",
+                    class_fa="علوم محض و طبیعی",
+                    class_en="Science",
+                    score=0.95,
+                    match_type="ai_agent",
+                    reason="ریاضیات",
+                )
+            return None
+
+        self.mock_agent.detect_ddc.side_effect = fake_detect
+        self.dewey_service = DeweyService(ai_agent=self.mock_agent)
+        self.book_service = BookService(dewey_service=self.dewey_service)
 
     def tearDown(self):
         self.conn.close()
@@ -308,3 +382,137 @@ class TestISBNService(unittest.TestCase):
         # Invalid ISBN
         self.assertFalse(is_valid_isbn("978-0-306-40615-9"))
         self.assertFalse(is_valid_isbn("123"))
+
+
+class TestDeweyAIAgent(unittest.TestCase):
+    """Test AI Agent for DDC detection using openai package."""
+
+    def test_internet_access_check(self):
+        # Result should be a boolean without throwing exception
+        res = check_internet_access(timeout=0.5)
+        self.assertIsInstance(res, bool)
+
+    def test_get_openai_config(self):
+        url, key, model = get_openai_config()
+        self.assertTrue(url.startswith("http://") or url.startswith("https://"))
+        self.assertIsInstance(key, str)
+        self.assertIsInstance(model, str)
+
+    def test_ai_agent_is_available(self):
+        agent = DeweyAIAgent(base_url="http://localhost:20128", api_key="sk-test")
+        with patch.object(agent, "_get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.models.list.return_value = MagicMock()
+            mock_get_client.return_value = mock_client
+            self.assertTrue(agent.is_available())
+
+    @patch("services.dewey_ai_agent.check_internet_access", return_value=True)
+    def test_ai_agent_detection_success(self, mock_net):
+        mock_choice = MagicMock()
+        mock_choice.message.content = json.dumps(
+            {
+                "dewey_code": "530.12",
+                "dewey_class": "علوم محض و فیزیک",
+                "dewey_subject": "مکانیک کوانتومی",
+                "confidence": 0.96,
+                "reason": "کتاب تخصصی فیزیک کوانتومی",
+            }
+        )
+        mock_response = MagicMock(choices=[mock_choice])
+
+        agent = DeweyAIAgent(base_url="http://localhost:20128", api_key="sk-test", model="claude-flash-3.6")
+        with patch.object(agent, "_get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_response
+            mock_get_client.return_value = mock_client
+
+            res = agent.detect_ddc("مکانیک کوانتومی ساکورایی")
+
+        self.assertIsNotNone(res)
+        self.assertIsInstance(res, SearchResult)
+        self.assertEqual(res.code, "530.12")
+        self.assertEqual(res.subject_fa, "مکانیک کوانتومی")
+        self.assertEqual(res.match_type, "ai_agent")
+        self.assertEqual(res.score, 0.96)
+
+    @patch("services.dewey_ai_agent.check_internet_access", return_value=True)
+    def test_ai_agent_invalid_code_rejection(self, mock_net):
+        mock_choice = MagicMock()
+        mock_choice.message.content = json.dumps(
+            {
+                "dewey_code": "invalid_99999",
+                "dewey_class": "تست",
+                "dewey_subject": "تست",
+            }
+        )
+        mock_response = MagicMock(choices=[mock_choice])
+
+        agent = DeweyAIAgent(base_url="http://localhost:20128")
+        with patch.object(agent, "_get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_response
+            mock_get_client.return_value = mock_client
+
+            res = agent.detect_ddc("کتاب تستی")
+        self.assertIsNone(res, "Invalid DDC code from LLM must be rejected")
+
+    @patch("services.dewey_ai_agent.check_internet_access", return_value=False)
+    def test_ai_agent_skips_when_offline(self, mock_net):
+        agent = DeweyAIAgent(base_url="http://localhost:20128")
+        res = agent.detect_ddc("فیزیک")
+        self.assertIsNone(res, "When offline, detect_ddc should return None without error")
+
+    @patch("services.dewey_ai_agent.check_internet_access", return_value=True)
+    def test_service_detect_with_ai(self, mock_net):
+        mock_choice = MagicMock()
+        mock_choice.message.content = json.dumps(
+            {
+                "dewey_code": "005.133",
+                "dewey_class": "علوم کامپیوتر و برنامه‌نویسی",
+                "dewey_subject": "زبان برنامه‌نویسی پایتون",
+                "confidence": 0.94,
+                "reason": "آموزش پایتون پیشرفته",
+            }
+        )
+        mock_response = MagicMock(choices=[mock_choice])
+
+        service = DeweyService()
+        agent = service.get_ai_agent()
+        with patch.object(agent, "_get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_response
+            mock_get_client.return_value = mock_client
+
+            ai_res = service.detect_with_ai("آموزش حرفه‌ای زبان برنامه‌نویسی پایتون")
+        self.assertIsNotNone(ai_res)
+        self.assertEqual(ai_res.dewey_code, "005.133")
+        self.assertEqual(ai_res.dewey_source, "ai")
+
+    @patch("services.dewey_ai_agent.check_internet_access", return_value=True)
+    def test_service_search_and_detect_subject_with_ai(self, mock_net):
+        mock_choice = MagicMock()
+        mock_choice.message.content = json.dumps(
+            {
+                "dewey_code": "510",
+                "dewey_class": "علوم محض",
+                "dewey_subject": "ریاضیات",
+                "confidence": 0.95,
+                "reason": "موضوع ریاضی",
+            }
+        )
+        mock_response = MagicMock(choices=[mock_choice])
+
+        service = DeweyService()
+        agent = service.get_ai_agent()
+        with patch.object(agent, "_get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_response
+            mock_get_client.return_value = mock_client
+
+            results = service.search_subject("ریاضیات", limit=3)
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0].code, "510")
+
+            detected = service.detect_subject("ریاضیات", threshold=0.80)
+            self.assertIsNotNone(detected)
+            self.assertEqual(detected.code, "510")

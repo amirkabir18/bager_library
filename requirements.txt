@@ -1,5 +1,6 @@
 customtkinter>=6.0.0
 jdatetime
+openai>=1.0.0
 pillow>=10.0.0
 python-dotenv
 winotify
