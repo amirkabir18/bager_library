@@ -735,7 +735,7 @@ def create_date_picker_button(
 
     btn = ctk.CTkButton(
         parent,
-        text="" if cal_icon else "📅",
+        text="" if cal_icon else "انتخاب",
         image=cal_icon,
         width=width,
         height=height,

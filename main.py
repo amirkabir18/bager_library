@@ -483,7 +483,9 @@ def open_user_profile_popover():
     name_row.pack(fill=tk.X)
     ctk.CTkLabel(
         name_row,
-        text=f"👤  {u_name}",
+        text=f"  {u_name}",
+        image=get_icon("user"),
+        compound="right",
         font=FONT_HEADER,
         text_color=("#0f172a", "#f8fafc"),
         anchor="e",
@@ -504,18 +506,23 @@ def open_user_profile_popover():
     role_pill.pack(side=tk.RIGHT, padx=(0, 6))
 
     if is_active in (1, "1", True):
-        status_text = "🟢 حساب فعال"
+        status_text = "حساب فعال"
         st_color = ("#15803d", "#34d399")
+        st_bg = ("#dcfce7", "#064e3b")
     else:
-        status_text = "🔴 غیرفعال"
+        status_text = "غیرفعال"
         st_color = ("#dc2626", "#f87171")
+        st_bg = ("#fee2e2", "#450a0a")
 
     ctk.CTkLabel(
         badge_row,
-        text=status_text,
+        text=f" {status_text} ",
         font=FONT_SMALL,
         text_color=st_color,
-        anchor="w",
+        fg_color=st_bg,
+        corner_radius=6,
+        height=22,
+        anchor="center",
     ).pack(side=tk.LEFT)
 
     ctk.CTkFrame(card, height=1, fg_color=("#e2e8f0", "#334155")).pack(fill=tk.X, padx=14, pady=(4, 6))
@@ -598,6 +605,7 @@ def open_user_profile_popover():
     edit_account_btn = ctk.CTkButton(
         card,
         text=" ویرایش مشخصات من ",
+        image=get_icon("user", white_only=True),
         compound="right",
         font=FONT_NORMAL,
         height=32,
@@ -851,7 +859,7 @@ rebuild_tabs()
 def open_edit_my_account_popup(user):
     popup = ctk.CTkToplevel(root)
     popup.title("ویرایش مشخصات حساب کاربری")
-    popup.geometry("440x460")
+    popup.geometry("480x570")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -867,73 +875,240 @@ def open_edit_my_account_popup(user):
     ry = root.winfo_rooty()
     rw = root.winfo_width()
     rh = root.winfo_height()
-    px = max(50, rx + (rw - 440) // 2)
-    py = max(50, ry + (rh - 460) // 2)
+    px = max(50, rx + (rw - 480) // 2)
+    py = max(50, ry + (rh - 570) // 2)
     popup.geometry(f"+{px}+{py}")
 
-    ctk.CTkLabel(popup, text="ویرایش مشخصات حساب من", font=FONT_TITLE).pack(pady=(16, 12))
+    # Header
+    header_f = ctk.CTkFrame(popup, fg_color="transparent")
+    header_f.pack(fill=tk.X, padx=20, pady=(14, 6))
+    ctk.CTkLabel(header_f, text="ویرایش مشخصات حساب من", font=FONT_TITLE, anchor="center").pack(fill=tk.X)
+    ctk.CTkLabel(
+        header_f,
+        text="مشاهده شناسه‌های ورود و ویرایش اطلاعات شخصی حساب کاربری",
+        font=FONT_SMALL,
+        text_color="#94a3b8",
+        anchor="center",
+    ).pack(fill=tk.X, pady=(2, 0))
 
-    r1 = ctk.CTkFrame(popup, fg_color="transparent")
-    r1.pack(fill=tk.X, padx=25, pady=4)
-    ctk.CTkLabel(r1, text="نام کاربری:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
-    u_name_ent = ctk.CTkEntry(r1, font=FONT_NORMAL, justify="right", height=32)
-    u_name_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-    u_name_ent.insert(0, user.get("username", ""))
-    u_name_ent.configure(state="disabled")
+    # --- Section 1: Read-only Identity Card ---
+    card_id = ctk.CTkFrame(
+        popup,
+        corner_radius=10,
+        border_width=1,
+        border_color=("#cbd5e1", "#334155"),
+        fg_color=("#f8fafc", "#0f172a"),
+    )
+    card_id.pack(fill=tk.X, padx=20, pady=(4, 6))
 
-    r2 = ctk.CTkFrame(popup, fg_color="transparent")
-    r2.pack(fill=tk.X, padx=25, pady=4)
-    ctk.CTkLabel(r2, text="شماره تلفن:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
-    u_phone_ent = ctk.CTkEntry(r2, font=FONT_NORMAL, justify="right", height=32)
-    u_phone_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-    u_phone_ent.insert(0, user.get("phone_number", ""))
-    u_phone_ent.configure(state="disabled")
+    id_top = ctk.CTkFrame(card_id, fg_color="transparent")
+    id_top.pack(fill=tk.X, padx=14, pady=(10, 4))
 
-    r3 = ctk.CTkFrame(popup, fg_color="transparent")
-    r3.pack(fill=tk.X, padx=25, pady=4)
-    ctk.CTkLabel(r3, text="شناسه چت تلگرام:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
-    u_tg_ent = ctk.CTkEntry(r3, font=FONT_NORMAL, justify="right", height=32)
+    ctk.CTkLabel(
+        id_top,
+        text=" شناسه‌های هویتی حساب ",
+        image=get_icon("lock", size=(16, 16)),
+        compound="right",
+        font=FONT_HEADER,
+        text_color=("#1e293b", "#f8fafc"),
+        anchor="e",
+    ).pack(side=tk.RIGHT)
+
+    badge_frame = ctk.CTkFrame(id_top, fg_color="transparent")
+    badge_frame.pack(side=tk.LEFT)
+
+    raw_role = str(user.get("role", "librarian")).strip().lower()
+    role_fa = tr(raw_role)
+    role_colors = {
+        "super admin": ("#064e3b", "#34d399"),
+        "superadmin": ("#064e3b", "#34d399"),
+        "admin": ("#1e3a8a", "#60a5fa"),
+        "librarian": ("#78350f", "#fbbf24"),
+    }
+    r_bg, r_text = role_colors.get(raw_role, ("#1e293b", "#94a3b8"))
+
+    ctk.CTkLabel(
+        badge_frame,
+        text=f" نقش: {role_fa} ",
+        font=FONT_SMALL,
+        fg_color=r_bg,
+        text_color=r_text,
+        corner_radius=6,
+        height=22,
+    ).pack(side=tk.LEFT, padx=(0, 4))
+
+    ctk.CTkLabel(
+        badge_frame,
+        text=" غیرقابل تغییر ",
+        font=FONT_SMALL,
+        fg_color=("#e2e8f0", "#1e293b"),
+        text_color=("#64748b", "#94a3b8"),
+        corner_radius=6,
+        height=22,
+    ).pack(side=tk.LEFT)
+
+    def add_id_row(parent, label, value, icon_name):
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill=tk.X, padx=14, pady=3)
+        ctk.CTkLabel(
+            row,
+            text=label,
+            font=FONT_NORMAL,
+            width=105,
+            anchor="e",
+            text_color=("#64748b", "#94a3b8"),
+        ).pack(side=tk.RIGHT, padx=(4, 0))
+
+        val_box = ctk.CTkFrame(row, corner_radius=6, fg_color=("#e2e8f0", "#1e293b"), height=32)
+        val_box.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+        val_box.pack_propagate(False)
+
+        icon_img = get_icon(icon_name, size=(15, 15)) if icon_name else None
+        lbl_val = ctk.CTkLabel(
+            val_box,
+            text=f"  {value}  ",
+            image=icon_img,
+            compound="right",
+            font=FONT_BOLD,
+            text_color=("#0f172a", "#f1f5f9"),
+            anchor="e",
+        )
+        lbl_val.pack(side=tk.RIGHT, padx=10, fill=tk.BOTH, expand=True)
+
+    add_id_row(card_id, "نام کاربری:", str(user.get("username") or "-"), "user")
+    add_id_row(card_id, "شماره همراه:", str(user.get("phone_number") or "-"), "phone")
+
+    note_row = ctk.CTkFrame(card_id, fg_color="transparent")
+    note_row.pack(fill=tk.X, padx=14, pady=(4, 10))
+
+    ctk.CTkLabel(
+        note_row,
+        text="",
+        image=get_icon("info", size=(14, 14)),
+        width=18,
+    ).pack(side=tk.RIGHT, padx=(4, 0), anchor="ne")
+
+    ctk.CTkLabel(
+        note_row,
+        text="نام کاربری و شماره همراه به عنوان شناسه‌های ورود ثابت بوده و جهت تغییر با مدیر تماس بگیرید.",
+        font=FONT_SMALL,
+        text_color=("#64748b", "#94a3b8"),
+        anchor="e",
+        justify="right",
+    ).pack(side=tk.RIGHT, fill=tk.X, expand=True)
+
+    # --- Section 2: Editable Settings Card ---
+    card_edit = ctk.CTkFrame(
+        popup,
+        corner_radius=10,
+        border_width=1,
+        border_color=("#cbd5e1", "#334155"),
+        fg_color=("#ffffff", "#1e293b"),
+    )
+    card_edit.pack(fill=tk.X, padx=20, pady=(4, 8))
+
+    edit_top = ctk.CTkFrame(card_edit, fg_color="transparent")
+    edit_top.pack(fill=tk.X, padx=14, pady=(10, 4))
+
+    ctk.CTkLabel(
+        edit_top,
+        text=" تنظیمات قابل ویرایش ",
+        image=get_icon("key", size=(16, 16)),
+        compound="right",
+        font=FONT_HEADER,
+        text_color=("#1e293b", "#f8fafc"),
+        anchor="e",
+    ).pack(side=tk.RIGHT)
+
+    # Telegram Chat ID Row
+    row_tg = ctk.CTkFrame(card_edit, fg_color="transparent")
+    row_tg.pack(fill=tk.X, padx=14, pady=(4, 2))
+    ctk.CTkLabel(row_tg, text="شناسه تلگرام:", font=FONT_NORMAL, width=105, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
+    u_tg_ent = ctk.CTkEntry(
+        row_tg,
+        font=FONT_NORMAL,
+        justify="right",
+        height=32,
+        placeholder_text="مثال: 123456789 (اختیاری)",
+    )
     u_tg_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
     if user.get("telegram_chat_id"):
         u_tg_ent.insert(0, str(user.get("telegram_chat_id", "")))
 
-    r4 = ctk.CTkFrame(popup, fg_color="transparent")
-    r4.pack(fill=tk.X, padx=25, pady=4)
-    ctk.CTkLabel(r4, text="رمز عبور جدید:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
+    ctk.CTkLabel(
+        card_edit,
+        text="جهت دریافت کدهای ورود یک‌بارمصرف (OTP) و اعلانات سیستم در تلگرام",
+        font=FONT_SMALL,
+        text_color=("#64748b", "#94a3b8"),
+        anchor="e",
+    ).pack(fill=tk.X, padx=14, pady=(0, 6))
+
+    # Password Row with Show/Hide toggle
+    row_pwd = ctk.CTkFrame(card_edit, fg_color="transparent")
+    row_pwd.pack(fill=tk.X, padx=14, pady=(4, 2))
+    ctk.CTkLabel(row_pwd, text="رمز عبور جدید:", font=FONT_NORMAL, width=105, anchor="e").pack(
+        side=tk.RIGHT, padx=(4, 0)
+    )
+
+    pwd_container = ctk.CTkFrame(row_pwd, fg_color="transparent")
+    pwd_container.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+
     u_pwd_ent = ctk.CTkEntry(
-        r4,
+        pwd_container,
         font=FONT_NORMAL,
         justify="right",
         height=32,
         show="*",
-        placeholder_text="در صورت عدم تغییر خالی بگذارید",
+        placeholder_text="در صورت عدم نیاز به تغییر خالی بگذارید",
     )
-    u_pwd_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+    u_pwd_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(4, 0))
+
+    icon_eye = get_icon("eye", size=(16, 16))
+    icon_eye_off = get_icon("eye-off", size=(16, 16))
+
+    def toggle_pwd_visibility():
+        if u_pwd_ent.cget("show") == "*":
+            u_pwd_ent.configure(show="")
+            btn_eye.configure(image=icon_eye_off)
+        else:
+            u_pwd_ent.configure(show="*")
+            btn_eye.configure(image=icon_eye)
+
+    btn_eye = ctk.CTkButton(
+        pwd_container,
+        text="",
+        image=icon_eye,
+        width=34,
+        height=32,
+        fg_color=("#e2e8f0", "#334155"),
+        hover_color=("#cbd5e1", "#475569"),
+        command=toggle_pwd_visibility,
+    )
+    btn_eye.pack(side=tk.LEFT)
+
+    ctk.CTkLabel(
+        card_edit,
+        text="حداقل ۴ کاراکتر (در صورت پر شدن، رمز عبور قبلی با مقدار جدید جایگزین می‌شود)",
+        font=FONT_SMALL,
+        text_color=("#64748b", "#94a3b8"),
+        anchor="e",
+    ).pack(fill=tk.X, padx=14, pady=(0, 10))
 
     def do_save_account():
-        uname = u_name_ent.get().strip() or str(user.get("username", ""))
-        phone = u_phone_ent.get().strip() or str(user.get("phone_number", ""))
+        uname = str(user.get("username", ""))
+        phone = str(user.get("phone_number", ""))
         tg = u_tg_ent.get().strip() or None
         pwd = u_pwd_ent.get().strip() or None
 
-        if not uname:
-            messagebox.showwarning("خطا", "لطفاً نام کاربری را وارد کنید!", parent=popup)
-            u_name_ent.focus()
-            return
-        if not phone:
-            messagebox.showwarning("خطا", "لطفاً شماره تلفن را وارد کنید!", parent=popup)
-            u_phone_ent.focus()
+        if pwd and len(pwd) < 4:
+            messagebox.showwarning("رمز عبور", "رمز عبور جدید باید حداقل ۴ کاراکتر باشد!", parent=popup)
+            u_pwd_ent.focus()
             return
 
         norm_phone = normalize_phone_number(phone)
-        if len(norm_phone) != 11 or not norm_phone.startswith("09"):
-            messagebox.showerror("خطا", "فرمت شماره تلفن نامعتبر است!\nمثال: 09123456789", parent=popup)
-            u_phone_ent.focus()
-            return
-
         uid = user.get("id")
         if not uid:
-            existing = get_user_by_identifier(user.get("username", ""), database_path=db_p)
+            existing = get_user_by_identifier(uname, database_path=db_p)
             if existing:
                 uid = existing.get("id")
         if not uid:
@@ -954,9 +1129,9 @@ def open_edit_my_account_popup(user):
             current_user = updated_user
             messagebox.showinfo("موفق", msg, parent=popup)
             popup.destroy()
-            u_role = tr(str(current_user.get("role", "")))
-            u_name = str(current_user.get("username", ""))
-            lbl_user_badge.configure(text=f"{u_name} ({u_role})")
+            u_role_str = tr(str(current_user.get("role", "")))
+            u_name_str = str(current_user.get("username", ""))
+            lbl_user_badge.configure(text=f"{u_name_str} ({u_role_str})")
             show_logged_in_view(current_user)
             if "search_users" in globals():
                 try:
@@ -966,8 +1141,10 @@ def open_edit_my_account_popup(user):
         else:
             messagebox.showerror("خطا", msg, parent=popup)
 
+    # Actions
     btn_f = ctk.CTkFrame(popup, fg_color="transparent")
-    btn_f.pack(pady=20, padx=20, fill=tk.X)
+    btn_f.pack(fill=tk.X, padx=20, pady=(6, 14))
+
     btn_save = create_icon_button(
         btn_f,
         text=" ذخیره تغییرات ",
@@ -976,9 +1153,11 @@ def open_edit_my_account_popup(user):
         font=FONT_BOLD,
         fg_color="#16a34a",
         hover_color="#15803d",
-        width=130,
+        height=34,
+        width=135,
     )
     btn_save.pack(side=tk.RIGHT, padx=5)
+
     btn_cancel = create_icon_button(
         btn_f,
         text=" انصراف ",
@@ -987,6 +1166,7 @@ def open_edit_my_account_popup(user):
         font=FONT_NORMAL,
         fg_color="transparent",
         hover_color=("#e2e8f0", "#1e293b"),
+        height=34,
         width=90,
     )
     btn_cancel.pack(side=tk.LEFT, padx=5)

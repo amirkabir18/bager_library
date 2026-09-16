@@ -16,6 +16,15 @@ $icons = @{
     "rotate-ccw" = 0xe148
     "x" = 0xe1b2
     "arrow-right-left" = 0xe417
+    "lock" = 57611
+    "user" = 57759
+    "phone" = 57651
+    "eye" = 57530
+    "eye-off" = 57531
+    "shield" = 57688
+    "key" = 57597
+    "info" = 57593
+    "send" = 57682
 }
 
 foreach ($name in $icons.Keys) {
