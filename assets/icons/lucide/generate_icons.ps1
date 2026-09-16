@@ -25,6 +25,11 @@ $icons = @{
     "key" = 57597
     "info" = 57593
     "send" = 57682
+    "pencil" = 57849
+    "edit" = 57714
+    "user-check" = 57760
+    "user-cog" = 58178
+    "settings" = 57684
 }
 
 foreach ($name in $icons.Keys) {

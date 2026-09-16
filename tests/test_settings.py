@@ -114,9 +114,11 @@ class TestAppSettingsDatabase(unittest.TestCase):
         cur = self.conn.cursor()
         cur.execute("INSERT INTO books (title, author, isbn) VALUES ('کتاب تست', 'نویسنده', '1234567890123')")
         book_id = cur.lastrowid
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('علی تست', '09121111111')")
+        member_id = cur.lastrowid
         cur.execute(
-            "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-01', '2025-01-15', 1)",
-            (book_id, "علی تست"),
+            "INSERT INTO loans (book_id, member_id, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-01', '2025-01-15', 1)",
+            (book_id, member_id),
         )
         loan_id = cur.lastrowid
         self.conn.commit()
@@ -148,14 +150,19 @@ class TestAppSettingsDatabase(unittest.TestCase):
         cur.execute("INSERT INTO books (title, author, isbn) VALUES ('شیمی عمومی', 'مورتیمر', '2222222222222')")
         book2_id = cur.lastrowid
 
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('رضا احمدی', '09120000001')")
+        m1_id = cur.lastrowid
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('سارا کریمی', '09120000002')")
+        m2_id = cur.lastrowid
+
         cur.execute(
-            "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-01', '2025-01-15', 1)",
-            (book1_id, "رضا احمدی"),
+            "INSERT INTO loans (book_id, member_id, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-01', '2025-01-15', 1)",
+            (book1_id, m1_id),
         )
         loan1 = cur.lastrowid
         cur.execute(
-            "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-01', '2025-01-10', 1)",
-            (book2_id, "سارا کریمی"),
+            "INSERT INTO loans (book_id, member_id, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-01', '2025-01-10', 1)",
+            (book2_id, m2_id),
         )
         loan2 = cur.lastrowid
         self.conn.commit()
@@ -192,19 +199,26 @@ class TestAppSettingsDatabase(unittest.TestCase):
         cur.execute("INSERT INTO books (title, author, isbn) VALUES ('الفبای فیزیک', 'نویسنده ۳', '1000000000003')")
         b3 = cur.lastrowid
 
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('محمد رضایی', '09120000011')")
+        m1 = cur.lastrowid
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('رضا محمدی', '09120000012')")
+        m2 = cur.lastrowid
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('احمد حسینی', '09120000013')")
+        m3 = cur.lastrowid
+
         cur.execute(
-            "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, 'محمد رضایی', '2025-01-01', '2025-01-10', 1)",
-            (b1,),
+            "INSERT INTO loans (book_id, member_id, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-01', '2025-01-10', 1)",
+            (b1, m1),
         )
         l1 = cur.lastrowid
         cur.execute(
-            "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, 'رضا محمدی', '2025-01-02', '2025-01-11', 1)",
-            (b2,),
+            "INSERT INTO loans (book_id, member_id, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-02', '2025-01-11', 1)",
+            (b2, m2),
         )
         l2 = cur.lastrowid
         cur.execute(
-            "INSERT INTO loans (book_id, member_name, borrow_date, return_date, borrowed) VALUES (?, 'احمد حسینی', '2025-01-03', '2025-01-12', 1)",
-            (b3,),
+            "INSERT INTO loans (book_id, member_id, borrow_date, return_date, borrowed) VALUES (?, ?, '2025-01-03', '2025-01-12', 1)",
+            (b3, m3),
         )
         l3 = cur.lastrowid
         self.conn.commit()
@@ -381,6 +395,65 @@ class TestNotificationSettingsEngine(unittest.TestCase):
 
         self.mock_root.after_cancel.assert_called_with("timer_123")
         self.mock_root.after.assert_called_with(60 * 60 * 1000, reminder_mgr._run_and_schedule)
+
+    def test_otp_cleanup_settings_and_manager(self):
+        from auth import OTPCleanupManager, cleanup_otp_sessions
+
+        # Check default settings in database
+        self.assertTrue(database.is_otp_cleanup_enabled(self.conn))
+        self.assertEqual(database.get_otp_cleanup_interval_hours(self.conn), 12.0)
+
+        # Update settings
+        database.set_setting(self.conn, "otp_cleanup_enabled", "false")
+        database.set_setting(self.conn, "otp_cleanup_interval_hours", "24")
+        self.assertFalse(database.is_otp_cleanup_enabled(self.conn))
+        self.assertEqual(database.get_otp_cleanup_interval_hours(self.conn), 24.0)
+
+        # Insert old and valid otp sessions
+        cur = self.conn.cursor()
+        old_time = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=25)).isoformat()
+        future_time = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=2)).isoformat()
+        past_expire = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=10)).isoformat()
+
+        # 1. Very old session
+        cur.execute(
+            "INSERT INTO otp_sessions (phone_number, otp_hash, created_at, expires_at, attempts, is_used) VALUES ('09121111111', 'h1', ?, ?, 0, 0)",
+            (old_time, old_time),
+        )
+        # 2. Expired session
+        cur.execute(
+            "INSERT INTO otp_sessions (phone_number, otp_hash, created_at, expires_at, attempts, is_used) VALUES ('09122222222', 'h2', ?, ?, 0, 0)",
+            (old_time, past_expire),
+        )
+        # 3. Used session
+        cur.execute(
+            "INSERT INTO otp_sessions (phone_number, otp_hash, created_at, expires_at, attempts, is_used) VALUES ('09123333333', 'h3', ?, ?, 0, 1)",
+            (old_time, future_time),
+        )
+        # 4. Valid session
+        cur.execute(
+            "INSERT INTO otp_sessions (phone_number, otp_hash, created_at, expires_at, attempts, is_used) VALUES ('09124444444', 'h4', ?, ?, 0, 0)",
+            (future_time, future_time),
+        )
+        self.conn.commit()
+
+        # Cleanup older than 12 hours or expired/used
+        deleted = cleanup_otp_sessions(max_age_hours=12.0, database_path=self.temp_db_path)
+        self.assertEqual(deleted, 3)
+
+        cur.execute("SELECT phone_number FROM otp_sessions")
+        rows = cur.fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], "09124444444")
+
+        # Test manager methods
+        mock_root = MagicMock()
+        mgr = OTPCleanupManager(root=mock_root, db_path=self.temp_db_path)
+        mgr.start()
+        self.assertTrue(mgr._running)
+        mock_root.after.assert_called()
+        mgr.stop()
+        self.assertFalse(mgr._running)
 
 
 if __name__ == "__main__":

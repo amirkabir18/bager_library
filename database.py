@@ -224,7 +224,7 @@ def init_database(connection: sqlite3.Connection | None = None):
         cur.execute("""
             CREATE TABLE IF NOT EXISTS members (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                member_id VARCHAR(255) UNIQUE NOT NULL,
+                username VARCHAR(255) UNIQUE NOT NULL,
                 phone_number VARCHAR(255) NOT NULL
             )
         """)
@@ -235,8 +235,8 @@ def init_database(connection: sqlite3.Connection | None = None):
                 borrow_date DATE NOT NULL,
                 return_date DATE,
                 borrowed BOOLEAN DEFAULT 1,
-                book_id VARCHAR(255),
-                member_name VARCHAR(255)
+                book_id INTEGER NOT NULL REFERENCES books(id),
+                member_id INTEGER NOT NULL REFERENCES members(id)
             )
         """)
 
@@ -297,6 +297,130 @@ def init_database(connection: sqlite3.Connection | None = None):
         except Exception:
             pass
 
+        # Members table migration: rename member_id column to username
+        try:
+            cur.execute('PRAGMA table_info("members")')
+            existing_mem_cols = {str(row[1]) for row in cur.fetchall()}
+            if "member_id" in existing_mem_cols and "username" not in existing_mem_cols:
+                try:
+                    cur.execute("ALTER TABLE members RENAME COLUMN member_id TO username")
+                except Exception:
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS members_migrated (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            username VARCHAR(255) UNIQUE NOT NULL,
+                            phone_number VARCHAR(255) NOT NULL
+                        )
+                    """)
+                    cur.execute(
+                        "INSERT INTO members_migrated (id, username, phone_number) SELECT id, member_id, phone_number FROM members"
+                    )
+                    cur.execute("DROP TABLE members")
+                    cur.execute("ALTER TABLE members_migrated RENAME TO members")
+        except Exception:
+            pass
+
+        # Loans table migration: replace member_name with member_id and ensure book_id references books.id
+        try:
+            cur.execute('PRAGMA table_info("loans")')
+            existing_loan_cols = {str(row[1]) for row in cur.fetchall()}
+            if "member_name" in existing_loan_cols or "member_id" not in existing_loan_cols:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS loans_migrated (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        borrow_date DATE NOT NULL,
+                        return_date DATE,
+                        borrowed BOOLEAN DEFAULT 1,
+                        book_id INTEGER NOT NULL REFERENCES books(id),
+                        member_id INTEGER NOT NULL REFERENCES members(id)
+                    )
+                """)
+                cur.execute("SELECT * FROM loans")
+                old_cols = [d[0] for d in cur.description]
+                old_rows = cur.fetchall()
+
+                for row in old_rows:
+                    r_dict = dict(zip(old_cols, row))
+                    l_id = r_dict.get("id")
+                    b_date = r_dict.get("borrow_date")
+                    r_date = r_dict.get("return_date")
+                    borrowed_val = r_dict.get("borrowed", 1)
+
+                    # Resolve member_id
+                    mem_id_resolved = None
+                    if "member_id" in r_dict and r_dict["member_id"] is not None:
+                        try:
+                            cand = int(r_dict["member_id"])
+                            cur.execute("SELECT id FROM members WHERE id = ?", (cand,))
+                            if cur.fetchone():
+                                mem_id_resolved = cand
+                        except (ValueError, TypeError):
+                            pass
+
+                    if mem_id_resolved is None:
+                        raw_mem = str(r_dict.get("member_name") or r_dict.get("member_id") or "").strip()
+                        if raw_mem:
+                            cur.execute("SELECT id FROM members WHERE username = ?", (raw_mem,))
+                            mf = cur.fetchone()
+                            if mf:
+                                mem_id_resolved = mf[0]
+                            else:
+                                cur.execute(
+                                    "INSERT INTO members (username, phone_number) VALUES (?, '09000000000')",
+                                    (raw_mem,),
+                                )
+                                mem_id_resolved = cur.lastrowid
+                        else:
+                            cur.execute("SELECT id FROM members LIMIT 1")
+                            mf = cur.fetchone()
+                            if mf:
+                                mem_id_resolved = mf[0]
+                            else:
+                                cur.execute(
+                                    "INSERT INTO members (username, phone_number) VALUES ('کاربر عمومی', '09000000000')"
+                                )
+                                mem_id_resolved = cur.lastrowid
+
+                    # Resolve book_id (actual ID from books table)
+                    bk_id_resolved = None
+                    raw_bk = r_dict.get("book_id")
+                    if raw_bk is not None:
+                        try:
+                            cand_bk = int(raw_bk)
+                            cur.execute("SELECT id FROM books WHERE id = ?", (cand_bk,))
+                            if cur.fetchone():
+                                bk_id_resolved = cand_bk
+                        except (ValueError, TypeError):
+                            pass
+
+                        if bk_id_resolved is None:
+                            cur.execute("SELECT id FROM books WHERE title = ? LIMIT 1", (str(raw_bk),))
+                            bf = cur.fetchone()
+                            if bf:
+                                bk_id_resolved = bf[0]
+
+                    if bk_id_resolved is None:
+                        cur.execute("SELECT id FROM books LIMIT 1")
+                        bf = cur.fetchone()
+                        if bf:
+                            bk_id_resolved = bf[0]
+                        else:
+                            cur.execute("INSERT INTO books (title, author) VALUES ('کتاب نامشخص', 'نامشخص')")
+                            bk_id_resolved = cur.lastrowid
+
+                    cur.execute(
+                        """
+                        INSERT INTO loans_migrated (id, borrow_date, return_date, borrowed, book_id, member_id)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (l_id, b_date, r_date, borrowed_val, bk_id_resolved, mem_id_resolved),
+                    )
+
+                cur.execute("DROP TABLE loans")
+                cur.execute("ALTER TABLE loans_migrated RENAME TO loans")
+        except Exception:
+            pass
+
         cur.execute("""
             CREATE TABLE IF NOT EXISTS app_settings (
                 key VARCHAR(100) PRIMARY KEY,
@@ -312,6 +436,8 @@ def init_database(connection: sqlite3.Connection | None = None):
             ("notification_check_interval_mins", "30"),
             ("internet_access_enabled", "true"),
             ("ai_features_enabled", "true"),
+            ("otp_cleanup_enabled", "true"),
+            ("otp_cleanup_interval_hours", "12"),
         ]
         cur.executemany(
             """
@@ -401,6 +527,8 @@ def init_database(connection: sqlite3.Connection | None = None):
                     pass
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_loans_return_borrowed ON loans(return_date, borrowed)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_loans_book_id ON loans(book_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_loans_member_id ON loans(member_id)")
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_notification_logs_lookup ON notification_logs(loan_id, sent_date, notification_type)"
         )
@@ -584,6 +712,43 @@ def is_ai_features_enabled(
     return str(val).strip().lower() in ("true", "1", "yes", "on")
 
 
+def is_otp_cleanup_enabled(
+    database_path_or_conn: sqlite3.Connection | str | None = None,
+) -> bool:
+    """
+    Returns True if OTP cleanup daemon is enabled in settings.
+    """
+    if isinstance(database_path_or_conn, sqlite3.Connection):
+        val = get_setting(database_path_or_conn, "otp_cleanup_enabled", default="true")
+    else:
+        val = get_setting(
+            "otp_cleanup_enabled",
+            default="true",
+            database_path=database_path_or_conn,
+        )
+    return str(val).strip().lower() in ("true", "1", "yes", "on")
+
+
+def get_otp_cleanup_interval_hours(
+    database_path_or_conn: sqlite3.Connection | str | None = None,
+) -> float:
+    """
+    Returns the interval in hours for OTP cleanup (default: 12.0).
+    """
+    if isinstance(database_path_or_conn, sqlite3.Connection):
+        val = get_setting(database_path_or_conn, "otp_cleanup_interval_hours", default="12")
+    else:
+        val = get_setting(
+            "otp_cleanup_interval_hours",
+            default="12",
+            database_path=database_path_or_conn,
+        )
+    try:
+        return max(0.1, float(val))
+    except (ValueError, TypeError):
+        return 12.0
+
+
 def _normalize_filter_date(val: str | None) -> str | None:
     if not val:
         return None
@@ -624,11 +789,12 @@ def get_notification_logs(
                 nl.notification_type,
                 nl.sent_date,
                 nl.created_at,
-                CASE WHEN nl.loan_id IS NULL THEN NULL ELSE COALESCE(b.title, l.book_id, 'نامشخص') END AS book_title,
-                CASE WHEN nl.loan_id IS NULL THEN NULL ELSE COALESCE(l.member_name, 'نامشخص') END AS member_name
+                CASE WHEN nl.loan_id IS NULL THEN NULL ELSE COALESCE(b.title, CAST(l.book_id AS TEXT), 'نامشخص') END AS book_title,
+                CASE WHEN nl.loan_id IS NULL THEN NULL ELSE COALESCE(m.username, CAST(l.member_id AS TEXT), 'نامشخص') END AS member_name
             FROM notification_logs nl
             LEFT JOIN loans l ON nl.loan_id = l.id
-            LEFT JOIN books b ON (CAST(l.book_id AS TEXT) = CAST(b.id AS TEXT) OR l.book_id = b.title)
+            LEFT JOIN books b ON (l.book_id = b.id OR CAST(l.book_id AS TEXT) = CAST(b.id AS TEXT) OR l.book_id = b.title)
+            LEFT JOIN members m ON (l.member_id = m.id OR CAST(l.member_id AS TEXT) = CAST(m.id AS TEXT) OR CAST(l.member_id AS TEXT) = m.username)
         """
         conditions: list[str] = []
         params: list[object] = []
@@ -678,11 +844,11 @@ def get_notification_logs(
             sq_date_norm = _normalize_filter_date(sq_raw)
 
             if col == "book_title":
-                conditions.append("(b.title LIKE ? OR l.book_id LIKE ?)")
+                conditions.append("(b.title LIKE ? OR CAST(l.book_id AS TEXT) LIKE ?)")
                 params.extend([pattern, pattern])
-            elif col == "member_name":
-                conditions.append("l.member_name LIKE ?")
-                params.append(pattern)
+            elif col in ("member_name", "member_id", "username"):
+                conditions.append("(m.username LIKE ? OR CAST(l.member_id AS TEXT) LIKE ?)")
+                params.extend([pattern, pattern])
             elif col == "loan_id":
                 conditions.append("CAST(nl.loan_id AS TEXT) LIKE ?")
                 params.append(pattern)
@@ -707,14 +873,14 @@ def get_notification_logs(
             else:
                 # "all"
                 all_parts = [
-                    "(b.title LIKE ? OR l.book_id LIKE ?)",
-                    "l.member_name LIKE ?",
+                    "(b.title LIKE ? OR CAST(l.book_id AS TEXT) LIKE ?)",
+                    "(m.username LIKE ? OR CAST(l.member_id AS TEXT) LIKE ?)",
                     "CAST(nl.loan_id AS TEXT) LIKE ?",
                     "CAST(nl.id AS TEXT) LIKE ?",
                     "CAST(nl.sent_date AS TEXT) LIKE ?",
                     f"(nl.notification_type LIKE ? OR {type_case_expr} LIKE ?)",
                 ]
-                all_params = [pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern]
+                all_params = [pattern] * 9
                 if sq_date_norm and sq_date_norm != sq_raw:
                     date_pattern = (
                         f"%{sq_date_norm}%"

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import os
 import re
 import secrets
@@ -12,6 +13,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from database import get_db_connection, get_setting, set_setting
+
+logger = logging.getLogger(__name__)
 
 PERSIAN_ARABIC_DIGITS = {
     "۰": "0",
@@ -438,6 +441,19 @@ def bootstrap_admin_user(
     if success:
         set_setting("admin_bootstrapped", "true", database_path=database_path)
     return success, msg, user_data
+
+
+def is_super_admin(user: dict[str, Any] | str | None) -> bool:
+    """
+    Checks whether the given user dict or role string has super admin privileges.
+    """
+    if user is None:
+        return False
+    if isinstance(user, dict):
+        role_str = str(user.get("role", "")).strip().lower()
+    else:
+        role_str = str(user).strip().lower()
+    return role_str in ("super admin", "superadmin")
 
 
 def ensure_bootstrap_admin(database_path: str | None = None) -> tuple[bool, str]:
@@ -931,6 +947,114 @@ def authenticate(
             return True, msg, user
 
     return authenticate_with_password(clean_identifier, clean_credential, database_path=database_path)
+
+
+def cleanup_otp_sessions(max_age_hours: float = 12.0, database_path: str | None = None) -> int:
+    """
+    Deletes OTP sessions that are expired, used, or older than max_age_hours.
+    Returns the count of deleted sessions.
+    """
+    conn = get_db_connection(database_path=database_path)
+    try:
+        cur = conn.cursor()
+        now_utc = datetime.now(timezone.utc)
+        cutoff_iso = (now_utc - timedelta(hours=max_age_hours)).isoformat()
+        now_iso = now_utc.isoformat()
+        cur.execute(
+            """
+            DELETE FROM otp_sessions
+            WHERE created_at < ? OR expires_at < ? OR is_used = 1
+            """,
+            (cutoff_iso, now_iso),
+        )
+        deleted = cur.rowcount
+        conn.commit()
+        return deleted
+    finally:
+        conn.close()
+
+
+class OTPCleanupManager:
+    """
+    Periodic daemon that removes expired/old OTP sessions from otp_sessions.
+    Configurable via app_settings:
+      - otp_cleanup_enabled: 'true' / 'false'
+      - otp_cleanup_interval_hours: interval in hours (default: 12)
+    """
+
+    def __init__(self, root: Any, db_path: str):
+        self.root = root
+        self.db_path = db_path
+        self._running = False
+        self._after_id = None
+
+    def get_settings(self) -> tuple[bool, float]:
+        enabled = True
+        interval_hours = 12.0
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT key, value FROM app_settings WHERE key IN ('otp_cleanup_enabled', 'otp_cleanup_interval_hours')"
+            )
+            for k, v in cur.fetchall():
+                if k == "otp_cleanup_enabled":
+                    enabled = str(v).strip().lower() in ("true", "1", "yes", "on")
+                elif k == "otp_cleanup_interval_hours":
+                    try:
+                        interval_hours = max(0.1, float(v))
+                    except (ValueError, TypeError):
+                        pass
+            conn.close()
+        except Exception:
+            pass
+        return enabled, interval_hours
+
+    def start(self):
+        if self._running:
+            return
+        self._running = True
+        # Schedule initial check shortly after startup (3 seconds)
+        self._after_id = self.root.after(3000, self._run_and_schedule)
+
+    def stop(self):
+        self._running = False
+        if self._after_id:
+            try:
+                self.root.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
+
+    def reschedule(self):
+        if self._after_id:
+            try:
+                self.root.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
+        if self._running:
+            self._run_and_schedule()
+
+    def clean_now(self) -> int:
+        _, interval_hours = self.get_settings()
+        return cleanup_otp_sessions(max_age_hours=interval_hours, database_path=self.db_path)
+
+    def _run_and_schedule(self):
+        if not self._running:
+            return
+        try:
+            enabled, interval_hours = self.get_settings()
+            if enabled:
+                cleanup_otp_sessions(max_age_hours=interval_hours, database_path=self.db_path)
+        except Exception as e:
+            logger.debug(f"[OTPCleanupManager] Error: {e}")
+        finally:
+            if self._running:
+                _, interval_hours = self.get_settings()
+                interval_ms = int(interval_hours * 3600 * 1000)
+                interval_ms = min(interval_ms, 2147483647)
+                self._after_id = self.root.after(interval_ms, self._run_and_schedule)
 
 
 if __name__ == "__main__":

@@ -44,12 +44,14 @@ def load_fonts():
 load_fonts()
 
 from auth import (
+    OTPCleanupManager,
     OTPService,
     authenticate,
     create_user,
     delete_user,
     ensure_bootstrap_admin,
     get_user_by_identifier,
+    is_super_admin,
     mask_phone_number,
     normalize_phone_number,
     update_user,
@@ -110,6 +112,8 @@ root.minsize(920, 620)
 notification_engine = NotificationEngine(root, icon_path=icon_p, db_path=db_p)
 reminder_manager = LoanReminderManager(root, db_p, notification_engine)
 reminder_manager.start()
+otp_cleanup_manager = OTPCleanupManager(root, db_p)
+otp_cleanup_manager.start()
 
 
 # Application boot-time internet check
@@ -937,46 +941,80 @@ def open_edit_my_account_popup(user):
         height=22,
     ).pack(side=tk.LEFT, padx=(0, 4))
 
-    ctk.CTkLabel(
-        badge_frame,
-        text=" غیرقابل تغییر ",
-        font=FONT_SMALL,
-        fg_color=("#e2e8f0", "#1e293b"),
-        text_color=("#64748b", "#94a3b8"),
-        corner_radius=6,
-        height=22,
-    ).pack(side=tk.LEFT)
+    can_edit_creds = is_super_admin(current_user)
 
-    def add_id_row(parent, label, value, icon_name):
-        row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill=tk.X, padx=14, pady=3)
+    if can_edit_creds:
         ctk.CTkLabel(
-            row,
-            text=label,
-            font=FONT_NORMAL,
-            width=105,
-            anchor="e",
-            text_color=("#64748b", "#94a3b8"),
-        ).pack(side=tk.RIGHT, padx=(4, 0))
+            badge_frame,
+            text=" قابل ویرایش (مدیر ارشد) ",
+            font=FONT_SMALL,
+            fg_color=("#dcfce7", "#064e3b"),
+            text_color=("#15803d", "#34d399"),
+            corner_radius=6,
+            height=22,
+        ).pack(side=tk.LEFT)
 
-        val_box = ctk.CTkFrame(row, corner_radius=6, fg_color=("#e2e8f0", "#1e293b"), height=32)
-        val_box.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-        val_box.pack_propagate(False)
-
-        icon_img = get_icon(icon_name, size=(15, 15)) if icon_name else None
-        lbl_val = ctk.CTkLabel(
-            val_box,
-            text=f"  {value}  ",
-            image=icon_img,
-            compound="right",
-            font=FONT_BOLD,
-            text_color=("#0f172a", "#f1f5f9"),
-            anchor="e",
+        r_uname = ctk.CTkFrame(card_id, fg_color="transparent")
+        r_uname.pack(fill=tk.X, padx=14, pady=3)
+        ctk.CTkLabel(r_uname, text="نام کاربری:", font=FONT_NORMAL, width=105, anchor="e").pack(
+            side=tk.RIGHT, padx=(4, 0)
         )
-        lbl_val.pack(side=tk.RIGHT, padx=10, fill=tk.BOTH, expand=True)
+        u_name_ent = ctk.CTkEntry(r_uname, font=FONT_NORMAL, justify="right", height=32)
+        u_name_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+        u_name_ent.insert(0, str(user.get("username") or ""))
 
-    add_id_row(card_id, "نام کاربری:", str(user.get("username") or "-"), "user")
-    add_id_row(card_id, "شماره همراه:", str(user.get("phone_number") or "-"), "phone")
+        r_phone = ctk.CTkFrame(card_id, fg_color="transparent")
+        r_phone.pack(fill=tk.X, padx=14, pady=3)
+        ctk.CTkLabel(r_phone, text="شماره همراه:", font=FONT_NORMAL, width=105, anchor="e").pack(
+            side=tk.RIGHT, padx=(4, 0)
+        )
+        u_phone_ent = ctk.CTkEntry(r_phone, font=FONT_NORMAL, justify="right", height=32)
+        u_phone_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+        u_phone_ent.insert(0, str(user.get("phone_number") or ""))
+
+        note_text = "دسترسی مدیر ارشد فعال است: می‌توانید نام کاربری و شماره تماس را ویرایش نمایید."
+    else:
+        ctk.CTkLabel(
+            badge_frame,
+            text=" غیرقابل تغییر ",
+            font=FONT_SMALL,
+            fg_color=("#e2e8f0", "#1e293b"),
+            text_color=("#64748b", "#94a3b8"),
+            corner_radius=6,
+            height=22,
+        ).pack(side=tk.LEFT)
+
+        def add_id_row(parent, label, value, icon_name):
+            row = ctk.CTkFrame(parent, fg_color="transparent")
+            row.pack(fill=tk.X, padx=14, pady=3)
+            ctk.CTkLabel(
+                row,
+                text=label,
+                font=FONT_NORMAL,
+                width=105,
+                anchor="e",
+                text_color=("#64748b", "#94a3b8"),
+            ).pack(side=tk.RIGHT, padx=(4, 0))
+
+            val_box = ctk.CTkFrame(row, corner_radius=6, fg_color=("#e2e8f0", "#1e293b"), height=32)
+            val_box.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+            val_box.pack_propagate(False)
+
+            icon_img = get_icon(icon_name, size=(15, 15)) if icon_name else None
+            lbl_val = ctk.CTkLabel(
+                val_box,
+                text=f"  {value}  ",
+                image=icon_img,
+                compound="right",
+                font=FONT_BOLD,
+                text_color=("#0f172a", "#f1f5f9"),
+                anchor="e",
+            )
+            lbl_val.pack(side=tk.RIGHT, padx=10, fill=tk.BOTH, expand=True)
+
+        add_id_row(card_id, "نام کاربری:", str(user.get("username") or "-"), "user")
+        add_id_row(card_id, "شماره همراه:", str(user.get("phone_number") or "-"), "phone")
+        note_text = "نام کاربری و شماره همراه فقط با دسترسی مدیر ارشد (Super Admin) قابل ویرایش هستند."
 
     note_row = ctk.CTkFrame(card_id, fg_color="transparent")
     note_row.pack(fill=tk.X, padx=14, pady=(4, 10))
@@ -990,7 +1028,7 @@ def open_edit_my_account_popup(user):
 
     ctk.CTkLabel(
         note_row,
-        text="نام کاربری و شماره همراه به عنوان شناسه‌های ورود ثابت بوده و جهت تغییر با مدیر تماس بگیرید.",
+        text=note_text,
         font=FONT_SMALL,
         text_color=("#64748b", "#94a3b8"),
         anchor="e",
@@ -1095,8 +1133,27 @@ def open_edit_my_account_popup(user):
     ).pack(fill=tk.X, padx=14, pady=(0, 10))
 
     def do_save_account():
-        uname = str(user.get("username", ""))
-        phone = str(user.get("phone_number", ""))
+        if can_edit_creds:
+            uname = u_name_ent.get().strip()
+            phone = u_phone_ent.get().strip()
+            if not uname:
+                messagebox.showwarning("خطا", "لطفاً نام کاربری را وارد کنید!", parent=popup)
+                u_name_ent.focus()
+                return
+            if not phone:
+                messagebox.showwarning("خطا", "لطفاً شماره تلفن را وارد کنید!", parent=popup)
+                u_phone_ent.focus()
+                return
+            norm_phone = normalize_phone_number(phone)
+            if len(norm_phone) != 11 or not norm_phone.startswith("09"):
+                messagebox.showerror("خطا", "فرمت شماره تلفن نامعتبر است!\nمثال: 09123456789", parent=popup)
+                u_phone_ent.focus()
+                return
+        else:
+            uname = str(user.get("username", ""))
+            phone = str(user.get("phone_number", ""))
+            norm_phone = normalize_phone_number(phone)
+
         tg = u_tg_ent.get().strip() or None
         pwd = u_pwd_ent.get().strip() or None
 
@@ -1105,7 +1162,6 @@ def open_edit_my_account_popup(user):
             u_pwd_ent.focus()
             return
 
-        norm_phone = normalize_phone_number(phone)
         uid = user.get("id")
         if not uid:
             existing = get_user_by_identifier(uname, database_path=db_p)
@@ -2582,17 +2638,26 @@ member_filter_settings = {
 
 search_bar_frame_member = ctk.CTkFrame(member_frame, corner_radius=8, height=48)
 search_bar_frame_member.pack(fill=tk.X, padx=10, pady=(10, 6))
-search_bar_frame_member.columnconfigure(3, weight=1)
+search_bar_frame_member.columnconfigure(4, weight=1)
 
 sub_btn_member = create_icon_button(
-    search_bar_frame_member, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=90
+    search_bar_frame_member, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=85
 )
 sub_btn_member.grid(row=0, column=0, padx=(8, 4), pady=6)
 
 filter_btn_member = create_icon_button(
-    search_bar_frame_member, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=90
+    search_bar_frame_member, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=85
 )
 filter_btn_member.grid(row=0, column=1, padx=4, pady=6)
+
+edit_member_btn = create_icon_button(
+    search_bar_frame_member,
+    text=" ویرایش عضو ",
+    icon_name="edit",
+    font=FONT_NORMAL,
+    width=100,
+)
+edit_member_btn.grid(row=0, column=2, padx=4, pady=6)
 
 add_member_btn = create_icon_button(
     search_bar_frame_member,
@@ -2601,9 +2666,9 @@ add_member_btn = create_icon_button(
     font=FONT_NORMAL,
     fg_color="#16a34a",
     hover_color="#15803d",
-    width=110,
+    width=105,
 )
-add_member_btn.grid(row=0, column=2, padx=4, pady=6)
+add_member_btn.grid(row=0, column=3, padx=4, pady=6)
 
 entry_search_member = ctk.CTkEntry(
     search_bar_frame_member,
@@ -2612,7 +2677,7 @@ entry_search_member = ctk.CTkEntry(
     justify="right",
     height=36,
 )
-entry_search_member.grid(row=0, column=3, sticky="ew", padx=(4, 8), pady=6)
+entry_search_member.grid(row=0, column=4, sticky="ew", padx=(4, 8), pady=6)
 
 member_tree_frame = ctk.CTkFrame(member_frame, corner_radius=8)
 member_tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
@@ -2627,7 +2692,10 @@ member_scrollbar.configure(command=member_tree.yview)
 for col in member_column:
     member_tree.heading(col, text=tr(col), anchor=tk.CENTER)
     member_tree.column(col, anchor=tk.CENTER)
-member_tree["displaycolumns"] = rtl_display_order(member_column, ["id", "member_id", "phone_number"])
+member_display_cols = (
+    ["id", "username", "phone_number"] if "username" in member_column else ["id", "member_id", "phone_number"]
+)
+member_tree["displaycolumns"] = rtl_display_order(member_column, member_display_cols)
 member_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=4)
 
 
@@ -2908,7 +2976,7 @@ def open_add_member_popup():
         temp_conn = get_db_connection(db_p)
         try:
             temp_cursor = temp_conn.cursor()
-            temp_cursor.execute("INSERT INTO members (member_id, phone_number) VALUES (?, ?)", (m_id, norm_phone))
+            temp_cursor.execute("INSERT INTO members (username, phone_number) VALUES (?, ?)", (m_id, norm_phone))
             temp_conn.commit()
 
             messagebox.showinfo("موفق", f"اطلاعات عضو با نام {m_id} با موفقیت ثبت شد!", parent=popup)
@@ -2948,7 +3016,198 @@ def open_add_member_popup():
     btn_cancel.pack(side=tk.LEFT, padx=5)
 
 
+def open_edit_member_popup(member_id: int | None = None):
+    if member_id is None:
+        selected = member_tree.selection()
+        if not selected:
+            messagebox.showinfo("راهنما", "لطفاً ابتدا یک عضو را از جدول انتخاب کنید.", parent=root)
+            return
+        vals = member_tree.item(selected[0], "values")
+        if not vals or str(vals[0]).startswith("❌"):
+            return
+        id_idx = member_column.index("id") if "id" in member_column else 0
+        try:
+            member_id = int(vals[id_idx])
+        except (ValueError, IndexError):
+            return
+
+    conn = get_db_connection(db_p)
+    try:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM members WHERE id = ?", (member_id,))
+        row = cur.fetchone()
+        if not row:
+            messagebox.showerror("خطا", "اطلاعات عضو در سامانه یافت نشد!", parent=root)
+            return
+        member_data = dict(row)
+    finally:
+        conn.close()
+
+    popup = ctk.CTkToplevel(root)
+    m_name_curr = str(member_data.get("username") or member_data.get("member_id") or "")
+    popup.title(f"ویرایش مشخصات عضو ({m_name_curr})")
+    popup.geometry("440x360")
+    popup.resizable(False, False)
+    if os.path.exists(icon_p):
+        try:
+            popup.iconbitmap(icon_p)
+        except Exception:
+            pass
+
+    popup.transient(root)
+    popup.grab_set()
+
+    root.update_idletasks()
+    rx = root.winfo_rootx()
+    ry = root.winfo_rooty()
+    rw = root.winfo_width()
+    rh = root.winfo_height()
+    px = max(50, rx + (rw - 440) // 2)
+    py = max(50, ry + (rh - 360) // 2)
+    popup.geometry(f"+{px}+{py}")
+
+    header_f = ctk.CTkFrame(popup, fg_color="transparent")
+    header_f.pack(fill=tk.X, padx=20, pady=(15, 6))
+    ctk.CTkLabel(header_f, text="ویرایش مشخصات عضو کتابخانه", font=FONT_TITLE, anchor="center").pack(fill=tk.X)
+    ctk.CTkLabel(
+        header_f,
+        text=f"شناسه پرونده عضویت: #{member_id}",
+        font=FONT_SMALL,
+        text_color="#94a3b8",
+        anchor="center",
+    ).pack(fill=tk.X, pady=(2, 0))
+
+    card_f = ctk.CTkFrame(
+        popup,
+        corner_radius=10,
+        border_width=1,
+        border_color=("#cbd5e1", "#334155"),
+        fg_color=("#ffffff", "#1e293b"),
+    )
+    card_f.pack(fill=tk.X, padx=20, pady=(4, 10))
+
+    row_1 = ctk.CTkFrame(card_f, fg_color="transparent")
+    row_1.pack(fill=tk.X, padx=14, pady=(12, 6))
+    ctk.CTkLabel(row_1, text="نام کاربر (عضو):", font=FONT_NORMAL, width=110, anchor="e").pack(
+        side=tk.RIGHT, padx=(4, 0)
+    )
+    entry_m_id = ctk.CTkEntry(row_1, font=FONT_NORMAL, justify="right", height=34)
+    entry_m_id.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+    entry_m_id.insert(0, m_name_curr)
+
+    row_2 = ctk.CTkFrame(card_f, fg_color="transparent")
+    row_2.pack(fill=tk.X, padx=14, pady=(6, 14))
+    ctk.CTkLabel(row_2, text="شماره تلفن:", font=FONT_NORMAL, width=110, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
+    entry_m_phone = ctk.CTkEntry(row_2, font=FONT_NORMAL, justify="right", height=34)
+    entry_m_phone.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+    entry_m_phone.insert(0, str(member_data.get("phone_number", "")))
+
+    def do_update_member():
+        new_name = entry_m_id.get().strip()
+        new_phone = entry_m_phone.get().strip()
+
+        if not new_name:
+            messagebox.showwarning("خطا", "لطفاً نام کاربر را وارد کنید!", parent=popup)
+            entry_m_id.focus()
+            return
+        if not new_phone:
+            messagebox.showwarning("خطا", "لطفاً شماره تلفن را وارد کنید!", parent=popup)
+            entry_m_phone.focus()
+            return
+
+        norm_phone = normalize_phone_number(new_phone)
+        if len(norm_phone) != 11 or not norm_phone.startswith("09"):
+            messagebox.showerror("خطا", "فرمت شماره تلفن نامعتبر است!\nمثال: 09123456789", parent=popup)
+            entry_m_phone.focus()
+            return
+
+        temp_conn = get_db_connection(db_p)
+        try:
+            temp_cursor = temp_conn.cursor()
+            temp_cursor.execute(
+                "SELECT id FROM members WHERE (username = ? OR member_id = ?) AND id != ?",
+                (new_name, new_name, member_id),
+            )
+            if temp_cursor.fetchone():
+                messagebox.showerror("خطا", f"نام کاربر '{new_name}' قبلاً برای عضو دیگری ثبت شده است!", parent=popup)
+                entry_m_id.focus()
+                return
+
+            try:
+                temp_cursor.execute(
+                    "UPDATE members SET username = ?, phone_number = ? WHERE id = ?",
+                    (new_name, norm_phone, member_id),
+                )
+            except sqlite3.OperationalError:
+                temp_cursor.execute(
+                    "UPDATE members SET member_id = ?, phone_number = ? WHERE id = ?",
+                    (new_name, norm_phone, member_id),
+                )
+
+            temp_conn.commit()
+
+            messagebox.showinfo("موفق", f"اطلاعات عضو «{new_name}» با موفقیت به‌روزرسانی شد.", parent=popup)
+            popup.destroy()
+            search_members()
+            if "search_loans" in globals():
+                try:
+                    search_loans()
+                except Exception:
+                    pass
+        except sqlite3.Error as e:
+            messagebox.showerror("خطا", f"خطا در به‌روزرسانی عضو: {e}", parent=popup)
+        finally:
+            temp_conn.close()
+
+    btn_f = ctk.CTkFrame(popup, fg_color="transparent")
+    btn_f.pack(fill=tk.X, padx=20, pady=(6, 12))
+
+    btn_save = create_icon_button(
+        btn_f,
+        text=" ذخیره تغییرات ",
+        icon_name="check",
+        command=do_update_member,
+        font=FONT_BOLD,
+        fg_color="#16a34a",
+        hover_color="#15803d",
+        height=34,
+        width=130,
+    )
+    btn_save.pack(side=tk.RIGHT, padx=5)
+
+    btn_cancel = create_icon_button(
+        btn_f,
+        text=" انصراف ",
+        icon_name="x",
+        command=popup.destroy,
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        height=34,
+        width=90,
+    )
+    btn_cancel.pack(side=tk.LEFT, padx=5)
+
+
 add_member_btn.configure(command=open_add_member_popup)
+edit_member_btn.configure(command=open_edit_member_popup)
+member_tree.bind("<Double-Button-1>", lambda e: open_edit_member_popup())
+
+member_context_menu = tk.Menu(root, tearoff=0)
+member_context_menu.add_command(label="ویرایش مشخصات عضو...", command=open_edit_member_popup)
+member_context_menu.add_separator()
+member_context_menu.add_command(label="حذف عضو", command=lambda: member_tree.event_generate("<Delete>"))
+
+
+def show_member_context_menu(event):
+    row_id = member_tree.identify_row(event.y)
+    if row_id:
+        member_tree.selection_set(row_id)
+        member_context_menu.tk_popup(event.x_root, event.y_root)
+
+
+member_tree.bind("<Button-3>", show_member_context_menu)
 
 member_search_after_id = None
 
@@ -2983,15 +3242,24 @@ user_filter_settings = {
 
 search_bar_frame_users = ctk.CTkFrame(auth_users_frame, corner_radius=8, height=48)
 search_bar_frame_users.pack(fill=tk.X, padx=10, pady=(10, 6))
-search_bar_frame_users.columnconfigure(3, weight=1)
+search_bar_frame_users.columnconfigure(4, weight=1)
 
-sub_btn_users = create_icon_button(search_bar_frame_users, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=90)
+sub_btn_users = create_icon_button(search_bar_frame_users, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=85)
 sub_btn_users.grid(row=0, column=0, padx=(8, 4), pady=6)
 
 filter_btn_users = create_icon_button(
-    search_bar_frame_users, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=90
+    search_bar_frame_users, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=85
 )
 filter_btn_users.grid(row=0, column=1, padx=4, pady=6)
+
+edit_user_btn = create_icon_button(
+    search_bar_frame_users,
+    text=" ویرایش کاربر ",
+    icon_name="user-cog",
+    font=FONT_NORMAL,
+    width=100,
+)
+edit_user_btn.grid(row=0, column=2, padx=4, pady=6)
 
 add_user_btn = create_icon_button(
     search_bar_frame_users,
@@ -3000,9 +3268,9 @@ add_user_btn = create_icon_button(
     font=FONT_NORMAL,
     fg_color="#16a34a",
     hover_color="#15803d",
-    width=110,
+    width=105,
 )
-add_user_btn.grid(row=0, column=2, padx=4, pady=6)
+add_user_btn.grid(row=0, column=3, padx=4, pady=6)
 
 entry_search_users = ctk.CTkEntry(
     search_bar_frame_users,
@@ -3011,7 +3279,7 @@ entry_search_users = ctk.CTkEntry(
     justify="right",
     height=36,
 )
-entry_search_users.grid(row=0, column=3, sticky="ew", padx=(4, 8), pady=6)
+entry_search_users.grid(row=0, column=4, sticky="ew", padx=(4, 8), pady=6)
 
 users_tree_frame = ctk.CTkFrame(auth_users_frame, corner_radius=8)
 users_tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
@@ -3392,7 +3660,306 @@ def open_create_user_popup():
     btn_cancel.pack(side=tk.LEFT, padx=5)
 
 
+def open_edit_user_popup(user_id: int | None = None):
+    if not current_user or str(current_user.get("role", "")).strip().lower() not in (
+        "super admin",
+        "superadmin",
+        "admin",
+    ):
+        messagebox.showerror("عدم دسترسی", "فقط نقش مدیر یا سرپرست مجاز به ویرایش کاربران است.", parent=root)
+        return
+
+    if user_id is None:
+        selected = users_tree.selection()
+        if not selected:
+            messagebox.showinfo("راهنما", "لطفاً ابتدا یک کاربر را از جدول انتخاب کنید.", parent=root)
+            return
+        vals = users_tree.item(selected[0], "values")
+        if not vals or str(vals[0]).startswith("❌"):
+            return
+        id_idx = user_columns.index("id") if "id" in user_columns else 0
+        try:
+            user_id = int(vals[id_idx])
+        except (ValueError, IndexError):
+            return
+
+    conn = get_db_connection(db_p)
+    try:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM auth_users WHERE id = ?", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            messagebox.showerror("خطا", "کاربر در سامانه یافت نشد.", parent=root)
+            return
+        u_data = dict(row)
+    finally:
+        conn.close()
+
+    popup = ctk.CTkToplevel(root)
+    curr_uname = str(u_data.get("username", ""))
+    popup.title(f"ویرایش کاربر ({curr_uname})")
+    popup.geometry("450x570")
+    popup.resizable(False, False)
+    if os.path.exists(icon_p):
+        try:
+            popup.iconbitmap(icon_p)
+        except Exception:
+            pass
+
+    popup.transient(root)
+    popup.grab_set()
+
+    root.update_idletasks()
+    rx = root.winfo_rootx()
+    ry = root.winfo_rooty()
+    rw = root.winfo_width()
+    rh = root.winfo_height()
+    px = max(50, rx + (rw - 450) // 2)
+    py = max(50, ry + (rh - 570) // 2)
+    popup.geometry(f"+{px}+{py}")
+
+    header_f = ctk.CTkFrame(popup, fg_color="transparent")
+    header_f.pack(fill=tk.X, padx=20, pady=(15, 6))
+    ctk.CTkLabel(header_f, text="ویرایش مشخصات کاربر سامانه", font=FONT_TITLE, anchor="center").pack(fill=tk.X)
+    ctk.CTkLabel(
+        header_f,
+        text=f"شناسه کاربری: #{user_id}",
+        font=FONT_SMALL,
+        text_color="#94a3b8",
+        anchor="center",
+    ).pack(fill=tk.X, pady=(2, 0))
+
+    card_f = ctk.CTkFrame(
+        popup,
+        corner_radius=10,
+        border_width=1,
+        border_color=("#cbd5e1", "#334155"),
+        fg_color=("#ffffff", "#1e293b"),
+    )
+    card_f.pack(fill=tk.X, padx=20, pady=(4, 10))
+
+    can_edit_creds = is_super_admin(current_user)
+
+    # Row 1: Username
+    r1 = ctk.CTkFrame(card_f, fg_color="transparent")
+    r1.pack(fill=tk.X, padx=14, pady=(12, 4))
+    ctk.CTkLabel(r1, text="نام کاربری:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
+    u_name_ent = ctk.CTkEntry(r1, font=FONT_NORMAL, justify="right", height=32)
+    u_name_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+    u_name_ent.insert(0, curr_uname)
+    if not can_edit_creds:
+        u_name_ent.configure(state="disabled")
+
+    # Row 2: Phone
+    r2 = ctk.CTkFrame(card_f, fg_color="transparent")
+    r2.pack(fill=tk.X, padx=14, pady=4)
+    ctk.CTkLabel(r2, text="شماره تلفن:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
+    u_phone_ent = ctk.CTkEntry(r2, font=FONT_NORMAL, justify="right", height=32)
+    u_phone_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+    u_phone_ent.insert(0, str(u_data.get("phone_number", "")))
+    if not can_edit_creds:
+        u_phone_ent.configure(state="disabled")
+
+    if not can_edit_creds:
+        note_cred = ctk.CTkFrame(card_f, fg_color="transparent")
+        note_cred.pack(fill=tk.X, padx=14, pady=(0, 6))
+        ctk.CTkLabel(note_cred, text="", image=get_icon("lock", size=(13, 13)), width=16).pack(
+            side=tk.RIGHT, padx=(2, 0)
+        )
+        ctk.CTkLabel(
+            note_cred,
+            text="ویرایش نام کاربری و شماره همراه منحصراً با دسترسی مدیر ارشد امکان‌پذیر است.",
+            font=FONT_SMALL,
+            text_color=("#64748b", "#94a3b8"),
+            anchor="e",
+        ).pack(side=tk.RIGHT, fill=tk.X, expand=True)
+
+    # Row 3: Role
+    r3 = ctk.CTkFrame(card_f, fg_color="transparent")
+    r3.pack(fill=tk.X, padx=14, pady=4)
+    ctk.CTkLabel(r3, text="نقش کاربر:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
+    available_roles = (
+        ["super admin", "admin", "librarian", "user"] if can_edit_creds else ["admin", "librarian", "user"]
+    )
+    u_role_combo = ctk.CTkOptionMenu(
+        r3,
+        font=FONT_NORMAL,
+        values=available_roles,
+        height=32,
+    )
+    curr_role = str(u_data.get("role", "librarian")).strip().lower()
+    u_role_combo.set(curr_role if curr_role in available_roles else "librarian")
+    u_role_combo.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+
+    # Row 4: Telegram chat ID
+    r4 = ctk.CTkFrame(card_f, fg_color="transparent")
+    r4.pack(fill=tk.X, padx=14, pady=4)
+    ctk.CTkLabel(r4, text="شناسه تلگرام:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
+    u_tg_ent = ctk.CTkEntry(r4, font=FONT_NORMAL, justify="right", height=32, placeholder_text="اختیاری")
+    u_tg_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+    if u_data.get("telegram_chat_id"):
+        u_tg_ent.insert(0, str(u_data.get("telegram_chat_id", "")))
+
+    # Row 5: Active Status Switch
+    r5 = ctk.CTkFrame(card_f, fg_color="transparent")
+    r5.pack(fill=tk.X, padx=14, pady=4)
+    ctk.CTkLabel(r5, text="وضعیت حساب:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
+    var_active = tk.BooleanVar(value=bool(u_data.get("is_active", 1)))
+    sw_active = ctk.CTkSwitch(
+        r5,
+        text="حساب کاربری فعال است",
+        variable=var_active,
+        font=FONT_NORMAL,
+    )
+    sw_active.pack(side=tk.RIGHT, padx=4)
+
+    # Row 6: Password
+    r6 = ctk.CTkFrame(card_f, fg_color="transparent")
+    r6.pack(fill=tk.X, padx=14, pady=(4, 12))
+    ctk.CTkLabel(r6, text="رمز عبور جدید:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
+    pwd_container = ctk.CTkFrame(r6, fg_color="transparent")
+    pwd_container.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+
+    u_pwd_ent = ctk.CTkEntry(
+        pwd_container,
+        font=FONT_NORMAL,
+        justify="right",
+        height=32,
+        show="*",
+        placeholder_text="در صورت عدم تغییر خالی بگذارید",
+    )
+    u_pwd_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(4, 0))
+
+    icon_eye = get_icon("eye", size=(16, 16))
+    icon_eye_off = get_icon("eye-off", size=(16, 16))
+
+    def toggle_user_pwd_visibility():
+        if u_pwd_ent.cget("show") == "*":
+            u_pwd_ent.configure(show="")
+            btn_pwd_eye.configure(image=icon_eye_off)
+        else:
+            u_pwd_ent.configure(show="*")
+            btn_pwd_eye.configure(image=icon_eye)
+
+    btn_pwd_eye = ctk.CTkButton(
+        pwd_container,
+        text="",
+        image=icon_eye,
+        width=34,
+        height=32,
+        fg_color=("#e2e8f0", "#334155"),
+        hover_color=("#cbd5e1", "#475569"),
+        command=toggle_user_pwd_visibility,
+    )
+    btn_pwd_eye.pack(side=tk.LEFT)
+
+    def do_update_user():
+        if can_edit_creds:
+            uname = u_name_ent.get().strip()
+            phone = u_phone_ent.get().strip()
+            if not uname:
+                messagebox.showwarning("خطا", "لطفاً نام کاربری را وارد کنید!", parent=popup)
+                u_name_ent.focus()
+                return
+            if not phone:
+                messagebox.showwarning("خطا", "لطفاً شماره تلفن را وارد کنید!", parent=popup)
+                u_phone_ent.focus()
+                return
+
+            norm_phone = normalize_phone_number(phone)
+            if len(norm_phone) != 11 or not norm_phone.startswith("09"):
+                messagebox.showerror("خطا", "فرمت شماره تلفن نامعتبر است!\nمثال: 09123456789", parent=popup)
+                u_phone_ent.focus()
+                return
+        else:
+            uname = str(u_data.get("username", ""))
+            phone = str(u_data.get("phone_number", ""))
+            norm_phone = normalize_phone_number(phone)
+
+        tg = u_tg_ent.get().strip() or None
+        role_val = u_role_combo.get().strip() or "librarian"
+        pwd = u_pwd_ent.get().strip() or None
+        act_val = var_active.get()
+
+        if pwd and len(pwd) < 4:
+            messagebox.showwarning("خطا", "رمز عبور جدید باید حداقل ۴ کاراکتر باشد!", parent=popup)
+            u_pwd_ent.focus()
+            return
+
+        success, msg, updated_user = update_user(
+            user_id=user_id,
+            username=uname,
+            phone_number=norm_phone,
+            password=pwd,
+            role=role_val,
+            telegram_chat_id=tg,
+            is_active=act_val,
+            database_path=db_p,
+        )
+
+        if success:
+            global current_user
+            if current_user and current_user.get("id") == user_id and updated_user:
+                current_user = updated_user
+                u_role_str = tr(str(current_user.get("role", "")))
+                u_name_str = str(current_user.get("username", ""))
+                lbl_user_badge.configure(text=f"{u_name_str} ({u_role_str})")
+
+            messagebox.showinfo("موفق", msg, parent=popup)
+            popup.destroy()
+            search_users()
+        else:
+            messagebox.showerror("خطا", msg, parent=popup)
+
+    btn_f = ctk.CTkFrame(popup, fg_color="transparent")
+    btn_f.pack(fill=tk.X, padx=20, pady=(6, 12))
+
+    btn_save = create_icon_button(
+        btn_f,
+        text=" ذخیره تغییرات ",
+        icon_name="check",
+        command=do_update_user,
+        font=FONT_BOLD,
+        fg_color="#16a34a",
+        hover_color="#15803d",
+        height=34,
+        width=130,
+    )
+    btn_save.pack(side=tk.RIGHT, padx=5)
+
+    btn_cancel = create_icon_button(
+        btn_f,
+        text=" انصراف ",
+        icon_name="x",
+        command=popup.destroy,
+        font=FONT_NORMAL,
+        fg_color="transparent",
+        hover_color=("#e2e8f0", "#1e293b"),
+        height=34,
+        width=90,
+    )
+    btn_cancel.pack(side=tk.LEFT, padx=5)
+
+
 add_user_btn.configure(command=open_create_user_popup)
+edit_user_btn.configure(command=open_edit_user_popup)
+users_tree.bind("<Double-Button-1>", lambda e: open_edit_user_popup())
+
+users_context_menu = tk.Menu(root, tearoff=0)
+users_context_menu.add_command(label="ویرایش مشخصات کاربر...", command=open_edit_user_popup)
+users_context_menu.add_separator()
+users_context_menu.add_command(label="حذف کاربر", command=lambda: users_tree.event_generate("<Delete>"))
+
+
+def show_users_context_menu(event):
+    row_id = users_tree.identify_row(event.y)
+    if row_id:
+        users_tree.selection_set(row_id)
+        users_context_menu.tk_popup(event.x_root, event.y_root)
+
+
+users_tree.bind("<Button-3>", show_users_context_menu)
 
 users_search_after_id = None
 
@@ -3494,8 +4061,9 @@ scrollbar_2.configure(command=loans_tree.yview)
 for col in loan_column:
     loans_tree.heading(col, text=tr(col), anchor=tk.CENTER)
     loans_tree.column(col, anchor=tk.CENTER)
+col_mem_display = "member_id" if "member_id" in loan_column else "member_name"
 loans_tree["displaycolumns"] = rtl_display_order(
-    loan_column, ["id", "member_name", "book_id", "borrow_date", "return_date", "borrowed"]
+    loan_column, ["id", col_mem_display, "book_id", "borrow_date", "return_date", "borrowed"]
 )
 loans_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=4)
 
@@ -3517,7 +4085,11 @@ def do_return_selected_loan():
     b_idx = loan_column.index("book_id") if "book_id" in loan_column else -1
     book_title = values[b_idx] if b_idx != -1 and b_idx < len(values) else ""
 
-    m_idx = loan_column.index("member_name") if "member_name" in loan_column else -1
+    m_idx = (
+        loan_column.index("member_id")
+        if "member_id" in loan_column
+        else (loan_column.index("member_name") if "member_name" in loan_column else -1)
+    )
     member_name = values[m_idx] if m_idx != -1 and m_idx < len(values) else ""
 
     borrowed_idx = loan_column.index("borrowed") if "borrowed" in loan_column else -1
@@ -3620,36 +4192,62 @@ def search_loans(event=None):
                 pattern = f"%{search_value}%"
                 op = "LIKE"
 
-            searchable_cols = ["member_name", "book_id", "id"]
             if selected_col == "all":
-                sub_conds = [f"{col} {op} ?" for col in searchable_cols]
-                where_conditions.append("(" + " OR ".join(sub_conds) + ")")
-                params.extend([pattern] * len(searchable_cols))
+                where_conditions.append(
+                    "(COALESCE(m.username, '') "
+                    + op
+                    + " ? OR COALESCE(b.title, '') "
+                    + op
+                    + " ? OR CAST(l.id AS TEXT) "
+                    + op
+                    + " ?)"
+                )
+                params.extend([pattern, pattern, pattern])
+            elif selected_col in ("member_id", "member_name"):
+                where_conditions.append(f"COALESCE(m.username, '') {op} ?")
+                params.append(pattern)
+            elif selected_col == "book_id":
+                where_conditions.append(f"COALESCE(b.title, '') {op} ?")
+                params.append(pattern)
             elif selected_col in loan_column:
-                where_conditions.append(f"{selected_col} {op} ?")
+                where_conditions.append(f"l.`{selected_col}` {op} ?")
                 params.append(pattern)
 
         status = loans_filter_settings.get("status", "all")
         if status == "borrowed":
-            where_conditions.append("(borrowed = 1 OR borrowed = '1')")
+            where_conditions.append("(l.borrowed = 1 OR l.borrowed = '1')")
         elif status == "returned":
-            where_conditions.append("(borrowed = 0 OR borrowed = '0' OR borrowed IS NULL)")
+            where_conditions.append("(l.borrowed = 0 OR l.borrowed = '0' OR l.borrowed IS NULL)")
 
         from_d = loans_filter_settings.get("from_date", "").strip()
         if from_d:
             from_greg = jalali_to_gregorian_str(from_d)
             if from_greg:
-                where_conditions.append("borrow_date >= ?")
+                where_conditions.append("l.borrow_date >= ?")
                 params.append(from_greg)
 
         to_d = loans_filter_settings.get("to_date", "").strip()
         if to_d:
             to_greg = jalali_to_gregorian_str(to_d)
             if to_greg:
-                where_conditions.append("borrow_date <= ?")
+                where_conditions.append("l.borrow_date <= ?")
                 params.append(to_greg)
 
-        query = f"SELECT {', '.join(loan_column)} FROM `{new_tabel_name}`"
+        cols_select = []
+        for col in loan_column:
+            if col in ("member_id", "member_name"):
+                cols_select.append(f"COALESCE(m.username, CAST(l.`{col}` AS TEXT)) AS `{col}`")
+            elif col == "book_id":
+                cols_select.append("COALESCE(b.title, CAST(l.book_id AS TEXT)) AS book_id")
+            else:
+                cols_select.append(f"l.`{col}`")
+
+        mem_join_col = "member_id" if "member_id" in loan_column else "member_name"
+        query = (
+            f"SELECT {', '.join(cols_select)} FROM loans l "
+            f"LEFT JOIN members m ON (l.`{mem_join_col}` = m.id OR CAST(l.`{mem_join_col}` AS TEXT) = m.username) "
+            f"LEFT JOIN books b ON (l.book_id = b.id OR l.book_id = b.title)"
+        )
         if where_conditions:
             query += " WHERE " + " AND ".join(where_conditions)
 
@@ -3659,11 +4257,15 @@ def search_loans(event=None):
             sort_dir = "ASC"
 
         if sort_col == "duration":
-            query += f" ORDER BY (julianday(`return_date`) - julianday(`borrow_date`)) {sort_dir}"
+            query += f" ORDER BY (julianday(l.`return_date`) - julianday(l.`borrow_date`)) {sort_dir}"
+        elif sort_col in ("member_id", "member_name"):
+            query += f" ORDER BY m.username {sort_dir}"
+        elif sort_col == "book_id":
+            query += f" ORDER BY b.title {sort_dir}"
         else:
             if sort_col not in loan_column:
                 sort_col = "id"
-            query += f" ORDER BY `{sort_col}` {sort_dir}"
+            query += f" ORDER BY l.`{sort_col}` {sort_dir}"
 
         temp_cursor.execute(query, tuple(params))
         results = temp_cursor.fetchall()
@@ -3720,7 +4322,8 @@ def open_loans_filter_popup():
     col_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
     rb_all = ctk.CTkRadioButton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL)
     rb_all.pack(side=tk.RIGHT, padx=4)
-    for col in ["member_name", "book_id", "id"]:
+    mem_filter_col = "member_id" if "member_id" in loan_column else "member_name"
+    for col in [mem_filter_col, "book_id", "id"]:
         rb = ctk.CTkRadioButton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL)
         rb.pack(side=tk.RIGHT, padx=4)
 
@@ -3808,7 +4411,7 @@ def open_loans_filter_popup():
         "مدت امانت": "duration",
         "تاریخ بازگشت": "return_date",
         "تاریخ امانت": "borrow_date",
-        "نام کاربر": "member_name",
+        "نام کاربر": mem_filter_col,
         "نام کتاب": "book_id",
         "شناسه": "id",
     }
@@ -3928,7 +4531,10 @@ def open_add_loan_popup(initial_book_title=""):
     mem_conn = get_db_connection(db_p)
     try:
         mem_cur = mem_conn.cursor()
-        mem_cur.execute("SELECT member_id FROM members ORDER BY member_id ASC")
+        try:
+            mem_cur.execute("SELECT username FROM members ORDER BY username ASC")
+        except sqlite3.OperationalError:
+            mem_cur.execute("SELECT member_id FROM members ORDER BY member_id ASC")
         members_data = [row[0] for row in mem_cur.fetchall()]
     finally:
         mem_conn.close()
@@ -3981,7 +4587,8 @@ def open_add_loan_popup(initial_book_title=""):
             bk_cur.execute("""
                 SELECT title FROM books
                 WHERE title IS NOT NULL AND title != ''
-                  AND title NOT IN (SELECT book_id FROM loans WHERE borrowed = 1 OR borrowed = '1')
+                  AND id NOT IN (SELECT book_id FROM loans WHERE (borrowed = 1 OR borrowed = '1') AND book_id IS NOT NULL)
+                  AND title NOT IN (SELECT book_id FROM loans WHERE (borrowed = 1 OR borrowed = '1') AND book_id IS NOT NULL)
                 ORDER BY title ASC
             """)
             books_data = [row[0] for row in bk_cur.fetchall() if row[0]]
@@ -4148,28 +4755,98 @@ def open_add_loan_popup(initial_book_title=""):
         with get_db_connection(db_p) as conn:
             settings = get_all_settings(conn)
         mln = int(settings.get("max_loans", "3"))
-        print(mln)
         try:
-            ins_cur = conn.cursor()
+            with get_db_connection(db_p) as conn:
+                ins_cur = conn.cursor()
 
-            ins_cur.execute(
-                "SELECT COUNT(*) FROM loans WHERE member_name = ? AND (borrowed = 1 OR borrowed = '1')", (m_name,)
-            )
-            current_borrowed = ins_cur.fetchone()[0]
-            if current_borrowed >= mln:
-                messagebox.showerror(
-                    "خطا",
-                    f"کاربر «{m_name}» در حال حاضر {current_borrowed} کتاب به امانت برده.\n"
-                    f"حداکثر سقف مجاز امانت همزمان: {mln} کتاب می‌باشد.",
-                    parent=popup,
+                # 1. Resolve member_id
+                try:
+                    ins_cur.execute("SELECT id, username FROM members WHERE username = ?", (m_name,))
+                except sqlite3.OperationalError:
+                    ins_cur.execute("SELECT id, member_id FROM members WHERE member_id = ?", (m_name,))
+                m_row = ins_cur.fetchone()
+                if not m_row and m_name.isdigit():
+                    try:
+                        ins_cur.execute("SELECT id, username FROM members WHERE id = ?", (int(m_name),))
+                    except sqlite3.OperationalError:
+                        ins_cur.execute("SELECT id, member_id FROM members WHERE id = ?", (int(m_name),))
+                    m_row = ins_cur.fetchone()
+
+                if not m_row:
+                    messagebox.showerror(
+                        "خطا",
+                        f"عضوی با نام «{m_name}» در فهرست اعضای کتابخانه یافت نشد.\nلطفاً ابتدا از تب «اعضای کتابخانه» او را ثبت کنید.",
+                        parent=popup,
+                    )
+                    member_entry.focus()
+                    return
+
+                actual_member_id = m_row[0]
+                actual_member_name = m_row[1]
+
+                # 2. Check book_id is actual ID from books table
+                actual_book_id = None
+                actual_book_title = b_title
+
+                ins_cur.execute("SELECT id, title FROM books WHERE title = ?", (b_title,))
+                b_row = ins_cur.fetchone()
+                if b_row:
+                    actual_book_id = b_row[0]
+                    actual_book_title = b_row[1]
+                elif b_title.isdigit():
+                    ins_cur.execute("SELECT id, title FROM books WHERE id = ?", (int(b_title),))
+                    b_row = ins_cur.fetchone()
+                    if b_row:
+                        actual_book_id = b_row[0]
+                        actual_book_title = b_row[1]
+
+                if actual_book_id is None:
+                    messagebox.showerror(
+                        "خطا",
+                        f"کتابی با عنوان یا شناسه «{b_title}» در پایگاه داده کتاب‌ها یافت نشد.",
+                        parent=popup,
+                    )
+                    book_entry.focus()
+                    return
+
+                # 3. Check member's active borrowed loans limit
+                ins_cur.execute(
+                    "SELECT COUNT(*) FROM loans WHERE (member_id = ? OR member_id = ?) AND (borrowed = 1 OR borrowed = '1')",
+                    (actual_member_id, str(actual_member_id)),
                 )
-                return
+                current_borrowed = ins_cur.fetchone()[0]
+                if current_borrowed >= mln:
+                    messagebox.showerror(
+                        "خطا",
+                        f"کاربر «{actual_member_name}» در حال حاضر {current_borrowed} کتاب به امانت برده.\n"
+                        f"حداکثر سقف مجاز امانت همزمان: {mln} کتاب می‌باشد.",
+                        parent=popup,
+                    )
+                    return
 
-            ins_cur.execute(
-                "INSERT INTO loans (member_name, book_id, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
-                (m_name, b_title, return_gregorian, borrow_gregorian),
+                # 4. Check if book is already borrowed
+                ins_cur.execute(
+                    "SELECT COUNT(*) FROM loans WHERE (book_id = ? OR book_id = ?) AND (borrowed = 1 OR borrowed = '1')",
+                    (actual_book_id, str(actual_book_id)),
+                )
+                if ins_cur.fetchone()[0] > 0:
+                    messagebox.showwarning(
+                        "امانت کتاب",
+                        f"کتاب «{actual_book_title}» در حال حاضر در امانت است و امکان امانت مجدد آن وجود ندارد.",
+                        parent=popup,
+                    )
+                    return
+
+                # 5. Insert loan with actual member_id and actual book_id
+                ins_cur.execute(
+                    "INSERT INTO loans (member_id, book_id, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
+                    (actual_member_id, actual_book_id, return_gregorian, borrow_gregorian),
+                )
+                conn.commit()
+
+            notification_engine.show(
+                "ثبت موفق امانت", f"کتاب «{actual_book_title}» با موفقیت برای {actual_member_name} ثبت شد."
             )
-            notification_engine.show("ثبت موفق امانت", f"کتاب «{b_title}» با موفقیت برای {m_name} ثبت شد.")
 
             messagebox.showinfo("موفقیت", "اطلاعات امانت با موفقیت ذخیره شد!", parent=popup)
             popup.destroy()
@@ -4177,9 +4854,6 @@ def open_add_loan_popup(initial_book_title=""):
             search()
         except sqlite3.Error as e:
             messagebox.showerror("خطا در پایگاه داده", f"خطا در ذخیره اطلاعات: {e}", parent=popup)
-        finally:
-            conn.commit()
-            conn.close()
 
     btn_f = ctk.CTkFrame(popup, fg_color="transparent")
     btn_f.pack(pady=16, padx=25, fill=tk.X)
@@ -4225,10 +4899,21 @@ def on_double_click(event):
     except ValueError:
         title_value = ""
 
+    id_index = columns.index("id") if "id" in columns else -1
+    book_db_id = None
+    if id_index != -1 and id_index < len(values):
+        try:
+            book_db_id = int(values[id_index])
+        except (ValueError, TypeError):
+            pass
+
     conn = get_db_connection(db_p)
     try:
         cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM loans WHERE book_id = ? AND (borrowed = 1 OR borrowed = '1')", (title_value,))
+        cur.execute(
+            "SELECT COUNT(*) FROM loans WHERE (book_id = ? OR book_id = ?) AND (borrowed = 1 OR borrowed = '1')",
+            (book_db_id, title_value),
+        )
         if cur.fetchone()[0] > 0:
             messagebox.showwarning(
                 "امانت کتاب",
@@ -4275,7 +4960,11 @@ def open_extend_loan_popup():
     b_idx = loan_column.index("book_id") if "book_id" in loan_column else -1
     book_title = values[b_idx] if b_idx != -1 and b_idx < len(values) else ""
 
-    m_idx = loan_column.index("member_name") if "member_name" in loan_column else -1
+    m_idx = (
+        loan_column.index("member_id")
+        if "member_id" in loan_column
+        else (loan_column.index("member_name") if "member_name" in loan_column else -1)
+    )
     member_name = values[m_idx] if m_idx != -1 and m_idx < len(values) else ""
 
     r_idx = loan_column.index("return_date") if "return_date" in loan_column else -1
@@ -5109,6 +5798,55 @@ lbl_boot_net_status = ctk.CTkLabel(
 )
 lbl_boot_net_status.pack(side=tk.LEFT, padx=10)
 
+var_otp_cleanup_enabled = tk.BooleanVar(value=True)
+
+pref_row_otp = ctk.CTkFrame(pref_card, fg_color="transparent")
+pref_row_otp.pack(fill=tk.X, padx=16, pady=4)
+
+chk_enable_otp_cleanup = ctk.CTkSwitch(
+    pref_row_otp,
+    text="پاک‌سازی خودکار کدهای یک‌بارمصرف (OTP)",
+    variable=var_otp_cleanup_enabled,
+    font=FONT_NORMAL,
+)
+chk_enable_otp_cleanup.pack(side=tk.RIGHT, padx=10)
+
+ctk.CTkLabel(pref_row_otp, text="بازه پاک‌سازی (ساعت):", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(15, 5))
+
+combo_otp_interval = ctk.CTkOptionMenu(
+    pref_row_otp,
+    values=["1", "3", "6", "12", "24", "48"],
+    width=80,
+    font=FONT_NORMAL,
+    dropdown_font=FONT_NORMAL,
+)
+combo_otp_interval.set("12")
+combo_otp_interval.pack(side=tk.RIGHT, padx=5)
+
+
+def trigger_clean_otp_now():
+    try:
+        deleted = otp_cleanup_manager.clean_now()
+        messagebox.showinfo(
+            "پاک‌سازی کدهای OTP",
+            f"عملیات پاک‌سازی انجام شد. {deleted} رکورد کد/نشست منقضی از پایگاه داده پاک شد.",
+            parent=root,
+        )
+    except Exception as e:
+        messagebox.showerror("خطا", f"خطا در پاک‌سازی کدهای OTP:\n{e}", parent=root)
+
+
+btn_clean_otp = create_icon_button(
+    pref_row_otp,
+    text=" پاک‌سازی فوری کدهای OTP ",
+    icon_name="rotate-ccw",
+    font=FONT_SMALL,
+    command=trigger_clean_otp_now,
+    width=175,
+    height=28,
+)
+btn_clean_otp.pack(side=tk.LEFT, padx=5)
+
 pref_row2 = ctk.CTkFrame(pref_card, fg_color="transparent")
 pref_row2.pack(fill=tk.X, padx=16, pady=6)
 
@@ -5274,6 +6012,9 @@ def save_settings_ui():
     else:
         ai_val = "true" if var_ai_enabled.get() else "false"
 
+    otp_cleanup_val = "true" if var_otp_cleanup_enabled.get() else "false"
+    otp_interval_val = str(combo_otp_interval.get()).strip() or "12"
+
     try:
         with get_db_connection(db_p) as conn:
             set_setting(conn, "max_loans", max_loans)
@@ -5283,6 +6024,8 @@ def save_settings_ui():
             set_setting(conn, "notification_check_interval_mins", interval)
             set_setting(conn, "internet_access_enabled", internet_val)
             set_setting(conn, "ai_features_enabled", ai_val)
+            set_setting(conn, "otp_cleanup_enabled", otp_cleanup_val)
+            set_setting(conn, "otp_cleanup_interval_hours", otp_interval_val)
             set_setting(conn, "openai_url", entry_ai_url.get().strip())
             set_setting(conn, "openai_key", entry_ai_key.get().strip())
             set_setting(conn, "openai_model", entry_ai_model.get().strip())
@@ -5303,6 +6046,11 @@ def save_settings_ui():
 
         try:
             reminder_manager.reschedule()
+        except Exception:
+            pass
+
+        try:
+            otp_cleanup_manager.reschedule()
         except Exception:
             pass
 
@@ -6064,6 +6812,14 @@ def load_settings_into_ui():
         else:
             var_ai_enabled.set(ai_en)
             chk_enable_ai.configure(state="normal")
+
+        otp_en = settings.get("otp_cleanup_enabled", "true").lower() == "true"
+        otp_int = settings.get("otp_cleanup_interval_hours", "12")
+        var_otp_cleanup_enabled.set(otp_en)
+        if otp_int in ["1", "3", "6", "12", "24", "48"]:
+            combo_otp_interval.set(otp_int)
+        else:
+            combo_otp_interval.set("12")
 
         update_boot_net_status_label()
         update_ai_card_inputs_state(enabled=(net_en and ai_en))

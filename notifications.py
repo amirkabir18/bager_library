@@ -279,9 +279,14 @@ class LoanReminderManager:
             """)
 
             cursor.execute("""
-                SELECT id, book_id, member_name, return_date
-                FROM loans
-                WHERE borrowed = 1 AND return_date IS NOT NULL AND return_date != ''
+                SELECT l.id,
+                       COALESCE(b.title, CAST(l.book_id AS TEXT), 'نامشخص') AS book_title,
+                       COALESCE(m.username, CAST(l.member_id AS TEXT), 'کاربر') AS member_name,
+                       l.return_date
+                FROM loans l
+                LEFT JOIN books b ON (l.book_id = b.id OR CAST(l.book_id AS TEXT) = CAST(b.id AS TEXT) OR l.book_id = b.title)
+                LEFT JOIN members m ON (l.member_id = m.id OR CAST(l.member_id AS TEXT) = CAST(m.id AS TEXT) OR CAST(l.member_id AS TEXT) = m.username)
+                WHERE l.borrowed = 1 AND l.return_date IS NOT NULL AND l.return_date != ''
             """)
             active_loans = cursor.fetchall()
 
@@ -290,7 +295,7 @@ class LoanReminderManager:
 
             for loan in active_loans:
                 loan_id = loan["id"]
-                book_id = loan["book_id"] or "نامشخص"
+                book_id = loan["book_title"] or "نامشخص"
                 member_name = loan["member_name"] or "کاربر"
                 return_date_raw = str(loan["return_date"]).strip()
 

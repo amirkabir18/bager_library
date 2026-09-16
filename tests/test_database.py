@@ -114,6 +114,17 @@ class TestDatabaseMigration(unittest.TestCase):
         self.assertIn("password_hash", auth_cols)
         self.assertIn("is_active", auth_cols)
 
+        # Check members table migrated from member_id to username
+        cur.execute('PRAGMA table_info("members")')
+        mem_cols = {row[1] for row in cur.fetchall()}
+        self.assertIn("username", mem_cols)
+
+        # Check loans table migrated with member_id and book_id
+        cur.execute('PRAGMA table_info("loans")')
+        loan_cols = {row[1] for row in cur.fetchall()}
+        self.assertIn("member_id", loan_cols)
+        self.assertIn("book_id", loan_cols)
+
     def test_idempotence(self):
         # Running multiple times should not raise errors
         database.init_database(self.conn)
@@ -178,16 +189,21 @@ class TestDatabaseMigration(unittest.TestCase):
         database.init_database(self.conn)
         cur = self.conn.cursor()
         cur.execute("INSERT INTO books (title, author, isbn) VALUES ('کتاب تست', 'نویسنده تست', '1234567890')")
-        cur.execute("INSERT INTO members (member_id, phone_number) VALUES ('عضو تستی', '09123456789')")
-        cur.execute("""
-            INSERT INTO loans (member_name, book_id, return_date, borrow_date, borrowed)
-            VALUES ('عضو تستی', 'کتاب تست', '2026-09-20', '2026-09-10', 1)
-        """)
+        book_id = cur.lastrowid
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('عضو تستی', '09123456789')")
+        member_id = cur.lastrowid
+        cur.execute(
+            """
+            INSERT INTO loans (member_id, book_id, return_date, borrow_date, borrowed)
+            VALUES (?, ?, '2026-09-20', '2026-09-10', 1)
+            """,
+            (member_id, book_id),
+        )
         loan_id = cur.lastrowid
         self.conn.commit()
 
         # Check book is currently marked as borrowed
-        cur.execute("SELECT COUNT(*) FROM loans WHERE book_id = 'کتاب تست' AND (borrowed = 1 OR borrowed = '1')")
+        cur.execute("SELECT COUNT(*) FROM loans WHERE book_id = ? AND (borrowed = 1 OR borrowed = '1')", (book_id,))
         self.assertEqual(cur.fetchone()[0], 1)
 
         # Return loan
@@ -195,7 +211,7 @@ class TestDatabaseMigration(unittest.TestCase):
         self.conn.commit()
 
         # Check book is now returned and available
-        cur.execute("SELECT COUNT(*) FROM loans WHERE book_id = 'کتاب تست' AND (borrowed = 1 OR borrowed = '1')")
+        cur.execute("SELECT COUNT(*) FROM loans WHERE book_id = ? AND (borrowed = 1 OR borrowed = '1')", (book_id,))
         self.assertEqual(cur.fetchone()[0], 0)
 
         cur.execute("SELECT borrowed FROM loans WHERE id = ?", (loan_id,))

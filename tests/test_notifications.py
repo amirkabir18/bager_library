@@ -58,25 +58,43 @@ class TestLoanReminderManager(unittest.TestCase):
         overdue_str = (today - datetime.timedelta(days=3)).strftime("%Y-%m-%d")
         returned_overdue_str = (today - datetime.timedelta(days=5)).strftime("%Y-%m-%d")
 
+        cur.execute("INSERT INTO books (title, author) VALUES ('کتاب امروز', 'نویسنده 1')")
+        b1 = cur.lastrowid
+        cur.execute("INSERT INTO books (title, author) VALUES ('کتاب فردا', 'نویسنده 2')")
+        b2 = cur.lastrowid
+        cur.execute("INSERT INTO books (title, author) VALUES ('کتاب تاخیر خورده', 'نویسنده 3')")
+        b3 = cur.lastrowid
+        cur.execute("INSERT INTO books (title, author) VALUES ('کتاب برگشتی', 'نویسنده 4')")
+        b4 = cur.lastrowid
+
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('علی', '09120000001')")
+        m1 = cur.lastrowid
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('رضا', '09120000002')")
+        m2 = cur.lastrowid
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('سارا', '09120000003')")
+        m3 = cur.lastrowid
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('مهدی', '09120000004')")
+        m4 = cur.lastrowid
+
         # 1. Due today
         cur.execute(
-            "INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
-            ("کتاب امروز", "علی", today_str, today_str),
+            "INSERT INTO loans (book_id, member_id, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
+            (b1, m1, today_str, today_str),
         )
         # 2. Due soon (tomorrow)
         cur.execute(
-            "INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
-            ("کتاب فردا", "رضا", due_tomorrow_str, today_str),
+            "INSERT INTO loans (book_id, member_id, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
+            (b2, m2, due_tomorrow_str, today_str),
         )
         # 3. Overdue (3 days late)
         cur.execute(
-            "INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
-            ("کتاب تاخیر خورده", "سارا", overdue_str, today_str),
+            "INSERT INTO loans (book_id, member_id, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
+            (b3, m3, overdue_str, today_str),
         )
         # 4. Returned loan (should be ignored)
         cur.execute(
-            "INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 0)",
-            ("کتاب برگشتی", "مهدی", returned_overdue_str, today_str),
+            "INSERT INTO loans (book_id, member_id, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 0)",
+            (b4, m4, returned_overdue_str, today_str),
         )
         self.conn.commit()
 
@@ -92,9 +110,13 @@ class TestLoanReminderManager(unittest.TestCase):
     def test_notifications_disabled_in_settings(self):
         cur = self.conn.cursor()
         today_str = datetime.date.today().strftime("%Y-%m-%d")
+        cur.execute("INSERT INTO books (title, author) VALUES ('کتاب تست', 'نویسنده')")
+        bt = cur.lastrowid
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('علی', '09120000001')")
+        mt = cur.lastrowid
         cur.execute(
-            "INSERT INTO loans (book_id, member_name, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
-            ("کتاب تست", "علی", today_str, today_str),
+            "INSERT INTO loans (book_id, member_id, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
+            (bt, mt, today_str, today_str),
         )
         cur.execute("UPDATE app_settings SET value = 'false' WHERE key = 'notifications_enabled'")
         self.conn.commit()

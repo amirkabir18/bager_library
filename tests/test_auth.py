@@ -22,6 +22,7 @@ from auth import (
     has_admin_user,
     hash_otp,
     hash_password,
+    is_super_admin,
     mask_phone_number,
     normalize_digits,
     normalize_phone_number,
@@ -58,6 +59,18 @@ class TestAuthUtilities(unittest.TestCase):
     def test_mask_phone_number(self):
         self.assertEqual(mask_phone_number("09123456789"), "0912***6789")
         self.assertEqual(mask_phone_number("+989123456789"), "0912***6789")
+
+    def test_is_super_admin(self):
+        self.assertTrue(is_super_admin({"role": "super admin"}))
+        self.assertTrue(is_super_admin({"role": "superadmin"}))
+        self.assertTrue(is_super_admin({"role": "Super Admin"}))
+        self.assertTrue(is_super_admin("super admin"))
+        self.assertTrue(is_super_admin("superadmin"))
+        self.assertFalse(is_super_admin({"role": "admin"}))
+        self.assertFalse(is_super_admin({"role": "librarian"}))
+        self.assertFalse(is_super_admin({"role": "user"}))
+        self.assertFalse(is_super_admin(None))
+        self.assertFalse(is_super_admin({}))
 
 
 class TestPasswordHashing(unittest.TestCase):
