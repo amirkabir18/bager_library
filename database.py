@@ -310,6 +310,8 @@ def init_database(connection: sqlite3.Connection | None = None):
             ("notification_advance_days", "2"),
             ("notification_sound", "true"),
             ("notification_check_interval_mins", "30"),
+            ("internet_access_enabled", "true"),
+            ("ai_features_enabled", "true"),
         ]
         cur.executemany(
             """
@@ -543,6 +545,43 @@ def get_all_settings(
             settings[k] = env_val
 
     return settings
+
+
+def is_internet_access_enabled(
+    database_path_or_conn: sqlite3.Connection | str | None = None,
+) -> bool:
+    """
+    Returns True if internet access is permitted by application settings.
+    """
+    if isinstance(database_path_or_conn, sqlite3.Connection):
+        val = get_setting(database_path_or_conn, "internet_access_enabled", default="true")
+    else:
+        val = get_setting(
+            "internet_access_enabled",
+            default="true",
+            database_path=database_path_or_conn,
+        )
+    return str(val).strip().lower() in ("true", "1", "yes", "on")
+
+
+def is_ai_features_enabled(
+    database_path_or_conn: sqlite3.Connection | str | None = None,
+) -> bool:
+    """
+    Returns True if AI features are enabled and permitted.
+    If internet access is disabled, AI features are strictly disabled as well.
+    """
+    if not is_internet_access_enabled(database_path_or_conn):
+        return False
+    if isinstance(database_path_or_conn, sqlite3.Connection):
+        val = get_setting(database_path_or_conn, "ai_features_enabled", default="true")
+    else:
+        val = get_setting(
+            "ai_features_enabled",
+            default="true",
+            database_path=database_path_or_conn,
+        )
+    return str(val).strip().lower() in ("true", "1", "yes", "on")
 
 
 def _normalize_filter_date(val: str | None) -> str | None:

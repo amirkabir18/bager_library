@@ -516,3 +516,34 @@ class TestDeweyAIAgent(unittest.TestCase):
             detected = service.detect_subject("ریاضیات", threshold=0.80)
             self.assertIsNotNone(detected)
             self.assertEqual(detected.code, "510")
+
+    def test_ai_agent_skips_when_ai_disabled_in_settings(self):
+        agent = DeweyAIAgent(base_url="http://localhost:20128")
+        with patch("database.is_ai_features_enabled", return_value=False):
+            res = agent.detect_ddc("برنامه‌نویسی پایتون")
+            self.assertIsNone(res, "When AI features are disabled in settings, detect_ddc must return None")
+
+    def test_ai_agent_skips_when_internet_disabled_in_settings(self):
+        agent = DeweyAIAgent(base_url="http://localhost:20128")
+        with patch("database.is_internet_access_enabled", return_value=False):
+            res = agent.detect_ddc("برنامه‌نویسی پایتون")
+            self.assertIsNone(res, "When internet access is disabled in settings, detect_ddc must return None")
+
+    def test_dewey_service_skips_when_ai_disabled(self):
+        service = DeweyService()
+        with patch("database.is_ai_features_enabled", return_value=False):
+            self.assertIsNone(service.detect_with_ai("آموزش هوش مصنوعی"))
+            self.assertEqual(service.search_subject("هوش مصنوعی"), [])
+            self.assertIsNone(service.detect_subject("هوش مصنوعی"))
+
+    def test_isbn_service_skips_online_fetch_when_internet_disabled(self):
+        from services.isbn_service import ISBNService
+
+        service = ISBNService()
+        with patch("database.is_internet_access_enabled", return_value=False):
+            with patch("urllib.request.urlopen") as mock_url:
+                meta = service.fetch_metadata("9780132350884")
+                self.assertIsNotNone(meta)
+                self.assertEqual(meta.isbn, "9780132350884")
+                self.assertIsNone(meta.title)
+                mock_url.assert_not_called()

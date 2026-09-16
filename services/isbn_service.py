@@ -92,6 +92,12 @@ class ISBNService:
         if not isbn:
             return None
 
+        from database import is_internet_access_enabled
+
+        if not is_internet_access_enabled():
+            logger.info("Internet access disabled in settings. Skipping online ISBN metadata fetch.")
+            return BookMetadata(isbn=isbn)
+
         # 1. Try Open Library
         meta = self._fetch_from_open_library(isbn)
         if meta and meta.title:

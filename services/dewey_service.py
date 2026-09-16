@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from config.dewey import load_dewey_dataset
+from database import is_ai_features_enabled
 from services.dewey_ai_agent import DeweyAIAgent, SearchResult
 
 logger = logging.getLogger(__name__)
@@ -163,6 +164,8 @@ class DeweyService:
 
     def search_subject(self, query: str, limit: int = 5) -> list[SearchResult]:
         """Searches DDC using the AI Agent."""
+        if not is_ai_features_enabled():
+            return []
         agent = self.get_ai_agent()
         if agent is None:
             return []
@@ -173,6 +176,8 @@ class DeweyService:
 
     def detect_subject(self, query: str, threshold: float = 0.50) -> SearchResult | None:
         """Detects the DDC code of a subject using the AI Agent."""
+        if not is_ai_features_enabled():
+            return None
         agent = self.get_ai_agent()
         if agent is None:
             return None
@@ -191,6 +196,8 @@ class DeweyService:
         Uses the OpenAI AI Agent to detect and classify DDC for a title, topic, or book.
         Validates DDC code strictly and returns a DeweyResult with source='ai'.
         """
+        if not is_ai_features_enabled():
+            return None
         agent = self.get_ai_agent()
         if agent is None:
             return None
@@ -308,17 +315,20 @@ class DeweyService:
             )
 
         # --- Step 2: AI Agent Classification ---
-        topic = title_raw
-        if categories:
-            cat_str = " | ".join([c for c in categories if c])
-            if cat_str:
-                topic = f"{topic} ({cat_str})" if topic else cat_str
+        if is_ai_features_enabled():
+            topic = title_raw
+            if categories:
+                cat_str = " | ".join([c for c in categories if c])
+                if cat_str:
+                    topic = f"{topic} ({cat_str})" if topic else cat_str
 
-        author = authors[0] if authors else None
-        ai_res = self.detect_with_ai(title=topic, author=author, description=description)
-        if ai_res and ai_res.dewey_code:
-            logger.info(f"Book: '{title_raw}' classified via AI Agent: {ai_res.dewey_code} ({ai_res.dewey_subject})")
-            return ai_res
+            author = authors[0] if authors else None
+            ai_res = self.detect_with_ai(title=topic, author=author, description=description)
+            if ai_res and ai_res.dewey_code:
+                logger.info(
+                    f"Book: '{title_raw}' classified via AI Agent: {ai_res.dewey_code} ({ai_res.dewey_subject})"
+                )
+                return ai_res
 
         # --- Step 3: Low Confidence Fallback ---
         logger.warning(f"DDC classification failed for book: '{title_raw}'. Setting dewey_code to None.")

@@ -18,7 +18,7 @@ from typing import Any
 
 from openai import APIConnectionError, APIError, OpenAI
 
-from database import get_setting
+from database import get_setting, is_ai_features_enabled, is_internet_access_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,11 @@ class SearchResult:
         }
 
 
-def check_internet_access(timeout: float = 1.2) -> bool:
+_BOOT_INTERNET_CHECKED: bool = False
+_BOOT_INTERNET_AVAILABLE: bool = False
+
+
+def probe_internet_connectivity(timeout: float = 1.2) -> bool:
     """
     Rapid non-blocking check to determine if the host system has active internet access.
     Probes reliable DNS roots (Cloudflare 1.1.1.1, Google 8.8.8.8, OpenDNS).
@@ -66,6 +70,68 @@ def check_internet_access(timeout: float = 1.2) -> bool:
         except OSError:
             continue
     return False
+
+
+def init_boot_internet_check(database_path: str | None = None, timeout: float = 1.2) -> bool:
+    """
+    Performs internet connectivity check at application boot time.
+    Respects internet_access_enabled setting.
+    """
+    global _BOOT_INTERNET_CHECKED, _BOOT_INTERNET_AVAILABLE
+
+    if not is_internet_access_enabled(database_path):
+        _BOOT_INTERNET_AVAILABLE = False
+        _BOOT_INTERNET_CHECKED = True
+        logger.info("Internet access is disabled in settings at boot time.")
+        return False
+
+    _BOOT_INTERNET_AVAILABLE = probe_internet_connectivity(timeout=timeout)
+    _BOOT_INTERNET_CHECKED = True
+    logger.info(f"Boot-time internet check completed: available={_BOOT_INTERNET_AVAILABLE}")
+    return _BOOT_INTERNET_AVAILABLE
+
+
+def get_boot_internet_status(database_path: str | None = None) -> bool:
+    """
+    Returns the boot-time cached internet status.
+    If not checked yet, triggers boot check.
+    """
+    global _BOOT_INTERNET_CHECKED, _BOOT_INTERNET_AVAILABLE
+
+    if not is_internet_access_enabled(database_path):
+        return False
+
+    if not _BOOT_INTERNET_CHECKED:
+        return init_boot_internet_check(database_path=database_path)
+    return _BOOT_INTERNET_AVAILABLE
+
+
+def set_boot_internet_status(status: bool) -> None:
+    """
+    Manually update cached internet status.
+    """
+    global _BOOT_INTERNET_CHECKED, _BOOT_INTERNET_AVAILABLE
+    _BOOT_INTERNET_AVAILABLE = status
+    _BOOT_INTERNET_CHECKED = True
+
+
+def check_internet_access(
+    timeout: float = 1.2,
+    database_path: str | None = None,
+    force_probe: bool = False,
+) -> bool:
+    """
+    Rapid non-blocking check to determine if the host system has active internet access.
+    Respects settings and uses boot-time check cache when available.
+    """
+    if not is_internet_access_enabled(database_path):
+        return False
+
+    global _BOOT_INTERNET_CHECKED, _BOOT_INTERNET_AVAILABLE
+    if not force_probe and _BOOT_INTERNET_CHECKED:
+        return _BOOT_INTERNET_AVAILABLE
+
+    return probe_internet_connectivity(timeout=timeout)
 
 
 def get_openai_config(database_path: str | None = None) -> tuple[str, str, str]:
@@ -175,8 +241,13 @@ class DeweyAIAgent:
         if not clean_topic:
             return None
 
-        # Verify internet access first
-        if not check_internet_access(timeout=1.0):
+        # Verify AI features and internet access first
+        if not is_ai_features_enabled(self.database_path):
+            logger.warning("AI features or internet access is disabled in settings. Skipping AI Agent.")
+            return None
+
+        # Verify internet access
+        if not check_internet_access(timeout=1.0, database_path=self.database_path):
             logger.warning("Internet access unavailable. Skipping AI Agent.")
             return None
 

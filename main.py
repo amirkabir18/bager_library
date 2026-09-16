@@ -61,12 +61,20 @@ from database import (
     get_db_connection,
     get_notification_logs,
     init_database,
+    is_ai_features_enabled,
+    is_internet_access_enabled,
     log_notification,
     rtl_display_order,
     set_setting,
     tr,
 )
 from services.book_service import BookService
+from services.dewey_ai_agent import (
+    get_boot_internet_status,
+    init_boot_internet_check,
+    probe_internet_connectivity,
+    set_boot_internet_status,
+)
 from services.dewey_service import DeweyService, is_valid_dewey
 
 dewey_service = DeweyService()
@@ -95,6 +103,31 @@ root.minsize(920, 620)
 notification_engine = NotificationEngine(root, icon_path=icon_p, db_path=db_p)
 reminder_manager = LoanReminderManager(root, db_p, notification_engine)
 reminder_manager.start()
+
+
+# Application boot-time internet check
+def run_boot_internet_check():
+    try:
+        init_boot_internet_check(database_path=db_p, timeout=1.2)
+        try:
+            root.after(
+                0,
+                lambda: update_boot_net_status_label() if "update_boot_net_status_label" in globals() else None,
+            )
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+boot_net_thread = threading.Thread(target=run_boot_internet_check, daemon=True)
+boot_net_thread.start()
+
+
+def is_ai_available() -> bool:
+    """Checks whether AI features are enabled in settings and internet was verified at boot."""
+    return is_ai_features_enabled(db_p) and get_boot_internet_status(db_p)
+
 
 if os.path.exists(icon_p):
     try:
@@ -1775,17 +1808,9 @@ def open_add_book_popup():
 
     classification_meta = {"source": None, "confidence": 0.0}
 
-    def check_net_for_ai_button():
-        from services.dewey_ai_agent import check_internet_access
-
-        has_net = check_internet_access(timeout=1.2)
-        if has_net:
-            try:
-                popup.after(0, lambda: row_ai.pack(fill=tk.X, pady=(3, 5), before=row_dewey))
-            except Exception:
-                pass
-
-    threading.Thread(target=check_net_for_ai_button, daemon=True).start()
+    # Show AI classification button if AI features are enabled and internet was verified at boot time
+    if is_ai_available():
+        row_ai.pack(fill=tk.X, pady=(3, 5), before=row_dewey)
 
     def update_shelf_preview(*args):
         code = ent_dewey.get().strip()
@@ -1805,6 +1830,11 @@ def open_add_book_popup():
     ent_subject.bind("<Key>", on_user_dewey_edit)
 
     def do_isbn_lookup():
+        if not is_internet_access_enabled(db_p):
+            messagebox.showwarning(
+                "دسترسی به اینترنت", "دسترسی به اینترنت در تنظیمات برنامه غیرفعال شده است.", parent=popup
+            )
+            return
         raw_isbn = ent_isbn.get().strip()
         if not raw_isbn:
             messagebox.showwarning("شابک", "لطفاً ابتدا مقدار شابک را وارد نمایید!", parent=popup)
@@ -1856,6 +1886,13 @@ def open_add_book_popup():
     btn_lookup_isbn.configure(command=do_isbn_lookup)
 
     def do_auto_classify_title():
+        if not is_ai_available():
+            messagebox.showwarning(
+                "هوش مصنوعی",
+                "قابلیت‌های هوش مصنوعی یا دسترسی به اینترنت در تنظیمات برنامه غیرفعال است.",
+                parent=popup,
+            )
+            return
         t = ent_title.get().strip()
         a = ent_author.get().strip()
         if not t:
@@ -2036,7 +2073,7 @@ def open_edit_book_popup(book_id: int | None = None):
     ent_i.insert(0, book.get("isbn") or "")
     ent_i.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
-    # Reclassify button (shown only if system has internet access)
+    # Reclassify button (shown only if system has internet access and AI enabled)
     row_re = ctk.CTkFrame(form_f, fg_color="transparent")
     btn_reclassify_single = create_icon_button(
         row_re,
@@ -2049,17 +2086,9 @@ def open_edit_book_popup(book_id: int | None = None):
     )
     btn_reclassify_single.pack(fill=tk.X)
 
-    def check_net_for_reclassify_button():
-        from services.dewey_ai_agent import check_internet_access
-
-        has_net = check_internet_access(timeout=1.2)
-        if has_net:
-            try:
-                popup.after(0, lambda: row_re.pack(fill=tk.X, pady=(3, 5), before=row_d))
-            except Exception:
-                pass
-
-    threading.Thread(target=check_net_for_reclassify_button, daemon=True).start()
+    # Show AI reclassify button if AI features are enabled and internet was verified at boot time
+    if is_ai_available():
+        row_re.pack(fill=tk.X, pady=(3, 5))
 
     # Dewey Code
     row_d = ctk.CTkFrame(form_f, fg_color="transparent")
@@ -2123,6 +2152,13 @@ def open_edit_book_popup(book_id: int | None = None):
     ent_d.bind("<KeyRelease>", lambda e: update_shelf_lbl())
 
     def do_reclassify():
+        if not is_ai_available():
+            messagebox.showwarning(
+                "هوش مصنوعی",
+                "قابلیت‌های هوش مصنوعی یا دسترسی به اینترنت در تنظیمات برنامه غیرفعال است.",
+                parent=popup,
+            )
+            return
         t = ent_t.get().strip()
         a = ent_a.get().strip()
         if not t:
@@ -4316,6 +4352,16 @@ def on_check_failed(error_msg: str, interactive: bool):
 
 
 def perform_check(interactive: bool = True):
+    if not is_internet_access_enabled(db_p):
+        if interactive:
+            messagebox.showwarning(
+                "دسترسی به اینترنت",
+                "دسترسی به اینترنت در تنظیمات برنامه غیرفعال شده است.",
+                parent=root,
+            )
+        lbl_update_status.configure(text="وضعیت: دسترسی به اینترنت در تنظیمات غیرفعال است.", text_color="#dc2626")
+        return
+
     lbl_update_status.configure(text="وضعیت: در حال بررسی آخرین نسخه...", text_color="#38bdf8")
     btn_update_action.configure(state="disabled")
 
@@ -4550,6 +4596,8 @@ ctk.CTkLabel(pref_card, text=" ترجیحات اعلان‌ها و یادآور�
 
 var_notif_enabled = tk.BooleanVar(value=True)
 var_notif_sound = tk.BooleanVar(value=True)
+var_internet_enabled = tk.BooleanVar(value=True)
+var_ai_enabled = tk.BooleanVar(value=True)
 
 pref_row1 = ctk.CTkFrame(pref_card, fg_color="transparent")
 pref_row1.pack(fill=tk.X, padx=16, pady=4)
@@ -4569,6 +4617,46 @@ chk_enable_sound = ctk.CTkSwitch(
     font=FONT_NORMAL,
 )
 chk_enable_sound.pack(side=tk.RIGHT, padx=10)
+
+pref_row_net = ctk.CTkFrame(pref_card, fg_color="transparent")
+pref_row_net.pack(fill=tk.X, padx=16, pady=4)
+
+chk_enable_internet = ctk.CTkSwitch(
+    pref_row_net,
+    text="فعال‌سازی دسترسی به اینترنت",
+    variable=var_internet_enabled,
+    font=FONT_NORMAL,
+    command=lambda: on_toggle_internet_setting(),
+)
+chk_enable_internet.pack(side=tk.RIGHT, padx=10)
+
+chk_enable_ai = ctk.CTkSwitch(
+    pref_row_net,
+    text="فعال‌سازی قابلیت‌های هوش مصنوعی",
+    variable=var_ai_enabled,
+    font=FONT_NORMAL,
+    command=lambda: on_toggle_ai_setting(),
+)
+chk_enable_ai.pack(side=tk.RIGHT, padx=10)
+
+btn_recheck_net = create_icon_button(
+    pref_row_net,
+    text=" بررسی مجدد اتصال ",
+    icon_name="rotate-ccw",
+    font=FONT_SMALL,
+    command=lambda: manual_recheck_internet(),
+    width=135,
+    height=28,
+)
+btn_recheck_net.pack(side=tk.LEFT, padx=5)
+
+lbl_boot_net_status = ctk.CTkLabel(
+    pref_row_net,
+    text="",
+    font=FONT_SMALL,
+    anchor="w",
+)
+lbl_boot_net_status.pack(side=tk.LEFT, padx=10)
 
 pref_row2 = ctk.CTkFrame(pref_card, fg_color="transparent")
 pref_row2.pack(fill=tk.X, padx=16, pady=6)
@@ -4634,6 +4722,88 @@ combo_theme = ctk.CTkOptionMenu(
 combo_theme.set("تیره (Dark)")
 combo_theme.pack(side=tk.RIGHT, padx=5)
 
+
+def update_boot_net_status_label():
+    try:
+        if not var_internet_enabled.get():
+            lbl_boot_net_status.configure(text="🔴 دسترسی اینترنت غیرفعال است", text_color="#dc2626")
+            return
+        net_ok = get_boot_internet_status(db_p)
+        if net_ok:
+            lbl_boot_net_status.configure(text="🟢 اینترنت متصل است", text_color="#16a34a")
+        else:
+            lbl_boot_net_status.configure(text="🔴 اینترنت قطع است", text_color="#dc2626")
+    except Exception:
+        pass
+
+
+def update_ai_card_inputs_state(enabled: bool):
+    try:
+        state = "normal" if enabled else "disabled"
+        entry_ai_url.configure(state=state)
+        entry_ai_key.configure(state=state)
+        entry_ai_model.configure(state=state)
+        btn_test_ai.configure(state=state)
+        if not enabled:
+            if not var_internet_enabled.get():
+                lbl_ai_status.configure(text="🔴 دسترسی اینترنت و هوش مصنوعی غیرفعال است", text_color="#dc2626")
+            else:
+                lbl_ai_status.configure(text="🟡 قابلیت‌های هوش مصنوعی غیرفعال است", text_color="#f59e0b")
+        else:
+            lbl_ai_status.configure(text="")
+    except Exception:
+        pass
+
+
+def on_toggle_internet_setting():
+    if not var_internet_enabled.get():
+        # If internet access is disabled, AI features are also disabled
+        var_ai_enabled.set(False)
+        chk_enable_ai.configure(state="disabled")
+        update_boot_net_status_label()
+        update_ai_card_inputs_state(enabled=False)
+    else:
+        chk_enable_ai.configure(state="normal")
+        update_boot_net_status_label()
+        update_ai_card_inputs_state(enabled=var_ai_enabled.get())
+
+
+def on_toggle_ai_setting():
+    if not var_internet_enabled.get():
+        var_ai_enabled.set(False)
+        chk_enable_ai.configure(state="disabled")
+        update_ai_card_inputs_state(enabled=False)
+        return
+    update_ai_card_inputs_state(enabled=var_ai_enabled.get())
+
+
+def manual_recheck_internet():
+    if not var_internet_enabled.get():
+        messagebox.showinfo(
+            "وضعیت اینترنت",
+            "دسترسی به اینترنت در تنظیمات برنامه غیرفعال شده است. ابتدا آن را فعال نمایید.",
+            parent=root,
+        )
+        return
+
+    lbl_boot_net_status.configure(text="در حال بررسی اتصال به اینترنت...", text_color="#38bdf8")
+
+    def _worker():
+        ok = probe_internet_connectivity(timeout=2.0)
+        set_boot_internet_status(ok)
+
+        def _done():
+            update_boot_net_status_label()
+            if ok:
+                messagebox.showinfo("بررسی اتصال", "اتصال به اینترنت برقرار و با موفقیت تأیید شد.", parent=root)
+            else:
+                messagebox.showwarning("بررسی اتصال", "اتصال به اینترنت برقرار نشد. شبکه را بررسی کنید.", parent=root)
+
+        root.after(0, _done)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 pref_row3 = ctk.CTkFrame(pref_card, fg_color="transparent")
 pref_row3.pack(fill=tk.X, padx=16, pady=(10, 14))
 
@@ -4645,6 +4815,14 @@ def save_settings_ui():
     max_loans = str(combo_max_loans.get()).strip() or "4"
     interval = str(combo_interval.get()).strip() or "30"
 
+    internet_val = "true" if var_internet_enabled.get() else "false"
+    # If internet access is disabled, AI features are strictly disabled
+    if internet_val == "false":
+        ai_val = "false"
+        var_ai_enabled.set(False)
+    else:
+        ai_val = "true" if var_ai_enabled.get() else "false"
+
     try:
         with get_db_connection(db_p) as conn:
             set_setting(conn, "max_loans", max_loans)
@@ -4652,9 +4830,25 @@ def save_settings_ui():
             set_setting(conn, "notification_sound", sound_val)
             set_setting(conn, "notification_advance_days", adv_days)
             set_setting(conn, "notification_check_interval_mins", interval)
+            set_setting(conn, "internet_access_enabled", internet_val)
+            set_setting(conn, "ai_features_enabled", ai_val)
             set_setting(conn, "openai_url", entry_ai_url.get().strip())
             set_setting(conn, "openai_key", entry_ai_key.get().strip())
             set_setting(conn, "openai_model", entry_ai_model.get().strip())
+
+        if internet_val == "false":
+            set_boot_internet_status(False)
+        else:
+            threading.Thread(
+                target=lambda: (
+                    init_boot_internet_check(database_path=db_p, timeout=1.2),
+                    root.after(0, update_boot_net_status_label),
+                ),
+                daemon=True,
+            ).start()
+
+        update_boot_net_status_label()
+        on_toggle_internet_setting()
 
         try:
             reminder_manager.reschedule()
@@ -4795,16 +4989,32 @@ ai_row4.pack(fill=tk.X, padx=16, pady=(6, 12))
 
 
 def test_ai_connection_ui():
+    if not is_internet_access_enabled(db_p):
+        messagebox.showwarning(
+            "دسترسی به اینترنت",
+            "دسترسی به اینترنت در تنظیمات برنامه غیرفعال شده است. لطفاً ابتدا دسترسی به اینترنت را فعال کنید.",
+            parent=root,
+        )
+        return
+
+    if not is_ai_features_enabled(db_p):
+        messagebox.showwarning(
+            "هوش مصنوعی",
+            "قابلیت‌های هوش مصنوعی در تنظیمات برنامه غیرفعال شده است. لطفاً ابتدا آن را در تنظیمات فعال کنید.",
+            parent=root,
+        )
+        return
+
     url = entry_ai_url.get().strip() or "http://localhost:20128"
     key = entry_ai_key.get().strip()
     lbl_ai_status.configure(text="در حال بررسی اتصال به سرویس هوش مصنوعی...", text_color="#38bdf8")
 
     def _test():
         try:
-            from services.dewey_ai_agent import DeweyAIAgent, check_internet_access
+            from services.dewey_ai_agent import DeweyAIAgent
 
-            net_ok = check_internet_access()
-            agent = DeweyAIAgent(base_url=url, api_key=key)
+            net_ok = get_boot_internet_status(db_p)
+            agent = DeweyAIAgent(base_url=url, api_key=key, database_path=db_p)
             is_alive = agent.is_available()
             if is_alive:
                 msg = "اتصال به سرویس هوش مصنوعی برقرار و سرور فعال است."
@@ -5332,6 +5542,8 @@ def load_settings_into_ui():
 
         n_en = settings.get("notifications_enabled", "true").lower() == "true"
         s_en = settings.get("notification_sound", "true").lower() == "true"
+        net_en = settings.get("internet_access_enabled", "true").lower() == "true"
+        ai_en = settings.get("ai_features_enabled", "true").lower() == "true"
         adv = settings.get("notification_advance_days", "2")
         inv = settings.get("notification_check_interval_mins", "30")
         mln = int(settings.get("max_loans", "2"))
@@ -5339,6 +5551,17 @@ def load_settings_into_ui():
 
         var_notif_enabled.set(n_en)
         var_notif_sound.set(s_en)
+        var_internet_enabled.set(net_en)
+        if not net_en:
+            var_ai_enabled.set(False)
+            chk_enable_ai.configure(state="disabled")
+        else:
+            var_ai_enabled.set(ai_en)
+            chk_enable_ai.configure(state="normal")
+
+        update_boot_net_status_label()
+        update_ai_card_inputs_state(enabled=(net_en and ai_en))
+
         if adv in ["1", "2", "3", "5", "7"]:
             combo_advance_days.set(adv)
         else:
@@ -5387,6 +5610,8 @@ def on_startup_update_detected(res: dict):
 
 def check_startup_updates():
     try:
+        if not is_internet_access_enabled(db_p):
+            return
         res = update_checker.check()
         if res.get("update_available"):
             root.after(1500, lambda: on_startup_update_detected(res))

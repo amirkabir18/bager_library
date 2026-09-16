@@ -53,6 +53,63 @@ class TestAppSettingsDatabase(unittest.TestCase):
         database.set_setting(self.conn, "custom_theme", "dark")
         self.assertEqual(database.get_setting(self.conn, "custom_theme"), "dark")
 
+    def test_internet_and_ai_settings(self):
+        # 1. Defaults
+        all_settings = database.get_all_settings(self.conn)
+        self.assertEqual(all_settings.get("internet_access_enabled"), "true")
+        self.assertEqual(all_settings.get("ai_features_enabled"), "true")
+
+        self.assertTrue(database.is_internet_access_enabled(self.conn))
+        self.assertTrue(database.is_ai_features_enabled(self.conn))
+
+        # 2. Disable AI features only
+        database.set_setting(self.conn, "ai_features_enabled", "false")
+        self.assertTrue(database.is_internet_access_enabled(self.conn))
+        self.assertFalse(database.is_ai_features_enabled(self.conn))
+
+        # 3. Disable internet access while AI features are set to true -> AI must be disabled!
+        database.set_setting(self.conn, "ai_features_enabled", "true")
+        database.set_setting(self.conn, "internet_access_enabled", "false")
+        self.assertFalse(database.is_internet_access_enabled(self.conn))
+        self.assertFalse(
+            database.is_ai_features_enabled(self.conn),
+            "When internet access is disabled, AI features must also be disabled",
+        )
+
+        # 4. Re-enable internet access -> AI becomes active again
+        database.set_setting(self.conn, "internet_access_enabled", "true")
+        self.assertTrue(database.is_internet_access_enabled(self.conn))
+        self.assertTrue(database.is_ai_features_enabled(self.conn))
+
+    def test_boot_time_internet_check_functions(self):
+        from services.dewey_ai_agent import (
+            get_boot_internet_status,
+            init_boot_internet_check,
+            set_boot_internet_status,
+        )
+
+        # Explicitly set boot status
+        set_boot_internet_status(True)
+        self.assertTrue(get_boot_internet_status(self.conn))
+
+        set_boot_internet_status(False)
+        self.assertFalse(get_boot_internet_status(self.conn))
+
+        # When internet access is disabled in settings, boot check returns False without probe
+        database.set_setting(self.conn, "internet_access_enabled", "false")
+        with patch("services.dewey_ai_agent.probe_internet_connectivity") as mock_probe:
+            res = init_boot_internet_check(database_path=self.temp_db_path)
+            self.assertFalse(res)
+            mock_probe.assert_not_called()
+
+        # When internet access is enabled, init_boot_internet_check calls probe
+        database.set_setting(self.conn, "internet_access_enabled", "true")
+        with patch("services.dewey_ai_agent.probe_internet_connectivity", return_value=True) as mock_probe:
+            res = init_boot_internet_check(database_path=self.temp_db_path)
+            self.assertTrue(res)
+            mock_probe.assert_called_once()
+            self.assertTrue(get_boot_internet_status(self.conn))
+
     def test_log_notification_and_retrieval(self):
         cur = self.conn.cursor()
         cur.execute("INSERT INTO books (title, author, isbn) VALUES ('کتاب تست', 'نویسنده', '1234567890123')")
