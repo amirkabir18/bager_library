@@ -68,6 +68,13 @@ from database import (
     set_setting,
     tr,
 )
+from persian_calendar import (
+    create_date_picker_button,
+    format_jalali_date,
+    get_today_jalali,
+    jalali_to_gregorian_str,
+    parse_jalali_date,
+)
 from services.book_service import BookService
 from services.dewey_ai_agent import (
     get_boot_internet_status,
@@ -3246,6 +3253,8 @@ loans_filter_settings = {
     "status": "all",
     "sort_col": "duration",
     "sort_dir": "ASC",
+    "from_date": "",
+    "to_date": "",
 }
 
 search_bar_frame_loans = ctk.CTkFrame(tabel_frame, corner_radius=8, height=48)
@@ -3397,6 +3406,8 @@ def update_loans_filter_indicator():
         or loans_filter_settings["status"] != "all"
         or loans_filter_settings["sort_col"] != "duration"
         or loans_filter_settings["sort_dir"] != "ASC"
+        or bool(loans_filter_settings.get("from_date"))
+        or bool(loans_filter_settings.get("to_date"))
     )
     if is_custom:
         filter_btn_loans.configure(text=" فیلترها (فعال) ", fg_color="#2563eb")
@@ -3444,6 +3455,20 @@ def search_loans(event=None):
         elif status == "returned":
             where_conditions.append("(borrowed = 0 OR borrowed = '0' OR borrowed IS NULL)")
 
+        from_d = loans_filter_settings.get("from_date", "").strip()
+        if from_d:
+            from_greg = jalali_to_gregorian_str(from_d)
+            if from_greg:
+                where_conditions.append("borrow_date >= ?")
+                params.append(from_greg)
+
+        to_d = loans_filter_settings.get("to_date", "").strip()
+        if to_d:
+            to_greg = jalali_to_gregorian_str(to_d)
+            if to_greg:
+                where_conditions.append("borrow_date <= ?")
+                params.append(to_greg)
+
         query = f"SELECT {', '.join(loan_column)} FROM `{new_tabel_name}`"
         if where_conditions:
             query += " WHERE " + " AND ".join(where_conditions)
@@ -3482,7 +3507,7 @@ sub_btn_loans.configure(command=search_loans)
 def open_loans_filter_popup():
     popup = ctk.CTkToplevel(root)
     popup.title("فیلترهای جدول امانات")
-    popup.geometry("460x420")
+    popup.geometry("460x500")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -3499,7 +3524,7 @@ def open_loans_filter_popup():
     rw = root.winfo_width()
     rh = root.winfo_height()
     px = max(50, rx + (rw - 460) // 2)
-    py = max(50, ry + (rh - 420) // 2)
+    py = max(50, ry + (rh - 500) // 2)
     popup.geometry(f"+{px}+{py}")
 
     col_var = tk.StringVar(value=loans_filter_settings["column"])
@@ -3551,6 +3576,47 @@ def open_loans_filter_popup():
     )
     rb_st_returned.pack(side=tk.RIGHT, padx=6)
 
+    # Date range filter card
+    group_date = ctk.CTkFrame(popup, corner_radius=8)
+    group_date.pack(fill=tk.X, padx=15, pady=4)
+    ctk.CTkLabel(group_date, text="بازه تاریخ امانت (شمسی)", font=FONT_BOLD, anchor="e").pack(
+        fill=tk.X, padx=10, pady=(6, 2)
+    )
+    date_frame = ctk.CTkFrame(group_date, fg_color="transparent")
+    date_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+
+    ctk.CTkLabel(date_frame, text="از:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(4, 2))
+    ent_from_date = ctk.CTkEntry(
+        date_frame, width=110, height=30, font=FONT_NORMAL, justify="center", placeholder_text="YYYY-MM-DD"
+    )
+    ent_from_date.insert(0, loans_filter_settings.get("from_date", ""))
+    btn_from_cal = create_date_picker_button(
+        date_frame,
+        entry_widget=ent_from_date,
+        title="انتخاب تاریخ شروع امانت",
+        icon_path=icon_p,
+        width=30,
+        height=30,
+    )
+    btn_from_cal.pack(side=tk.RIGHT, padx=2)
+    ent_from_date.pack(side=tk.RIGHT, padx=(2, 10))
+
+    ctk.CTkLabel(date_frame, text="تا:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(4, 2))
+    ent_to_date = ctk.CTkEntry(
+        date_frame, width=110, height=30, font=FONT_NORMAL, justify="center", placeholder_text="YYYY-MM-DD"
+    )
+    ent_to_date.insert(0, loans_filter_settings.get("to_date", ""))
+    btn_to_cal = create_date_picker_button(
+        date_frame,
+        entry_widget=ent_to_date,
+        title="انتخاب تاریخ پایان امانت",
+        icon_path=icon_p,
+        width=30,
+        height=30,
+    )
+    btn_to_cal.pack(side=tk.RIGHT, padx=2)
+    ent_to_date.pack(side=tk.RIGHT, padx=2)
+
     group_sort = ctk.CTkFrame(popup, corner_radius=8)
     group_sort.pack(fill=tk.X, padx=15, pady=4)
     ctk.CTkLabel(group_sort, text="مرتب‌سازی نتایج", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
@@ -3592,6 +3658,8 @@ def open_loans_filter_popup():
         loans_filter_settings["status"] = status_var.get()
         loans_filter_settings["sort_col"] = sort_options.get(sort_col_cb.get(), "duration")
         loans_filter_settings["sort_dir"] = "ASC" if sort_dir_cb.get() == "صعودی" else "DESC"
+        loans_filter_settings["from_date"] = ent_from_date.get().strip()
+        loans_filter_settings["to_date"] = ent_to_date.get().strip()
 
         update_loans_filter_indicator()
         popup.destroy()
@@ -3603,6 +3671,8 @@ def open_loans_filter_popup():
         loans_filter_settings["status"] = "all"
         loans_filter_settings["sort_col"] = "duration"
         loans_filter_settings["sort_dir"] = "ASC"
+        loans_filter_settings["from_date"] = ""
+        loans_filter_settings["to_date"] = ""
 
         update_loans_filter_indicator()
         popup.destroy()
@@ -3772,7 +3842,7 @@ def open_add_loan_popup(initial_book_title=""):
         bk_listbox.bind("<Double-Button-1>", select_book)
 
     # 3. Borrow Date
-    cur_today = jdatetime.date.today()
+    cur_today = get_today_jalali()
     c_days_10 = cur_today + jdatetime.timedelta(days=10)
     c_days_20 = cur_today + jdatetime.timedelta(days=20)
     c_days_30 = cur_today + jdatetime.timedelta(days=30)
@@ -3780,8 +3850,18 @@ def open_add_loan_popup(initial_book_title=""):
     ctk.CTkLabel(popup, text="تاریخ امانت کتاب (YYYY-MM-DD):", font=FONT_NORMAL, anchor="e").pack(
         fill=tk.X, padx=25, pady=(4, 0)
     )
-    borrow_entry = ctk.CTkEntry(popup, font=FONT_NORMAL, justify="right", height=32)
-    borrow_entry.pack(fill=tk.X, padx=25, pady=2)
+    row_borrow = ctk.CTkFrame(popup, fg_color="transparent")
+    row_borrow.pack(fill=tk.X, padx=25, pady=2)
+
+    borrow_entry = ctk.CTkEntry(row_borrow, font=FONT_NORMAL, justify="right", height=32)
+    btn_cal_borrow = create_date_picker_button(
+        row_borrow,
+        entry_widget=borrow_entry,
+        title="انتخاب تاریخ امانت (تقویم شمسی)",
+        icon_path=icon_p,
+    )
+    btn_cal_borrow.pack(side=tk.LEFT, padx=(0, 4))
+    borrow_entry.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
     var_auto_date = tk.IntVar(value=1)
     borrow_entry.insert(0, str(cur_today))
@@ -3803,8 +3883,19 @@ def open_add_loan_popup(initial_book_title=""):
     ctk.CTkLabel(popup, text="تاریخ بازگشت کتاب (YYYY-MM-DD):", font=FONT_NORMAL, anchor="e").pack(
         fill=tk.X, padx=25, pady=(4, 0)
     )
-    return_entry = ctk.CTkEntry(popup, font=FONT_NORMAL, justify="right", height=32)
-    return_entry.pack(fill=tk.X, padx=25, pady=2)
+    row_return = ctk.CTkFrame(popup, fg_color="transparent")
+    row_return.pack(fill=tk.X, padx=25, pady=2)
+
+    return_entry = ctk.CTkEntry(row_return, font=FONT_NORMAL, justify="right", height=32)
+    btn_cal_return = create_date_picker_button(
+        row_return,
+        entry_widget=return_entry,
+        title="انتخاب تاریخ بازگشت (تقویم شمسی)",
+        icon_path=icon_p,
+        on_select=lambda d: selected_days.set(""),
+    )
+    btn_cal_return.pack(side=tk.LEFT, padx=(0, 4))
+    return_entry.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
     selected_days = tk.StringVar(value="option1")
     return_entry.insert(0, str(c_days_10))
@@ -3858,19 +3949,17 @@ def open_add_loan_popup(initial_book_title=""):
             return_entry.focus()
             return
 
-        try:
-            j_date = jdatetime.datetime.strptime(borrow_shamsi, "%Y-%m-%d")
-            borrow_gregorian = j_date.togregorian().strftime("%Y-%m-%d")
-        except ValueError:
+        j_borrow = parse_jalali_date(borrow_shamsi)
+        if not j_borrow:
             messagebox.showerror("خطا", "فرمت تاریخ امانت وارد شده صحیح نیست!\nمثال: 1403-06-20", parent=popup)
             return
+        borrow_gregorian = j_borrow.togregorian().strftime("%Y-%m-%d")
 
-        try:
-            j_date = jdatetime.datetime.strptime(return_shamsi, "%Y-%m-%d")
-            return_gregorian = j_date.togregorian().strftime("%Y-%m-%d")
-        except ValueError:
+        j_return = parse_jalali_date(return_shamsi)
+        if not j_return:
             messagebox.showerror("خطا", "فرمت تاریخ بازگشت وارد شده صحیح نیست!\nمثال: 1403-06-30", parent=popup)
             return
+        return_gregorian = j_return.togregorian().strftime("%Y-%m-%d")
 
         if return_gregorian < borrow_gregorian:
             messagebox.showerror("خطا", "تاریخ بازگشت نمی‌تواند پیش از تاریخ امانت باشد!", parent=popup)
@@ -3988,7 +4077,189 @@ entry_search_loans.bind("<Return>", search_loans)
 
 loans_tree.bind("<Double-Button-1>", lambda event: do_return_selected_loan())
 
+
+def open_extend_loan_popup():
+    selected = loans_tree.selection()
+    if not selected:
+        messagebox.showwarning("هشدار", "لطفاً ابتدا یک رکورد امانت را از جدول انتخاب کنید!", parent=root)
+        return
+
+    item_id = selected[0]
+    values = loans_tree.item(item_id, "values")
+    if not values or str(values[0]).startswith("❌"):
+        return
+
+    id_idx = loan_column.index("id") if "id" in loan_column else 0
+    loan_id = values[id_idx]
+
+    b_idx = loan_column.index("book_id") if "book_id" in loan_column else -1
+    book_title = values[b_idx] if b_idx != -1 and b_idx < len(values) else ""
+
+    m_idx = loan_column.index("member_name") if "member_name" in loan_column else -1
+    member_name = values[m_idx] if m_idx != -1 and m_idx < len(values) else ""
+
+    r_idx = loan_column.index("return_date") if "return_date" in loan_column else -1
+    cur_return_shamsi = values[r_idx] if r_idx != -1 and r_idx < len(values) else ""
+
+    borrowed_idx = loan_column.index("borrowed") if "borrowed" in loan_column else -1
+    current_status = values[borrowed_idx] if borrowed_idx != -1 and borrowed_idx < len(values) else ""
+
+    if current_status == "بازگردانده شده":
+        messagebox.showinfo("اطلاع", "این کتاب قبلاً بازگردانده شده است و امکان تمدید ندارد.", parent=root)
+        return
+
+    popup = ctk.CTkToplevel(root)
+    popup.title("تمدید و تغییر تاریخ بازگشت امانت")
+    popup.geometry("420x360")
+    popup.resizable(False, False)
+    if os.path.exists(icon_p):
+        try:
+            popup.iconbitmap(icon_p)
+        except Exception:
+            pass
+
+    popup.transient(root)
+    popup.grab_set()
+
+    root.update_idletasks()
+    rx = root.winfo_rootx()
+    ry = root.winfo_rooty()
+    rw = root.winfo_width()
+    rh = root.winfo_height()
+    popup.geometry(f"+{max(50, rx + (rw - 420) // 2)}+{max(50, ry + (rh - 360) // 2)}")
+
+    ctk.CTkLabel(popup, text="تمدید یا تغییر تاریخ بازگشت", font=FONT_TITLE).pack(pady=(14, 8))
+
+    info_card = ctk.CTkFrame(popup, corner_radius=8, fg_color=("#f1f5f9", "#1e293b"))
+    info_card.pack(fill=tk.X, padx=20, pady=(0, 10))
+
+    ctk.CTkLabel(
+        info_card,
+        text=f"کتاب: {book_title}   |   عضو: {member_name}",
+        font=FONT_NORMAL,
+        anchor="e",
+    ).pack(fill=tk.X, padx=10, pady=(6, 2))
+
+    ctk.CTkLabel(
+        info_card,
+        text=f"تاریخ بازگشت فعلی: {cur_return_shamsi or 'نامشخص'}",
+        font=FONT_SMALL,
+        text_color=("#64748b", "#94a3b8"),
+        anchor="e",
+    ).pack(fill=tk.X, padx=10, pady=(0, 6))
+
+    ctk.CTkLabel(popup, text="تاریخ بازگشت جدید (YYYY-MM-DD):", font=FONT_NORMAL, anchor="e").pack(
+        fill=tk.X, padx=20, pady=(4, 2)
+    )
+
+    row_new_date = ctk.CTkFrame(popup, fg_color="transparent")
+    row_new_date.pack(fill=tk.X, padx=20, pady=2)
+
+    cur_jdate = parse_jalali_date(cur_return_shamsi) or get_today_jalali()
+    default_new_date = format_jalali_date(cur_jdate + jdatetime.timedelta(days=7))
+
+    ent_new_date = ctk.CTkEntry(row_new_date, font=FONT_NORMAL, justify="right", height=32)
+    ent_new_date.insert(0, default_new_date)
+
+    btn_cal = create_date_picker_button(
+        row_new_date,
+        entry_widget=ent_new_date,
+        title="انتخاب تاریخ بازگشت جدید (تقویم شمسی)",
+        icon_path=icon_p,
+    )
+    btn_cal.pack(side=tk.LEFT, padx=(0, 4))
+    ent_new_date.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+
+    quick_frame = ctk.CTkFrame(popup, fg_color="transparent")
+    quick_frame.pack(fill=tk.X, padx=20, pady=6)
+
+    def _add_days(d_cnt: int):
+        base = parse_jalali_date(ent_new_date.get()) or get_today_jalali()
+        new_d = base + jdatetime.timedelta(days=d_cnt)
+        ent_new_date.delete(0, tk.END)
+        ent_new_date.insert(0, format_jalali_date(new_d))
+
+    btn_q7 = ctk.CTkButton(
+        quick_frame,
+        text="+۷ روز",
+        font=FONT_SMALL,
+        width=65,
+        height=26,
+        fg_color=("#cbd5e1", "#334155"),
+        text_color=("#0f172a", "#f8fafc"),
+        command=lambda: _add_days(7),
+    )
+    btn_q7.pack(side=tk.RIGHT, padx=2)
+
+    btn_q14 = ctk.CTkButton(
+        quick_frame,
+        text="+۱۴ روز",
+        font=FONT_SMALL,
+        width=65,
+        height=26,
+        fg_color=("#cbd5e1", "#334155"),
+        text_color=("#0f172a", "#f8fafc"),
+        command=lambda: _add_days(14),
+    )
+    btn_q14.pack(side=tk.RIGHT, padx=2)
+
+    btn_q30 = ctk.CTkButton(
+        quick_frame,
+        text="+۳۰ روز",
+        font=FONT_SMALL,
+        width=65,
+        height=26,
+        fg_color=("#cbd5e1", "#334155"),
+        text_color=("#0f172a", "#f8fafc"),
+        command=lambda: _add_days(30),
+    )
+    btn_q30.pack(side=tk.RIGHT, padx=2)
+
+    btn_save = create_icon_button(
+        popup,
+        text=" ثبت تمدید امانت ",
+        icon_name="check",
+        font=FONT_BOLD,
+        fg_color="#16a34a",
+        hover_color="#15803d",
+        height=34,
+    )
+    btn_save.pack(fill=tk.X, padx=20, pady=(12, 6))
+
+    def _do_save_extend():
+        val = ent_new_date.get().strip()
+        parsed = parse_jalali_date(val)
+        if not parsed:
+            messagebox.showerror("خطا", "فرمت تاریخ بازگشت معتبر نیست!\nمثال: 1403-07-15", parent=popup)
+            return
+
+        greg_str = parsed.togregorian().strftime("%Y-%m-%d")
+        conn = get_db_connection(db_p)
+        try:
+            cur = conn.cursor()
+            cur.execute("UPDATE loans SET return_date = ? WHERE id = ?", (greg_str, loan_id))
+            conn.commit()
+            popup.destroy()
+            notification_engine.show(
+                "تمدید امانت",
+                f"مهلت بازگشت کتاب «{book_title}» تا تاریخ {format_jalali_date(parsed)} تمدید شد.",
+            )
+            messagebox.showinfo(
+                "موفقیت",
+                f"تاریخ بازگشت کتاب با موفقیت به {format_jalali_date(parsed)} تغییر یافت.",
+                parent=root,
+            )
+            search_loans()
+        except sqlite3.Error as ex:
+            messagebox.showerror("خطا", f"خطا در ثبت تمدید: {ex}", parent=popup)
+        finally:
+            conn.close()
+
+    btn_save.configure(command=_do_save_extend)
+
+
 loans_menu = tk.Menu(root, tearoff=0)
+loans_menu.add_command(label="تمدید یا ویرایش تاریخ بازگشت", command=open_extend_loan_popup)
 loans_menu.add_command(label="ثبت بازگشت کتاب", command=do_return_selected_loan)
 loans_menu.add_separator()
 loans_menu.add_command(label="حذف رکورد امانت", command=lambda: loans_tree.event_generate("<Delete>"))
@@ -5219,6 +5490,8 @@ audit_log_filter_settings = {
     "notification_type": "all",
     "sort_col": "id",
     "sort_dir": "DESC",
+    "start_date": "",
+    "end_date": "",
 }
 
 
@@ -5229,6 +5502,8 @@ def update_audit_log_filter_indicator():
         or audit_log_filter_settings["notification_type"] != "all"
         or audit_log_filter_settings["sort_col"] != "id"
         or audit_log_filter_settings["sort_dir"] != "DESC"
+        or bool(audit_log_filter_settings.get("start_date"))
+        or bool(audit_log_filter_settings.get("end_date"))
     )
     if is_custom:
         btn_filter_logs.configure(text=" فیلترها (فعال) ", fg_color="#2563eb")
@@ -5248,11 +5523,15 @@ def load_notification_logs_ui():
     mode_filter = audit_log_filter_settings.get("match_mode", "contains")
     s_col = audit_log_filter_settings.get("sort_col", "id")
     s_dir = audit_log_filter_settings.get("sort_dir", "DESC")
+    start_d = audit_log_filter_settings.get("start_date", "").strip() or None
+    end_d = audit_log_filter_settings.get("end_date", "").strip() or None
 
     try:
         logs = get_notification_logs(
             conn_or_path=db_p,
             notification_type=type_filter,
+            start_date=start_d,
+            end_date=end_d,
             search_query=search_kw if search_kw else None,
             column=col_filter,
             match_mode=mode_filter,
@@ -5298,7 +5577,7 @@ def load_notification_logs_ui():
 def open_audit_log_filter_popup():
     popup = ctk.CTkToplevel(root)
     popup.title("فیلترهای تاریخچه اعلان‌ها")
-    popup.geometry("460x450")
+    popup.geometry("460x520")
     popup.resizable(False, False)
     if os.path.exists(icon_p):
         try:
@@ -5315,7 +5594,7 @@ def open_audit_log_filter_popup():
     rw = root.winfo_width()
     rh = root.winfo_height()
     px = max(50, rx + (rw - 460) // 2)
-    py = max(50, ry + (rh - 450) // 2)
+    py = max(50, ry + (rh - 520) // 2)
     popup.geometry(f"+{px}+{py}")
 
     col_var = tk.StringVar(value=audit_log_filter_settings["column"])
@@ -5380,6 +5659,47 @@ def open_audit_log_filter_popup():
     rb_t_test = ctk.CTkRadioButton(type_frame, text="اعلان آزمایشی", variable=type_var, value="test", font=FONT_NORMAL)
     rb_t_test.pack(side=tk.RIGHT, padx=6)
 
+    # Date range filter card
+    group_log_date = ctk.CTkFrame(popup, corner_radius=8)
+    group_log_date.pack(fill=tk.X, padx=15, pady=4)
+    ctk.CTkLabel(group_log_date, text="بازه تاریخ ارسال اعلان (شمسی)", font=FONT_BOLD, anchor="e").pack(
+        fill=tk.X, padx=10, pady=(6, 2)
+    )
+    date_log_frame = ctk.CTkFrame(group_log_date, fg_color="transparent")
+    date_log_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
+
+    ctk.CTkLabel(date_log_frame, text="از:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(4, 2))
+    ent_log_start = ctk.CTkEntry(
+        date_log_frame, width=110, height=30, font=FONT_NORMAL, justify="center", placeholder_text="YYYY-MM-DD"
+    )
+    ent_log_start.insert(0, audit_log_filter_settings.get("start_date", ""))
+    btn_start_cal = create_date_picker_button(
+        date_log_frame,
+        entry_widget=ent_log_start,
+        title="انتخاب تاریخ شروع ارسال",
+        icon_path=icon_p,
+        width=30,
+        height=30,
+    )
+    btn_start_cal.pack(side=tk.RIGHT, padx=2)
+    ent_log_start.pack(side=tk.RIGHT, padx=(2, 10))
+
+    ctk.CTkLabel(date_log_frame, text="تا:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(4, 2))
+    ent_log_end = ctk.CTkEntry(
+        date_log_frame, width=110, height=30, font=FONT_NORMAL, justify="center", placeholder_text="YYYY-MM-DD"
+    )
+    ent_log_end.insert(0, audit_log_filter_settings.get("end_date", ""))
+    btn_end_cal = create_date_picker_button(
+        date_log_frame,
+        entry_widget=ent_log_end,
+        title="انتخاب تاریخ پایان ارسال",
+        icon_path=icon_p,
+        width=30,
+        height=30,
+    )
+    btn_end_cal.pack(side=tk.RIGHT, padx=2)
+    ent_log_end.pack(side=tk.RIGHT, padx=2)
+
     group_sort = ctk.CTkFrame(popup, corner_radius=8)
     group_sort.pack(fill=tk.X, padx=15, pady=4)
     ctk.CTkLabel(group_sort, text="مرتب‌سازی نتایج", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
@@ -5428,6 +5748,8 @@ def open_audit_log_filter_popup():
         audit_log_filter_settings["notification_type"] = type_var.get()
         audit_log_filter_settings["sort_col"] = sort_options.get(sort_col_cb.get(), "id")
         audit_log_filter_settings["sort_dir"] = "DESC" if "نزولی" in sort_dir_cb.get() else "ASC"
+        audit_log_filter_settings["start_date"] = ent_log_start.get().strip()
+        audit_log_filter_settings["end_date"] = ent_log_end.get().strip()
 
         type_display_map = {
             "all": "همه",
@@ -5447,6 +5769,8 @@ def open_audit_log_filter_popup():
         audit_log_filter_settings["notification_type"] = "all"
         audit_log_filter_settings["sort_col"] = "id"
         audit_log_filter_settings["sort_dir"] = "DESC"
+        audit_log_filter_settings["start_date"] = ""
+        audit_log_filter_settings["end_date"] = ""
 
         combo_log_type.set("همه")
         update_audit_log_filter_indicator()
@@ -5495,6 +5819,8 @@ def refresh_notification_logs():
     audit_log_filter_settings["notification_type"] = "all"
     audit_log_filter_settings["sort_col"] = "id"
     audit_log_filter_settings["sort_dir"] = "DESC"
+    audit_log_filter_settings["start_date"] = ""
+    audit_log_filter_settings["end_date"] = ""
     update_audit_log_filter_indicator()
     load_notification_logs_ui()
 
