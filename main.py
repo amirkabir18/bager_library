@@ -76,8 +76,10 @@ from persian_calendar import (
     get_today_jalali,
     jalali_to_gregorian_str,
     parse_jalali_date,
+    to_persian_digits,
 )
 from services.book_service import BookService
+from services.contributor_service import get_contributors_stats
 from services.dewey_ai_agent import (
     get_boot_internet_status,
     init_boot_internet_check,
@@ -5641,7 +5643,7 @@ dev_box_header = ctk.CTkFrame(dev_box, fg_color="transparent")
 dev_box_header.pack(fill=tk.X, padx=18, pady=(12, 6))
 ctk.CTkLabel(
     dev_box_header,
-    text=" تیم توسعه و پشتیبانی متن‌باز ",
+    text=" تیم توسعه و مشارکت‌کنندگان متن‌باز ",
     font=FONT_HEADER,
     text_color=("#0f172a", "#f8fafc"),
     anchor="e",
@@ -5649,42 +5651,259 @@ ctk.CTkLabel(
 
 devs_container = ctk.CTkFrame(dev_box, fg_color="transparent")
 devs_container.pack(fill=tk.X, padx=14, pady=(2, 10))
-devs_container.columnconfigure((0, 1, 2), weight=1, uniform="devs")
 
-developers_info = [
-    ("امیرحسین اسدی", "@amirkabir18", "https://github.com/amirkabir18"),
-    ("سید محمد حسن موسوی", "@Aliomosavi", "https://github.com/Aliomosavi"),
-    ("امیررضا یونس‌زاده شیرازی", "@ARUSH221617", "https://github.com/ARUSH221617"),
-]
 
-for idx, (name, handle, profile_url) in enumerate(developers_info):
-    d_card = ctk.CTkFrame(
-        devs_container,
-        corner_radius=8,
-        fg_color=("#f8fafc", "#0f172a"),
-        border_width=1,
-        border_color=("#e2e8f0", "#334155"),
-    )
-    d_card.grid(row=0, column=idx, padx=4, pady=4, sticky="nsew")
+def render_contributor_cards(contributors: list[dict]):
+    for child in devs_container.winfo_children():
+        child.destroy()
 
+    if not contributors:
+        return
+
+    devs_container.columnconfigure(0, weight=1, uniform="dev_boxes")
+    devs_container.columnconfigure(1, weight=1, uniform="dev_boxes")
+
+    box_style = {
+        "corner_radius": 8,
+        "fg_color": ("#f8fafc", "#0f172a"),
+        "border_width": 1,
+        "border_color": ("#e2e8f0", "#334155"),
+    }
+
+    # Left box: ordered contributor list
+    left_box = ctk.CTkFrame(devs_container, **box_style)
+    left_box.grid(row=0, column=0, padx=(0, 6), pady=4, sticky="nsew")
+
+    left_header = ctk.CTkFrame(left_box, fg_color="transparent")
+    left_header.pack(fill=tk.X, padx=14, pady=(10, 8))
     ctk.CTkLabel(
-        d_card,
-        text=f"👤 {name}",
+        left_header,
+        text=" فهرست مشارکت‌کنندگان ",
         font=FONT_BOLD,
         text_color=("#0f172a", "#f8fafc"),
-        anchor="center",
-    ).pack(pady=(10, 4), padx=6)
+        image=get_icon("user", size=(15, 15)),
+        compound="right",
+    ).pack(side=tk.RIGHT)
 
-    ctk.CTkButton(
-        d_card,
-        text=handle,
+    # Right box: single progress bar and detailed contribution stats
+    right_box = ctk.CTkFrame(devs_container, **box_style)
+    right_box.grid(row=0, column=1, padx=(6, 0), pady=4, sticky="nsew")
+
+    right_header = ctk.CTkFrame(right_box, fg_color="transparent")
+    right_header.pack(fill=tk.X, padx=14, pady=(10, 8))
+    ctk.CTkLabel(
+        right_header,
+        text=" سهم مشارکت در کد پروژه ",
+        font=FONT_BOLD,
+        text_color=("#0f172a", "#f8fafc"),
+        image=get_icon("bookmark", size=(15, 15)),
+        compound="right",
+    ).pack(side=tk.RIGHT)
+
+    stat_content = ctk.CTkFrame(right_box, fg_color="transparent")
+    stat_content.pack(fill=tk.BOTH, expand=True, padx=14, pady=(0, 10))
+
+    top_row = ctk.CTkFrame(stat_content, fg_color="transparent")
+    top_row.pack(fill=tk.X, pady=(2, 6))
+
+    lbl_percent = ctk.CTkLabel(
+        top_row,
+        text="",
+        font=ctk.CTkFont(family=FONT_FAMILY, size=24, weight="bold"),
+        text_color=("#16a34a", "#22c55e"),
+        anchor="w",
+    )
+    lbl_percent.pack(side=tk.LEFT)
+
+    name_col = ctk.CTkFrame(top_row, fg_color="transparent")
+    name_col.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+
+    lbl_name = ctk.CTkLabel(
+        name_col,
+        text="",
+        font=FONT_BOLD,
+        text_color=("#0f172a", "#f8fafc"),
+        anchor="e",
+    )
+    lbl_name.pack(fill=tk.X)
+
+    lbl_role = ctk.CTkLabel(
+        name_col,
+        text="",
         font=FONT_SMALL,
-        fg_color="transparent",
+        text_color=("#64748b", "#94a3b8"),
+        anchor="e",
+    )
+    lbl_role.pack(fill=tk.X)
+
+    # The single progress bar on the right
+    progress_bar = ctk.CTkProgressBar(
+        stat_content,
+        height=12,
+        corner_radius=6,
+        progress_color=("#16a34a", "#22c55e"),
+        fg_color=("#e2e8f0", "#334155"),
+    )
+    progress_bar.pack(fill=tk.X, pady=(6, 8))
+
+    meta_row = ctk.CTkFrame(stat_content, fg_color="transparent")
+    meta_row.pack(fill=tk.X, pady=(2, 4))
+
+    lbl_lines = ctk.CTkLabel(
+        meta_row,
+        text="",
+        font=FONT_SMALL,
+        text_color=("#0f172a", "#f8fafc"),
+        anchor="e",
+    )
+    lbl_lines.pack(side=tk.RIGHT)
+
+    lbl_rank = ctk.CTkLabel(
+        meta_row,
+        text="",
+        font=FONT_SMALL,
         text_color=("#2563eb", "#38bdf8"),
-        hover_color=("#e2e8f0", "#1e293b"),
-        height=26,
-        command=lambda u=profile_url: open_url(u),
-    ).pack(pady=(0, 8), padx=6)
+        anchor="w",
+    )
+    lbl_rank.pack(side=tk.LEFT)
+
+    lbl_hint = ctk.CTkLabel(
+        stat_content,
+        text="جهت مشاهده سهم هر توسعه‌دهنده، روی ردیف او در فهرست کلیک کنید.",
+        font=FONT_SMALL,
+        text_color=("#64748b", "#94a3b8"),
+        anchor="center",
+    )
+    lbl_hint.pack(fill=tk.X, pady=(6, 2))
+
+    item_frames = []
+
+    def select_contributor(target_idx: int):
+        if target_idx < 0 or target_idx >= len(contributors):
+            return
+        c_item = contributors[target_idx]
+        c_name = c_item.get("name") or c_item.get("login") or "توسعه‌دهنده"
+        c_login = c_item.get("login", "")
+        c_percent = float(c_item.get("percent", 0.0) or 0.0)
+        c_lines = int(c_item.get("lines_added", 0) or 0)
+        p_str = f"{to_persian_digits(f'{c_percent:.1f}')}٪"
+        r_str = to_persian_digits(target_idx + 1)
+
+        lbl_percent.configure(text=p_str)
+        lbl_name.configure(text=c_name)
+        lbl_role.configure(text=f"@{c_login} • سهم از کل کد مخزن")
+        progress_bar.set(max(0.0, min(1.0, c_percent / 100.0)))
+
+        if c_lines > 0:
+            lines_str = to_persian_digits(f"{c_lines:,}")
+            lbl_lines.configure(text=f"سطرهای افزوده: {lines_str} سطر")
+        else:
+            lbl_lines.configure(text="ثبت در آمار مشارکت‌کنندگان")
+
+        lbl_rank.configure(text=f"رتبه {r_str} در مشارکت")
+
+        for i, f in enumerate(item_frames):
+            if i == target_idx:
+                f.configure(
+                    fg_color=("#e2e8f0", "#1e293b"),
+                    border_color=("#2563eb", "#38bdf8"),
+                )
+            else:
+                f.configure(
+                    fg_color=("#ffffff", "#1e293b"),
+                    border_color=("#e2e8f0", "#334155"),
+                )
+
+    for idx, c in enumerate(contributors):
+        row_card = ctk.CTkFrame(
+            left_box,
+            corner_radius=6,
+            fg_color=("#ffffff", "#1e293b"),
+            border_width=1,
+            border_color=("#e2e8f0", "#334155"),
+            cursor="hand2",
+        )
+        row_card.pack(fill=tk.X, padx=10, pady=3)
+        item_frames.append(row_card)
+
+        rank_str = to_persian_digits(idx + 1)
+        name = c.get("name") or c.get("login") or "توسعه‌دهنده"
+        handle = f"@{c.get('login', '')}"
+        percent = float(c.get("percent", 0.0) or 0.0)
+        percent_str = f"{to_persian_digits(f'{percent:.1f}')}٪"
+        profile_url = c.get("html_url") or f"https://github.com/{c.get('login', '')}"
+
+        ctk.CTkButton(
+            row_card,
+            text=handle,
+            font=FONT_SMALL,
+            fg_color="transparent",
+            text_color=("#2563eb", "#38bdf8"),
+            hover_color=("#e2e8f0", "#334155"),
+            height=24,
+            width=75,
+            command=lambda u=profile_url: open_url(u),
+        ).pack(side=tk.LEFT, padx=(6, 2), pady=4)
+
+        ctk.CTkLabel(
+            row_card,
+            text=percent_str,
+            font=FONT_BOLD,
+            text_color=("#16a34a", "#4ade80") if percent > 0 else ("#64748b", "#94a3b8"),
+            width=46,
+            anchor="center",
+        ).pack(side=tk.LEFT, padx=2)
+
+        name_lbl = ctk.CTkLabel(
+            row_card,
+            text=name,
+            font=FONT_NORMAL,
+            text_color=("#0f172a", "#f8fafc"),
+            anchor="e",
+        )
+        name_lbl.pack(side=tk.RIGHT, padx=(0, 6), fill=tk.X, expand=True)
+
+        rank_badge = ctk.CTkLabel(
+            row_card,
+            text=f" {rank_str} ",
+            font=FONT_SMALL,
+            fg_color=("#e2e8f0", "#334155"),
+            text_color=("#0f172a", "#f8fafc"),
+            corner_radius=4,
+            height=20,
+            width=22,
+        )
+        rank_badge.pack(side=tk.RIGHT, padx=(6, 2))
+
+        def _make_handler(target=idx):
+            return lambda e: select_contributor(target)
+
+        row_card.bind("<Button-1>", _make_handler(idx))
+        name_lbl.bind("<Button-1>", _make_handler(idx))
+        rank_badge.bind("<Button-1>", _make_handler(idx))
+
+    select_contributor(0)
+
+
+def load_contributors_async():
+    initial_data = get_contributors_stats(cache_ttl=86400)
+    render_contributor_cards(initial_data)
+
+    if not is_internet_access_enabled(db_p):
+        return
+
+    def _worker():
+        try:
+            data = get_contributors_stats(force_refresh=False)
+            if data:
+                root.after(0, lambda: render_contributor_cards(data))
+        except Exception:
+            pass
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+load_contributors_async()
 
 links_row = ctk.CTkFrame(dev_box, fg_color="transparent")
 links_row.pack(fill=tk.X, padx=18, pady=(4, 14))
