@@ -11,8 +11,8 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any
 
+import database
 from config.dewey import load_dewey_dataset
-from database import is_ai_features_enabled
 from services.dewey_ai_agent import DeweyAIAgent, SearchResult
 
 logger = logging.getLogger(__name__)
@@ -164,7 +164,7 @@ class DeweyService:
 
     def search_subject(self, query: str, limit: int = 5) -> list[SearchResult]:
         """Searches DDC using the AI Agent."""
-        if not is_ai_features_enabled():
+        if not database.is_ai_features_enabled():
             return []
         agent = self.get_ai_agent()
         if agent is None:
@@ -176,7 +176,7 @@ class DeweyService:
 
     def detect_subject(self, query: str, threshold: float = 0.50) -> SearchResult | None:
         """Detects the DDC code of a subject using the AI Agent."""
-        if not is_ai_features_enabled():
+        if not database.is_ai_features_enabled():
             return None
         agent = self.get_ai_agent()
         if agent is None:
@@ -196,7 +196,7 @@ class DeweyService:
         Uses the OpenAI AI Agent to detect and classify DDC for a title, topic, or book.
         Validates DDC code strictly and returns a DeweyResult with source='ai'.
         """
-        if not is_ai_features_enabled():
+        if not database.is_ai_features_enabled():
             return None
         agent = self.get_ai_agent()
         if agent is None:
@@ -315,7 +315,7 @@ class DeweyService:
             )
 
         # --- Step 2: AI Agent Classification ---
-        if is_ai_features_enabled():
+        if database.is_ai_features_enabled():
             topic = title_raw
             if categories:
                 cat_str = " | ".join([c for c in categories if c])

@@ -18,7 +18,8 @@ from typing import Any
 
 from openai import APIConnectionError, APIError, OpenAI
 
-from database import get_setting, is_ai_features_enabled, is_internet_access_enabled
+import database
+from database import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ def init_boot_internet_check(database_path: str | None = None, timeout: float = 
     """
     global _BOOT_INTERNET_CHECKED, _BOOT_INTERNET_AVAILABLE
 
-    if not is_internet_access_enabled(database_path):
+    if not database.is_internet_access_enabled(database_path):
         _BOOT_INTERNET_AVAILABLE = False
         _BOOT_INTERNET_CHECKED = True
         logger.info("Internet access is disabled in settings at boot time.")
@@ -98,7 +99,7 @@ def get_boot_internet_status(database_path: str | None = None) -> bool:
     """
     global _BOOT_INTERNET_CHECKED, _BOOT_INTERNET_AVAILABLE
 
-    if not is_internet_access_enabled(database_path):
+    if not database.is_internet_access_enabled(database_path):
         return False
 
     if not _BOOT_INTERNET_CHECKED:
@@ -124,7 +125,7 @@ def check_internet_access(
     Rapid non-blocking check to determine if the host system has active internet access.
     Respects settings and uses boot-time check cache when available.
     """
-    if not is_internet_access_enabled(database_path):
+    if not database.is_internet_access_enabled(database_path):
         return False
 
     global _BOOT_INTERNET_CHECKED, _BOOT_INTERNET_AVAILABLE
@@ -242,7 +243,7 @@ class DeweyAIAgent:
             return None
 
         # Verify AI features and internet access first
-        if not is_ai_features_enabled(self.database_path):
+        if not database.is_ai_features_enabled(self.database_path):
             logger.warning("AI features or internet access is disabled in settings. Skipping AI Agent.")
             return None
 

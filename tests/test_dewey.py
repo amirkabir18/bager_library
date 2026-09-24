@@ -322,20 +322,21 @@ class TestBackwardCompatibility(unittest.TestCase):
 
     def test_book_registration_without_ddc_succeeds(self):
         # A book that cannot be classified should register successfully with dewey_code=None
-        res = self.book_service.register_book(
-            title="یادداشت‌های روزانه ناشناس ۱۲۳",
-            author="نامشخص",
-            isbn="9780000000000",
-            auto_classify=True,
-            conn_or_path=self.conn,
-        )
-        self.assertIsNotNone(res["id"])
-        self.assertIsNone(res["dewey_code"])
+        with patch("database.is_ai_features_enabled", return_value=False):
+            res = self.book_service.register_book(
+                title="یادداشت‌های روزانه ناشناس ۱۲۳",
+                author="نامشخص",
+                isbn="9780000000000",
+                auto_classify=True,
+                conn_or_path=self.conn,
+            )
+            self.assertIsNotNone(res["id"])
+            self.assertIsNone(res["dewey_code"])
 
-        book = self.book_service.get_book(res["id"], conn_or_path=self.conn)
-        self.assertIsNotNone(book)
-        self.assertEqual(book["title"], "یادداشت‌های روزانه ناشناس ۱۲۳")
-        self.assertIsNone(book["dewey_code"])
+            book = self.book_service.get_book(res["id"], conn_or_path=self.conn)
+            self.assertIsNotNone(book)
+            self.assertEqual(book["title"], "یادداشت‌های روزانه ناشناس ۱۲۳")
+            self.assertIsNone(book["dewey_code"])
 
     def test_legacy_due_column_migrated_and_removed(self):
         # 1. New DB should not have 'due' column
