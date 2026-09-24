@@ -341,5 +341,107 @@ class TestDatabaseBackupRestore(unittest.TestCase):
             database.restore_database(fake_path, target_path_or_conn=self.source_db)
 
 
+class TestCsvExport(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.csv_path = os.path.join(self.temp_dir.name, "export.csv")
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_write_csv_file_basic(self):
+        headers = ["شناسه", "عنوان", "نویسنده"]
+        rows = [
+            [1, "شاهنامه", "فردوسی"],
+            [2, "گلستان", "سعدی"],
+        ]
+        out_path = database.write_csv_file(self.csv_path, headers, rows)
+        self.assertTrue(os.path.exists(out_path))
+
+        # Check BOM is present (0xEF, 0xBB, 0xBF)
+        with open(out_path, "rb") as f:
+            raw = f.read(3)
+            self.assertEqual(raw, b"\xef\xbb\xbf")
+
+        # Read back with csv.reader
+        import csv
+
+        with open(out_path, "r", encoding="utf-8-sig") as f:
+            reader = list(csv.reader(f))
+            self.assertEqual(reader[0], headers)
+            self.assertEqual(reader[1], ["1", "شاهنامه", "فردوسی"])
+            self.assertEqual(reader[2], ["2", "گلستان", "سعدی"])
+
+
+class TestLoanEligibility(unittest.TestCase):
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        database.init_database(self.conn)
+        cur = self.conn.cursor()
+        cur.execute("INSERT INTO members (id, username, phone_number) VALUES (1, 'علی رضایی', '09120000001')")
+        cur.execute("INSERT INTO books (id, title, author) VALUES (1, 'کتاب اول', 'نویسنده ۱')")
+        cur.execute("INSERT INTO books (id, title, author) VALUES (2, 'کتاب دوم', 'نویسنده ۲')")
+        cur.execute("INSERT INTO books (id, title, author) VALUES (3, 'کتاب سوم', 'نویسنده ۳')")
+        cur.execute("INSERT INTO books (id, title, author) VALUES (4, 'کتاب چهارم', 'نویسنده ۴')")
+        cur.execute("INSERT INTO books (id, title, author) VALUES (5, 'کتاب پنجم', 'نویسنده ۵')")
+        database.set_setting(self.conn, "max_loans", "3")
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_fresh_member_is_eligible(self):
+        ok, msg, stats = database.check_member_loan_eligibility(1, conn_or_path=self.conn, current_date="2026-09-24")
+        self.assertTrue(ok)
+        self.assertEqual(stats["active_loans"], 0)
+        self.assertEqual(stats["overdue_loans"], 0)
+        self.assertEqual(stats["max_quota"], 3)
+
+    def test_member_under_quota_is_eligible(self):
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO loans (member_id, book_id, borrow_date, return_date, borrowed) VALUES (1, 1, '2026-09-20', '2026-09-30', 1)"
+        )
+        self.conn.commit()
+        ok, msg, stats = database.check_member_loan_eligibility(1, conn_or_path=self.conn, current_date="2026-09-24")
+        self.assertTrue(ok)
+        self.assertEqual(stats["active_loans"], 1)
+
+    def test_member_at_quota_is_blocked(self):
+        cur = self.conn.cursor()
+        for b_id in (1, 2, 3):
+            cur.execute(
+                f"INSERT INTO loans (member_id, book_id, borrow_date, return_date, borrowed) VALUES (1, {b_id}, '2026-09-20', '2026-09-30', 1)"
+            )
+        self.conn.commit()
+        ok, msg, stats = database.check_member_loan_eligibility(1, conn_or_path=self.conn, current_date="2026-09-24")
+        self.assertFalse(ok)
+        self.assertIn("سقف مجاز", msg)
+        self.assertEqual(stats["active_loans"], 3)
+
+    def test_member_with_overdue_is_blocked(self):
+        cur = self.conn.cursor()
+        # Return date was 2026-09-22, but today is 2026-09-24
+        cur.execute(
+            "INSERT INTO loans (member_id, book_id, borrow_date, return_date, borrowed) VALUES (1, 1, '2026-09-10', '2026-09-22', 1)"
+        )
+        self.conn.commit()
+        ok, msg, stats = database.check_member_loan_eligibility(1, conn_or_path=self.conn, current_date="2026-09-24")
+        self.assertFalse(ok)
+        self.assertIn("تأخیر", msg)
+        self.assertEqual(stats["overdue_loans"], 1)
+
+    def test_returned_overdue_book_does_not_block(self):
+        cur = self.conn.cursor()
+        # Overdue date, but returned (borrowed = 0)
+        cur.execute(
+            "INSERT INTO loans (member_id, book_id, borrow_date, return_date, borrowed) VALUES (1, 1, '2026-09-10', '2026-09-22', 0)"
+        )
+        self.conn.commit()
+        ok, msg, stats = database.check_member_loan_eligibility(1, conn_or_path=self.conn, current_date="2026-09-24")
+        self.assertTrue(ok)
+        self.assertEqual(stats["overdue_loans"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

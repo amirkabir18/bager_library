@@ -1559,15 +1559,65 @@ def logout():
     show_login_view()
 
 
+def export_tree_to_csv_ui(tree_widget: ttk.Treeview, default_name: str):
+    try:
+        from database import write_csv_file
+
+        items = tree_widget.get_children()
+        rows = []
+        for item in items:
+            vals = tree_widget.item(item, "values")
+            if vals and str(vals[0]).startswith("❌"):
+                continue
+            rows.append(vals)
+
+        if not rows:
+            messagebox.showinfo("خروجی CSV", "هیچ داده‌ای برای صدور یافت نشد.", parent=root)
+            return
+
+        cols = list(tree_widget["columns"])
+        headers = [tree_widget.heading(c).get("text", c) for c in cols]
+
+        default_file = f"{default_name}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        dest_path = filedialog.asksaveasfilename(
+            parent=root,
+            title="ذخیره خروجی اکسل / CSV",
+            defaultextension=".csv",
+            initialfile=default_file,
+            filetypes=[("فایل CSV", "*.csv"), ("تمام فایل‌ها", "*.*")],
+        )
+        if not dest_path:
+            return
+
+        write_csv_file(dest_path, headers, rows)
+        messagebox.showinfo(
+            "خروجی موفق",
+            f"تعداد {len(rows)} رکورد با موفقیت در فایل زیر ذخیره شد:\n{dest_path}",
+            parent=root,
+        )
+    except Exception as e:
+        messagebox.showerror("خطا در خروجی CSV", f"خطا در ایجاد فایل:\n{e}", parent=root)
+
+
 search_bar_frame = ctk.CTkFrame(books_frame, corner_radius=8, height=48)
 search_bar_frame.pack(fill=tk.X, padx=10, pady=(10, 6))
-search_bar_frame.columnconfigure(5, weight=1)
+search_bar_frame.columnconfigure(6, weight=1)
 
 sub_btn = create_icon_button(search_bar_frame, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=80)
 sub_btn.grid(row=0, column=0, padx=(8, 4), pady=6)
 
 filter_btn = create_icon_button(search_bar_frame, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=85)
 filter_btn.grid(row=0, column=1, padx=4, pady=6)
+
+export_books_btn = create_icon_button(
+    search_bar_frame,
+    text=" خروجی اکسل ",
+    icon_name="file-spreadsheet",
+    font=FONT_NORMAL,
+    width=100,
+    command=lambda: export_tree_to_csv_ui(tree, "books_export"),
+)
+export_books_btn.grid(row=0, column=2, padx=4, pady=6)
 
 reclassify_all_btn = create_icon_button(
     search_bar_frame,
@@ -1576,7 +1626,7 @@ reclassify_all_btn = create_icon_button(
     font=FONT_NORMAL,
     width=115,
 )
-reclassify_all_btn.grid(row=0, column=2, padx=4, pady=6)
+reclassify_all_btn.grid(row=0, column=3, padx=4, pady=6)
 
 edit_book_btn = create_icon_button(
     search_bar_frame,
@@ -1585,7 +1635,7 @@ edit_book_btn = create_icon_button(
     font=FONT_NORMAL,
     width=95,
 )
-edit_book_btn.grid(row=0, column=3, padx=4, pady=6)
+edit_book_btn.grid(row=0, column=4, padx=4, pady=6)
 
 add_book_btn = create_icon_button(
     search_bar_frame,
@@ -1596,7 +1646,7 @@ add_book_btn = create_icon_button(
     hover_color="#15803d",
     width=105,
 )
-add_book_btn.grid(row=0, column=4, padx=4, pady=6)
+add_book_btn.grid(row=0, column=5, padx=4, pady=6)
 
 entry_serch = ctk.CTkEntry(
     search_bar_frame,
@@ -1605,7 +1655,7 @@ entry_serch = ctk.CTkEntry(
     justify="right",
     height=36,
 )
-entry_serch.grid(row=0, column=5, sticky="ew", padx=(4, 8), pady=6)
+entry_serch.grid(row=0, column=6, sticky="ew", padx=(4, 8), pady=6)
 
 tree_frame = ctk.CTkFrame(books_frame, corner_radius=8)
 tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
@@ -2640,7 +2690,7 @@ member_filter_settings = {
 
 search_bar_frame_member = ctk.CTkFrame(member_frame, corner_radius=8, height=48)
 search_bar_frame_member.pack(fill=tk.X, padx=10, pady=(10, 6))
-search_bar_frame_member.columnconfigure(4, weight=1)
+search_bar_frame_member.columnconfigure(5, weight=1)
 
 sub_btn_member = create_icon_button(
     search_bar_frame_member, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=85
@@ -2652,6 +2702,16 @@ filter_btn_member = create_icon_button(
 )
 filter_btn_member.grid(row=0, column=1, padx=4, pady=6)
 
+export_member_btn = create_icon_button(
+    search_bar_frame_member,
+    text=" خروجی اکسل ",
+    icon_name="file-spreadsheet",
+    font=FONT_NORMAL,
+    width=100,
+    command=lambda: export_tree_to_csv_ui(member_tree, "members_export"),
+)
+export_member_btn.grid(row=0, column=2, padx=4, pady=6)
+
 edit_member_btn = create_icon_button(
     search_bar_frame_member,
     text=" ویرایش عضو ",
@@ -2659,7 +2719,7 @@ edit_member_btn = create_icon_button(
     font=FONT_NORMAL,
     width=100,
 )
-edit_member_btn.grid(row=0, column=2, padx=4, pady=6)
+edit_member_btn.grid(row=0, column=3, padx=4, pady=6)
 
 add_member_btn = create_icon_button(
     search_bar_frame_member,
@@ -2670,7 +2730,7 @@ add_member_btn = create_icon_button(
     hover_color="#15803d",
     width=105,
 )
-add_member_btn.grid(row=0, column=3, padx=4, pady=6)
+add_member_btn.grid(row=0, column=4, padx=4, pady=6)
 
 entry_search_member = ctk.CTkEntry(
     search_bar_frame_member,
@@ -2679,7 +2739,7 @@ entry_search_member = ctk.CTkEntry(
     justify="right",
     height=36,
 )
-entry_search_member.grid(row=0, column=4, sticky="ew", padx=(4, 8), pady=6)
+entry_search_member.grid(row=0, column=5, sticky="ew", padx=(4, 8), pady=6)
 
 member_tree_frame = ctk.CTkFrame(member_frame, corner_radius=8)
 member_tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
@@ -3244,7 +3304,7 @@ user_filter_settings = {
 
 search_bar_frame_users = ctk.CTkFrame(auth_users_frame, corner_radius=8, height=48)
 search_bar_frame_users.pack(fill=tk.X, padx=10, pady=(10, 6))
-search_bar_frame_users.columnconfigure(4, weight=1)
+search_bar_frame_users.columnconfigure(5, weight=1)
 
 sub_btn_users = create_icon_button(search_bar_frame_users, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=85)
 sub_btn_users.grid(row=0, column=0, padx=(8, 4), pady=6)
@@ -3254,6 +3314,16 @@ filter_btn_users = create_icon_button(
 )
 filter_btn_users.grid(row=0, column=1, padx=4, pady=6)
 
+export_users_btn = create_icon_button(
+    search_bar_frame_users,
+    text=" خروجی اکسل ",
+    icon_name="file-spreadsheet",
+    font=FONT_NORMAL,
+    width=100,
+    command=lambda: export_tree_to_csv_ui(users_tree, "users_export"),
+)
+export_users_btn.grid(row=0, column=2, padx=4, pady=6)
+
 edit_user_btn = create_icon_button(
     search_bar_frame_users,
     text=" ویرایش کاربر ",
@@ -3261,7 +3331,7 @@ edit_user_btn = create_icon_button(
     font=FONT_NORMAL,
     width=100,
 )
-edit_user_btn.grid(row=0, column=2, padx=4, pady=6)
+edit_user_btn.grid(row=0, column=3, padx=4, pady=6)
 
 add_user_btn = create_icon_button(
     search_bar_frame_users,
@@ -3272,7 +3342,7 @@ add_user_btn = create_icon_button(
     hover_color="#15803d",
     width=105,
 )
-add_user_btn.grid(row=0, column=3, padx=4, pady=6)
+add_user_btn.grid(row=0, column=4, padx=4, pady=6)
 
 entry_search_users = ctk.CTkEntry(
     search_bar_frame_users,
@@ -3281,7 +3351,7 @@ entry_search_users = ctk.CTkEntry(
     justify="right",
     height=36,
 )
-entry_search_users.grid(row=0, column=4, sticky="ew", padx=(4, 8), pady=6)
+entry_search_users.grid(row=0, column=5, sticky="ew", padx=(4, 8), pady=6)
 
 users_tree_frame = ctk.CTkFrame(auth_users_frame, corner_radius=8)
 users_tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
@@ -4008,7 +4078,7 @@ loans_filter_settings = {
 
 search_bar_frame_loans = ctk.CTkFrame(tabel_frame, corner_radius=8, height=48)
 search_bar_frame_loans.pack(fill=tk.X, padx=10, pady=(10, 6))
-search_bar_frame_loans.columnconfigure(4, weight=1)
+search_bar_frame_loans.columnconfigure(5, weight=1)
 
 sub_btn_loans = create_icon_button(search_bar_frame_loans, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=85)
 sub_btn_loans.grid(row=0, column=0, padx=(8, 4), pady=6)
@@ -4017,6 +4087,16 @@ filter_btn_loans = create_icon_button(
     search_bar_frame_loans, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=85
 )
 filter_btn_loans.grid(row=0, column=1, padx=4, pady=6)
+
+export_loans_btn = create_icon_button(
+    search_bar_frame_loans,
+    text=" خروجی اکسل ",
+    icon_name="file-spreadsheet",
+    font=FONT_NORMAL,
+    width=100,
+    command=lambda: export_tree_to_csv_ui(loans_tree, "loans_export"),
+)
+export_loans_btn.grid(row=0, column=2, padx=4, pady=6)
 
 add_loan_btn = create_icon_button(
     search_bar_frame_loans,
@@ -4027,7 +4107,7 @@ add_loan_btn = create_icon_button(
     hover_color="#1d4ed8",
     width=125,
 )
-add_loan_btn.grid(row=0, column=2, padx=4, pady=6)
+add_loan_btn.grid(row=0, column=3, padx=4, pady=6)
 
 return_loan_btn = create_icon_button(
     search_bar_frame_loans,
@@ -4039,7 +4119,7 @@ return_loan_btn = create_icon_button(
     width=135,
     command=lambda: do_return_selected_loan(),
 )
-return_loan_btn.grid(row=0, column=3, padx=4, pady=6)
+return_loan_btn.grid(row=0, column=4, padx=4, pady=6)
 
 entry_search_loans = ctk.CTkEntry(
     search_bar_frame_loans,
@@ -4048,7 +4128,7 @@ entry_search_loans = ctk.CTkEntry(
     justify="right",
     height=36,
 )
-entry_search_loans.grid(row=0, column=4, sticky="ew", padx=(4, 8), pady=6)
+entry_search_loans.grid(row=0, column=5, sticky="ew", padx=(4, 8), pady=6)
 
 loans_tree_frame = ctk.CTkFrame(tabel_frame, corner_radius=8)
 loans_tree_frame.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=True)
@@ -4558,18 +4638,49 @@ def open_add_loan_popup(initial_book_title=""):
     for item in members_data[:10]:
         mem_listbox.insert(tk.END, item)
 
+    lbl_mem_eligibility = ctk.CTkLabel(popup, text="", font=FONT_SMALL, anchor="e")
+    lbl_mem_eligibility.pack(fill=tk.X, padx=25, pady=(0, 2))
+
+    def update_member_eligibility(m_val: str):
+        if not m_val:
+            lbl_mem_eligibility.configure(text="")
+            return
+        try:
+            with get_db_connection(db_p) as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT id FROM members WHERE username = ? OR CAST(id AS TEXT) = ?", (m_val, m_val))
+                row = cur.fetchone()
+                if row:
+                    from database import check_member_loan_eligibility
+
+                    ok, msg, stats = check_member_loan_eligibility(row[0], conn_or_path=conn)
+                    if not ok:
+                        lbl_mem_eligibility.configure(text=f"⚠️ {msg}", text_color="#ef4444")
+                    else:
+                        lbl_mem_eligibility.configure(
+                            text=f"✓ سهمیه امانت: {stats['active_loans']}/{stats['max_quota']}",
+                            text_color="#10b981",
+                        )
+                else:
+                    lbl_mem_eligibility.configure(text="")
+        except Exception:
+            pass
+
     def search_member(e):
         mem_listbox.delete(0, tk.END)
         q = member_entry.get().strip().lower()
         for item in members_data:
             if q in item.lower():
                 mem_listbox.insert(tk.END, item)
+        update_member_eligibility(member_entry.get().strip())
 
     def select_member(e):
         if mem_listbox.curselection():
+            val = mem_listbox.get(mem_listbox.curselection()[0])
             member_entry.delete(0, tk.END)
-            member_entry.insert(0, mem_listbox.get(mem_listbox.curselection()[0]))
+            member_entry.insert(0, val)
             mem_listbox.delete(0, tk.END)
+            update_member_eligibility(val)
 
     member_entry.bind("<KeyRelease>", search_member)
     mem_listbox.bind("<Double-Button-1>", select_member)
@@ -4754,9 +4865,6 @@ def open_add_loan_popup(initial_book_title=""):
             messagebox.showerror("خطا", "تاریخ بازگشت نمی‌تواند پیش از تاریخ امانت باشد!", parent=popup)
             return
 
-        with get_db_connection(db_p) as conn:
-            settings = get_all_settings(conn)
-        mln = int(settings.get("max_loans", "3"))
         try:
             with get_db_connection(db_p) as conn:
                 ins_cur = conn.cursor()
@@ -4811,17 +4919,16 @@ def open_add_loan_popup(initial_book_title=""):
                     book_entry.focus()
                     return
 
-                # 3. Check member's active borrowed loans limit
-                ins_cur.execute(
-                    "SELECT COUNT(*) FROM loans WHERE (member_id = ? OR member_id = ?) AND (borrowed = 1 OR borrowed = '1')",
-                    (actual_member_id, str(actual_member_id)),
+                # 3. Check member loan eligibility (quota & overdue check)
+                from database import check_member_loan_eligibility
+
+                is_eligible, reason_msg, stats = check_member_loan_eligibility(
+                    actual_member_id, conn_or_path=conn, current_date=borrow_gregorian
                 )
-                current_borrowed = ins_cur.fetchone()[0]
-                if current_borrowed >= mln:
+                if not is_eligible:
                     messagebox.showerror(
-                        "خطا",
-                        f"کاربر «{actual_member_name}» در حال حاضر {current_borrowed} کتاب به امانت برده.\n"
-                        f"حداکثر سقف مجاز امانت همزمان: {mln} کتاب می‌باشد.",
+                        "عدم امکان امانت کتاب",
+                        f"کاربر «{actual_member_name}» شرایط دریافت امانت جدید را ندارد:\n\n{reason_msg}",
                         parent=popup,
                     )
                     return

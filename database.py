@@ -1,3 +1,4 @@
+import csv
 import datetime
 import os
 import sqlite3
@@ -1063,4 +1064,87 @@ def restore_database(
                 target_conn.close()
     finally:
         src_conn.close()
+
+
+def write_csv_file(file_path: str, headers: list[str], rows: list[object]) -> str:
+    """
+    Writes tabular data to a CSV file with UTF-8 BOM encoding for Excel compatibility.
+    """
+    # ponytail: writes flat table to csv; upgrade to openpyxl if styled xlsx requested
+    abs_path = os.path.abspath(file_path)
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    with open(abs_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        writer.writerows(rows)  # type: ignore[arg-type]
+    return abs_path
+
+
+def check_member_loan_eligibility(
+    member_id: int,
+    conn_or_path: sqlite3.Connection | str | None = None,
+    current_date: str | None = None,
+) -> tuple[bool, str, dict[str, int]]:
+    """
+    Checks whether a member is eligible to borrow a new book.
+    Validates active loan quota and blocks borrowing if member holds overdue books.
+    Returns: (is_eligible, reason_message, stats)
+    stats: {"active_loans": count, "overdue_loans": count, "max_quota": quota}
+    """
+    # ponytail: checks quota and overdue status; upgrade to fine calculation if penalty system added
+    conn, should_close = _resolve_connection(conn_or_path)
+    try:
+        cur = conn.cursor()
+        quota_str = get_setting(conn, "max_loans", default="4")
+        try:
+            quota = max(1, int(quota_str))
+        except (ValueError, TypeError):
+            quota = 4
+
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM loans
+            WHERE member_id = ? AND (borrowed = 1 OR borrowed = '1')
+            """,
+            (member_id,),
+        )
+        active_loans = cur.fetchone()[0] or 0
+
+        today_iso = current_date or datetime.date.today().isoformat()
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM loans
+            WHERE member_id = ? AND (borrowed = 1 OR borrowed = '1')
+              AND return_date IS NOT NULL AND return_date < ?
+            """,
+            (member_id, today_iso),
+        )
+        overdue_loans = cur.fetchone()[0] or 0
+
+        stats = {
+            "active_loans": active_loans,
+            "overdue_loans": overdue_loans,
+            "max_quota": quota,
+        }
+
+        if overdue_loans > 0:
+            return (
+                False,
+                f"کاربر دارای {overdue_loans} کتاب دارای تأخیر و سررسیدشده است. لطفاً ابتدا کتاب‌های سررسیدشده بازگردانده شوند.",
+                stats,
+            )
+
+        if active_loans >= quota:
+            return (
+                False,
+                f"کاربر به سقف مجاز امانت همزمان ({quota} کتاب) رسیده است ({active_loans} امانت فعال).",
+                stats,
+            )
+
+        return True, "کاربر مجاز به دریافت امانت است.", stats
+    finally:
+        if should_close:
+            conn.close()
+
+
 
