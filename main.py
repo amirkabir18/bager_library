@@ -7,7 +7,7 @@ import threading
 import tkinter as tk
 import tkinter.font as tkfont
 import webbrowser
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 import customtkinter as ctk
 import jdatetime
@@ -6480,6 +6480,123 @@ btn_test_ai = create_icon_button(
     height=32,
 )
 btn_test_ai.pack(side=tk.RIGHT, padx=5)
+
+
+# --- Database Backup & Restore Card ---
+backup_card = ctk.CTkFrame(settings_container, corner_radius=10)
+backup_card.pack(fill=tk.X, pady=(0, 12))
+
+backup_header_row = ctk.CTkFrame(backup_card, fg_color="transparent")
+backup_header_row.pack(fill=tk.X, padx=16, pady=(12, 6))
+
+ctk.CTkLabel(
+    backup_header_row,
+    text=" پشتیبان‌گیری و بازیابی پایگاه داده (Backup & Restore) ",
+    font=FONT_HEADER,
+    anchor="e",
+).pack(side=tk.RIGHT)
+
+lbl_backup_status = ctk.CTkLabel(
+    backup_header_row,
+    text="",
+    font=FONT_SMALL,
+    text_color="#94a3b8",
+    anchor="w",
+)
+lbl_backup_status.pack(side=tk.LEFT)
+
+backup_row = ctk.CTkFrame(backup_card, fg_color="transparent")
+backup_row.pack(fill=tk.X, padx=16, pady=(4, 12))
+
+
+def do_backup_database_ui():
+    try:
+        from database import backup_database
+
+        default_filename = f"bager_library_backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        dest_path = filedialog.asksaveasfilename(
+            parent=root,
+            title="ذخیره فایل پشتیبان پایگاه داده",
+            defaultextension=".db",
+            initialfile=default_filename,
+            filetypes=[("پایگاه داده SQLite", "*.db"), ("تمام فایل‌ها", "*.*")],
+        )
+        if not dest_path:
+            return
+
+        saved_file = backup_database(dest_path, source_path_or_conn=db_p)
+        size_kb = os.path.getsize(saved_file) / 1024
+        msg = f"نسخه پشتیبان با موفقیت ذخیره شد:\n{saved_file}\nحجم: {size_kb:.1f} کیلوبایت"
+        lbl_backup_status.configure(text="🟢 پشتیبان‌گیری موفق", text_color="#16a34a")
+        messagebox.showinfo("پشتیبان‌گیری موفق", msg, parent=root)
+    except Exception as e:
+        lbl_backup_status.configure(text="🔴 خطا در پشتیبان‌گیری", text_color="#dc2626")
+        messagebox.showerror("خطا در پشتیبان‌گیری", f"خطا در ایجاد نسخه پشتیبان:\n{e}", parent=root)
+
+
+def do_restore_database_ui():
+    try:
+        from database import restore_database
+
+        confirm = messagebox.askyesno(
+            "تأیید بازیابی پایگاه داده",
+            "هشدار: بازیابی نسخه پشتیبان تمام اطلاعات فعلی (کتاب‌ها، اعضا، امانات، کاربران) را جایگزین خواهد کرد.\n\nآیا از ادامه مطمئن هستید؟",
+            icon="warning",
+            parent=root,
+        )
+        if not confirm:
+            return
+
+        src_path = filedialog.askopenfilename(
+            parent=root,
+            title="انتخاب فایل پشتیبان پایگاه داده",
+            filetypes=[("پایگاه داده SQLite", "*.db"), ("تمام فایل‌ها", "*.*")],
+        )
+        if not src_path:
+            return
+
+        restore_database(src_path, target_path_or_conn=db_p)
+        lbl_backup_status.configure(text="🟢 بازیابی پایگاه داده موفق", text_color="#16a34a")
+        messagebox.showinfo("بازیابی موفق", "پایگاه داده با موفقیت از فایل پشتیبان بازیابی شد.", parent=root)
+
+        for refresh_fn in (search, search_members, search_loans, load_notification_logs_ui):
+            try:
+                refresh_fn()
+            except Exception:
+                pass
+        try:
+            if "search_users" in globals():
+                search_users()
+        except Exception:
+            pass
+    except Exception as e:
+        lbl_backup_status.configure(text="🔴 خطا در بازیابی", text_color="#dc2626")
+        messagebox.showerror("خطا در بازیابی", f"خطا در بازیابی پایگاه داده:\n{e}", parent=root)
+
+
+btn_backup_db = create_icon_button(
+    backup_row,
+    text=" تهیه نسخه پشتیبان (Backup) ",
+    icon_name="download",
+    font=FONT_NORMAL,
+    command=do_backup_database_ui,
+    width=180,
+    height=32,
+)
+btn_backup_db.pack(side=tk.RIGHT, padx=5)
+
+btn_restore_db = create_icon_button(
+    backup_row,
+    text=" بازیابی از نسخه پشتیبان (Restore) ",
+    icon_name="upload",
+    font=FONT_NORMAL,
+    fg_color="#b45309",
+    hover_color="#92400e",
+    command=do_restore_database_ui,
+    width=210,
+    height=32,
+)
+btn_restore_db.pack(side=tk.RIGHT, padx=5)
 
 
 # --- Audit Log Viewer Card ---

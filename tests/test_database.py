@@ -284,5 +284,62 @@ class TestDatabaseMigration(unittest.TestCase):
                     os.environ.pop("LOCALAPPDATA", None)
 
 
+class TestDatabaseBackupRestore(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.source_db = os.path.join(self.temp_dir.name, "source.db")
+        self.backup_db = os.path.join(self.temp_dir.name, "backup.db")
+
+        # Initialize source db with standard schema and some records
+        conn = sqlite3.connect(self.source_db)
+        database.init_database(conn)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO books (title, author, isbn) VALUES ('کتاب تستی', 'نویسنده تست', '9780001112223')")
+        cur.execute("INSERT INTO members (username, phone_number) VALUES ('کاربر تستی', '09123456789')")
+        conn.commit()
+        conn.close()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_backup_and_restore_success(self):
+        # 1. Take backup
+        saved_path = database.backup_database(self.backup_db, source_path_or_conn=self.source_db)
+        self.assertTrue(os.path.exists(saved_path))
+
+        # 2. Modify original source db
+        conn = sqlite3.connect(self.source_db)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM books")
+        conn.commit()
+        cur.execute("SELECT COUNT(*) FROM books")
+        self.assertEqual(cur.fetchone()[0], 0)
+        conn.close()
+
+        # 3. Restore from backup
+        database.restore_database(self.backup_db, target_path_or_conn=self.source_db)
+
+        # 4. Verify original books restored
+        conn = sqlite3.connect(self.source_db)
+        cur = conn.cursor()
+        cur.execute("SELECT title, author FROM books")
+        rows = cur.fetchall()
+        conn.close()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], "کتاب تستی")
+
+    def test_restore_invalid_file_fails(self):
+        invalid_path = os.path.join(self.temp_dir.name, "invalid.db")
+        with open(invalid_path, "w", encoding="utf-8") as f:
+            f.write("not a sqlite database")
+        with self.assertRaises(ValueError):
+            database.restore_database(invalid_path, target_path_or_conn=self.source_db)
+
+    def test_restore_nonexistent_file_fails(self):
+        fake_path = os.path.join(self.temp_dir.name, "does_not_exist.db")
+        with self.assertRaises(FileNotFoundError):
+            database.restore_database(fake_path, target_path_or_conn=self.source_db)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -998,3 +998,69 @@ def reclassify_all_books(force: bool = False, conn_or_path: sqlite3.Connection |
 
     service = BookService()
     return service.reclassify_all_books(force=force, conn_or_path=conn_or_path)
+
+
+def backup_database(
+    target_path: str,
+    source_path_or_conn: sqlite3.Connection | str | None = None,
+) -> str:
+    """
+    Creates an atomic, consistent online backup of the SQLite database using sqlite3.Connection.backup.
+    """
+    # ponytail: local file sqlite3.backup; upgrade to S3/remote storage if multi-tenant needed
+    source_conn, should_close_src = _resolve_connection(source_path_or_conn)
+    try:
+        abs_target = os.path.abspath(target_path)
+        os.makedirs(os.path.dirname(abs_target), exist_ok=True)
+        dest_conn = sqlite3.connect(abs_target)
+        try:
+            source_conn.backup(dest_conn)
+        finally:
+            dest_conn.close()
+        return abs_target
+    finally:
+        if should_close_src:
+            source_conn.close()
+
+
+def restore_database(
+    backup_file_path: str,
+    target_path_or_conn: sqlite3.Connection | str | None = None,
+) -> None:
+    """
+    Restores the SQLite database from a valid SQLite backup file.
+    Validates backup integrity and required tables before restoring.
+    """
+    # ponytail: checks schema presence; upgrade to version migration check if breaking schemas introduced
+    if not os.path.exists(backup_file_path):
+        raise FileNotFoundError(f"فایل پشتیبان یافت نشد: {backup_file_path}")
+
+    try:
+        test_conn = sqlite3.connect(backup_file_path)
+        try:
+            cur = test_conn.cursor()
+            cur.execute("PRAGMA quick_check")
+            row = cur.fetchone()
+            if not row or row[0] != "ok":
+                raise ValueError("فایل پشتیبان نامعتبر یا آسیب‌دیده است.")
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = {r[0] for r in cur.fetchall()}
+            required = {"books", "members", "loans"}
+            if not required.issubset(tables):
+                raise ValueError(f"فایل پشتیبان شامل جداول مورد نیاز کتابخانه نیست: {required - tables}")
+        finally:
+            test_conn.close()
+    except (sqlite3.DatabaseError, sqlite3.OperationalError) as err:
+        raise ValueError(f"فایل انتخاب‌شده یک پایگاه داده معتبر SQLite نیست: {err}") from err
+
+    src_conn = sqlite3.connect(backup_file_path)
+    try:
+        target_conn, should_close_tgt = _resolve_connection(target_path_or_conn)
+        try:
+            src_conn.backup(target_conn)
+        finally:
+            if should_close_tgt:
+                target_conn.close()
+    finally:
+        src_conn.close()
+
