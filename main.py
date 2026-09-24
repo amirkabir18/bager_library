@@ -1,5 +1,6 @@
 import datetime
 import os
+from random import choice
 import sqlite3
 import sys
 import tempfile
@@ -1609,16 +1610,6 @@ sub_btn.grid(row=0, column=0, padx=(8, 4), pady=6)
 filter_btn = create_icon_button(search_bar_frame, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=85)
 filter_btn.grid(row=0, column=1, padx=4, pady=6)
 
-export_books_btn = create_icon_button(
-    search_bar_frame,
-    text=" خروجی اکسل ",
-    icon_name="file-spreadsheet",
-    font=FONT_NORMAL,
-    width=100,
-    command=lambda: export_tree_to_csv_ui(tree, "books_export"),
-)
-export_books_btn.grid(row=0, column=2, padx=4, pady=6)
-
 reclassify_all_btn = create_icon_button(
     search_bar_frame,
     text=" رده‌بندی دسته‌ای ",
@@ -2702,16 +2693,6 @@ filter_btn_member = create_icon_button(
 )
 filter_btn_member.grid(row=0, column=1, padx=4, pady=6)
 
-export_member_btn = create_icon_button(
-    search_bar_frame_member,
-    text=" خروجی اکسل ",
-    icon_name="file-spreadsheet",
-    font=FONT_NORMAL,
-    width=100,
-    command=lambda: export_tree_to_csv_ui(member_tree, "members_export"),
-)
-export_member_btn.grid(row=0, column=2, padx=4, pady=6)
-
 edit_member_btn = create_icon_button(
     search_bar_frame_member,
     text=" ویرایش عضو ",
@@ -3313,16 +3294,6 @@ filter_btn_users = create_icon_button(
     search_bar_frame_users, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=85
 )
 filter_btn_users.grid(row=0, column=1, padx=4, pady=6)
-
-export_users_btn = create_icon_button(
-    search_bar_frame_users,
-    text=" خروجی اکسل ",
-    icon_name="file-spreadsheet",
-    font=FONT_NORMAL,
-    width=100,
-    command=lambda: export_tree_to_csv_ui(users_tree, "users_export"),
-)
-export_users_btn.grid(row=0, column=2, padx=4, pady=6)
 
 edit_user_btn = create_icon_button(
     search_bar_frame_users,
@@ -4087,16 +4058,6 @@ filter_btn_loans = create_icon_button(
     search_bar_frame_loans, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=85
 )
 filter_btn_loans.grid(row=0, column=1, padx=4, pady=6)
-
-export_loans_btn = create_icon_button(
-    search_bar_frame_loans,
-    text=" خروجی اکسل ",
-    icon_name="file-spreadsheet",
-    font=FONT_NORMAL,
-    width=100,
-    command=lambda: export_tree_to_csv_ui(loans_tree, "loans_export"),
-)
-export_loans_btn.grid(row=0, column=2, padx=4, pady=6)
 
 add_loan_btn = create_icon_button(
     search_bar_frame_loans,
@@ -6412,6 +6373,88 @@ def trigger_check_now():
     except Exception as e:
         messagebox.showerror("خطا", f"خطا در بررسی امانات:\n{e}", parent=root)
 
+def csv_print():
+    csv_panel = ctk.CTkToplevel(root)
+    csv_panel.title("دریافت جدول ها")
+    csv_panel.geometry("900x450")
+    csv_panel.resizable(False, False)
+    if os.path.exists(icon_p):
+        try:
+            csv_panel.iconbitmap(icon_p)
+        except Exception:
+            pass
+    csv_panel.grab_set()
+
+    table_map = {
+        "کتاب ها": ("books", "books_export"),
+        "کاربران": ("auth_users", "users_export"),
+        "اعضا": ("members", "members_export"),
+        "امانت ها": ("loans", "loans_export"),
+    }
+
+    def table_choice(choice):
+        table_name, export_name = table_map.get(choice, ("books", "books_export"))
+        export_tables_btn.configure(
+            command=lambda name=export_name: export_tree_to_csv_ui(table_choice_tree, name)
+        )
+
+        with get_db_connection(db_p) as conn:
+            cur = conn.cursor()
+            cur.execute(f"SELECT * FROM `{table_name}`")
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+
+        # 1. تخلیه داده‌های قبلی
+        table_choice_tree.delete(*table_choice_tree.get_children())
+
+        # 2. ریست displaycolumns برای جلوگیری از خطای Tcl
+        table_choice_tree["displaycolumns"] = ()
+        table_choice_tree["columns"] = cols
+        table_choice_tree["show"] = "headings"
+        table_choice_tree["displaycolumns"] = rtl_display_order(cols, cols)
+
+        for col in cols:
+            table_choice_tree.heading(col, text=tr(col), anchor="center")
+            table_choice_tree.column(col, anchor="center")
+
+        for row in rows:
+            table_choice_tree.insert("", "end", values=row)
+
+    btn_frame = ctk.CTkFrame(csv_panel)
+    btn_frame.pack(padx=16, pady=(0, 12), fill=tk.BOTH)
+
+    csv_tabel_op = ctk.CTkOptionMenu(
+        btn_frame,
+        values=list(table_map.keys()),
+        width=140,
+        command=table_choice,
+        font=FONT_NORMAL,
+        dropdown_font=FONT_NORMAL,
+    )
+    csv_tabel_op.set("کتاب ها")
+    csv_tabel_op.pack(padx=5, side=tk.LEFT)
+
+    export_tables_btn = create_icon_button(
+        btn_frame,
+        text="گرفتن خروجی اکسل",
+        icon_name="file-spreadsheet",
+        font=FONT_NORMAL,
+        width=100,
+    )
+    export_tables_btn.pack(pady=10, side=tk.RIGHT)
+
+    table_choice_frame = ctk.CTkFrame(csv_panel)
+    table_choice_frame.pack(fill=tk.BOTH, expand=True, padx=16, pady=(0, 12))
+
+    scrollbar_3 = ctk.CTkScrollbar(table_choice_frame)
+    scrollbar_3.pack(side=tk.RIGHT, fill=tk.Y, padx=(4, 0), pady=4)
+
+    table_choice_tree = ttk.Treeview(table_choice_frame, yscrollcommand=scrollbar_3.set)
+    scrollbar_3.configure(command=table_choice_tree.yview)
+    table_choice_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=4)
+
+    table_choice("کتاب ها")
+
 
 btn_save_settings = create_icon_button(
     pref_row3,
@@ -6448,6 +6491,16 @@ btn_check_now = create_icon_button(
     height=34,
 )
 btn_check_now.pack(side=tk.RIGHT, padx=5)
+
+btn_csv_print = create_icon_button(
+    pref_row3,
+    text="دریافت جدول ها",
+    font=FONT_NORMAL,
+    command=csv_print,
+    width=150,
+    height=34,
+)
+btn_csv_print.pack(side=tk.RIGHT, padx=5)
 
 # --- AI Provider Settings Card ---
 ai_card = ctk.CTkFrame(settings_container, corner_radius=10)
