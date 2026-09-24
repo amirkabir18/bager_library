@@ -72,13 +72,15 @@ def calculate_code_percentages(stats_items: list[dict]) -> list[dict]:
         lines_added = sum(int(w.get("a", 0)) for w in weeks if isinstance(w, dict))
         total_lines += lines_added
 
-        entries.append({
-            "login": login,
-            "name": get_contributor_display_name(login),
-            "html_url": author.get("html_url") or f"https://github.com/{login}",
-            "avatar_url": author.get("avatar_url", ""),
-            "lines_added": lines_added,
-        })
+        entries.append(
+            {
+                "login": login,
+                "name": get_contributor_display_name(login),
+                "html_url": author.get("html_url") or f"https://github.com/{login}",
+                "avatar_url": author.get("avatar_url", ""),
+                "lines_added": lines_added,
+            }
+        )
 
     for entry in entries:
         if total_lines > 0:
@@ -105,14 +107,16 @@ def calculate_commit_percentages(contributors_items: list[dict]) -> list[dict]:
             continue
         commits = int(item.get("contributions", 0))
         total_commits += commits
-        entries.append({
-            "login": login,
-            "name": get_contributor_display_name(login),
-            "html_url": item.get("html_url") or f"https://github.com/{login}",
-            "avatar_url": item.get("avatar_url", ""),
-            "commits": commits,
-            "lines_added": 0,
-        })
+        entries.append(
+            {
+                "login": login,
+                "name": get_contributor_display_name(login),
+                "html_url": item.get("html_url") or f"https://github.com/{login}",
+                "avatar_url": item.get("avatar_url", ""),
+                "commits": commits,
+                "lines_added": 0,
+            }
+        )
 
     for entry in entries:
         if total_commits > 0:
