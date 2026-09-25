@@ -1145,6 +1145,3 @@ def check_member_loan_eligibility(
     finally:
         if should_close:
             conn.close()
-
-
-

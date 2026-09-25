@@ -1,28 +1,22 @@
 import datetime
 import os
+<<<<<<< HEAD
 from random import choice
 import sqlite3
+=======
+>>>>>>> 1290e4e2ce558e5522e33501b4449add53d5be68
 import sys
-import tempfile
 import threading
 import tkinter as tk
 import tkinter.font as tkfont
-import webbrowser
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
+from typing import Any
 
 import customtkinter as ctk
 import jdatetime
 from PIL import Image
 
 from notifications import LoanReminderManager, NotificationEngine
-from updater import (
-    DownloadManager,
-    UpdateChecker,
-    apply_update,
-    format_size,
-    format_speed,
-    load_app_info,
-)
 
 base_dir = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
 icon_p = os.path.join(base_dir, "logo.ico")
@@ -48,7 +42,6 @@ from auth import (
     OTPCleanupManager,
     OTPService,
     authenticate,
-    create_user,
     delete_user,
     ensure_bootstrap_admin,
     get_user_by_identifier,
@@ -58,36 +51,25 @@ from auth import (
     update_user,
 )
 from database import (
-    clear_notification_logs,
     db_p,
-    get_all_settings,
     get_db_connection,
-    get_notification_logs,
     init_database,
     is_ai_features_enabled,
     is_internet_access_enabled,
-    log_notification,
-    rtl_display_order,
-    set_setting,
     tr,
 )
-from persian_calendar import (
-    create_date_picker_button,
-    format_jalali_date,
-    get_today_jalali,
-    jalali_to_gregorian_str,
-    parse_jalali_date,
-    to_persian_digits,
-)
 from services.book_service import BookService
-from services.contributor_service import get_contributors_stats
 from services.dewey_ai_agent import (
     get_boot_internet_status,
     init_boot_internet_check,
-    probe_internet_connectivity,
-    set_boot_internet_status,
 )
-from services.dewey_service import DeweyService, is_valid_dewey
+from services.dewey_service import DeweyService
+from ui.books_tab import build_books_tab
+from ui.help_tab import build_help_tab
+from ui.loans_tab import build_loans_tab
+from ui.members_tab import build_members_tab
+from ui.settings_tab import build_settings_tab
+from ui.users_tab import build_users_tab
 
 dewey_service = DeweyService()
 book_service = BookService(dewey_service=dewey_service)
@@ -95,13 +77,6 @@ book_service = BookService(dewey_service=dewey_service)
 with get_db_connection(db_p) as _init_conn:
     init_database(_init_conn)
     ensure_bootstrap_admin(database_path=db_p)
-    _init_cur = _init_conn.cursor()
-    _init_cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    tables_data = _init_cur.fetchall()
-    table_names = [str(r[0]) for r in tables_data]
-    tabel_name = "books"
-    _init_cur.execute(f'PRAGMA table_info("{tabel_name}")')
-    columns: list[str] = [str(row[1]) for row in _init_cur.fetchall()]
 
 # CustomTkinter Global Theme
 ctk.set_appearance_mode("dark")
@@ -124,10 +99,9 @@ def run_boot_internet_check():
     try:
         init_boot_internet_check(database_path=db_p, timeout=1.2)
         try:
-            root.after(
-                0,
-                lambda: update_boot_net_status_label() if "update_boot_net_status_label" in globals() else None,
-            )
+            fn = globals().get("update_boot_net_status_label")
+            if fn:
+                root.after(0, fn)
         except Exception:
             pass
     except Exception:
@@ -162,6 +136,15 @@ FONT_HEADER = ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold")
 FONT_NORMAL = ctk.CTkFont(family=FONT_FAMILY, size=11)
 FONT_BOLD = ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold")
 FONT_SMALL = ctk.CTkFont(family=FONT_FAMILY, size=10)
+
+FONTS = {
+    "family": FONT_FAMILY,
+    "header": FONT_HEADER,
+    "normal": FONT_NORMAL,
+    "bold": FONT_BOLD,
+    "small": FONT_SMALL,
+    "title": FONT_TITLE,
+}
 
 icons_cache: dict[tuple[str, int, int, bool], ctk.CTkImage] = {}
 
@@ -403,14 +386,46 @@ auth_users_frame = ctk.CTkFrame(content_container, corner_radius=10)
 help_frame = ctk.CTkFrame(content_container, corner_radius=10)
 settings_frame = ctk.CTkFrame(content_container, corner_radius=10)
 
-filter_settings = {
-    "column": "all",
-    "match_mode": "contains",
-    "availability": "all",
-    "dewey_class": "all",
-    "sort_col": "id",
-    "sort_dir": "ASC",
-}
+books_tab_controllers: dict[str, Any] = {}
+loans_tab_controllers: dict[str, Any] = {}
+members_tab_controllers: dict[str, Any] = {}
+users_tab_controllers: dict[str, Any] = {}
+settings_tab_controllers: dict[str, Any] = {}
+help_tab_controllers: dict[str, Any] = {}
+
+
+def search(event=None):
+    if "search" in books_tab_controllers:
+        return books_tab_controllers["search"](event)
+
+
+def search_members(event=None):
+    if "search_members" in members_tab_controllers:
+        return members_tab_controllers["search_members"](event)
+
+
+def search_users(event=None):
+    if "search_users" in users_tab_controllers:
+        return users_tab_controllers["search_users"](event)
+
+
+def search_loans(event=None):
+    if "search_loans" in loans_tab_controllers:
+        return loans_tab_controllers["search_loans"](event)
+
+
+refresh_loans_table = search_loans
+
+
+def load_settings_into_ui():
+    if "load_settings_into_ui" in settings_tab_controllers:
+        return settings_tab_controllers["load_settings_into_ui"]()
+
+
+def load_notification_logs_ui():
+    if "load_notification_logs_ui" in settings_tab_controllers:
+        return settings_tab_controllers["load_notification_logs_ui"]()
+
 
 current_active_tab = "login"
 nav_buttons: dict[str, ctk.CTkButton] = {}
@@ -1560,46 +1575,14 @@ def logout():
     show_login_view()
 
 
-def export_tree_to_csv_ui(tree_widget: ttk.Treeview, default_name: str):
-    try:
-        from database import write_csv_file
-
-        items = tree_widget.get_children()
-        rows = []
-        for item in items:
-            vals = tree_widget.item(item, "values")
-            if vals and str(vals[0]).startswith("❌"):
-                continue
-            rows.append(vals)
-
-        if not rows:
-            messagebox.showinfo("خروجی CSV", "هیچ داده‌ای برای صدور یافت نشد.", parent=root)
-            return
-
-        cols = list(tree_widget["columns"])
-        headers = [tree_widget.heading(c).get("text", c) for c in cols]
-
-        default_file = f"{default_name}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-        dest_path = filedialog.asksaveasfilename(
-            parent=root,
-            title="ذخیره خروجی اکسل / CSV",
-            defaultextension=".csv",
-            initialfile=default_file,
-            filetypes=[("فایل CSV", "*.csv"), ("تمام فایل‌ها", "*.*")],
-        )
-        if not dest_path:
-            return
-
-        write_csv_file(dest_path, headers, rows)
-        messagebox.showinfo(
-            "خروجی موفق",
-            f"تعداد {len(rows)} رکورد با موفقیت در فایل زیر ذخیره شد:\n{dest_path}",
-            parent=root,
-        )
-    except Exception as e:
-        messagebox.showerror("خطا در خروجی CSV", f"خطا در ایجاد فایل:\n{e}", parent=root)
+# ==================== کتاب‌ها (Books Management) ====================
+def handle_borrow_book(book_title: str):
+    switch_tab("loans")
+    if "open_add_loan_popup" in loans_tab_controllers:
+        loans_tab_controllers["open_add_loan_popup"](book_title)
 
 
+<<<<<<< HEAD
 search_bar_frame = ctk.CTkFrame(books_frame, corner_radius=8, height=48)
 search_bar_frame.pack(fill=tk.X, padx=10, pady=(10, 6))
 search_bar_frame.columnconfigure(6, weight=1)
@@ -2663,31 +2646,42 @@ def on_key_release(event):
     if search_after_id is not None:
         root.after_cancel(search_after_id)
     search_after_id = root.after(200, search)
+=======
+books_tab_controllers.update(
+    build_books_tab(
+        parent=books_frame,
+        root=root,
+        fonts=FONTS,
+        get_icon_fn=get_icon,
+        create_icon_button_fn=create_icon_button,
+        bind_table_delete_fn=bind_table_delete,
+        db_path=db_p,
+        book_service=book_service,
+        is_ai_available_fn=is_ai_available,
+        is_internet_access_enabled_fn=is_internet_access_enabled,
+        on_borrow_book=handle_borrow_book,
+        icon_path=icon_p,
+    )
+)
+>>>>>>> 1290e4e2ce558e5522e33501b4449add53d5be68
 
 
 # ==================== اعضای کتابخانه (Library Members) ====================
-member_tabel_name = "members"
-cursor_mem = sqlite3.connect(db_p).cursor()
-cursor_mem.execute(f'PRAGMA table_info("{member_tabel_name}")')
-member_column: list[str] = [str(row[1]) for row in cursor_mem.fetchall()]
-cursor_mem.connection.close()
-
-member_filter_settings = {
-    "column": "all",
-    "match_mode": "contains",
-    "sort_col": "id",
-    "sort_dir": "ASC",
-}
-
-search_bar_frame_member = ctk.CTkFrame(member_frame, corner_radius=8, height=48)
-search_bar_frame_member.pack(fill=tk.X, padx=10, pady=(10, 6))
-search_bar_frame_member.columnconfigure(5, weight=1)
-
-sub_btn_member = create_icon_button(
-    search_bar_frame_member, text=" جستجو ", icon_name="search", font=FONT_BOLD, width=85
+members_tab_controllers.update(
+    build_members_tab(
+        parent=member_frame,
+        root=root,
+        fonts=FONTS,
+        get_icon_fn=get_icon,
+        create_icon_button_fn=create_icon_button,
+        bind_table_delete_fn=bind_table_delete,
+        db_path=db_p,
+        icon_path=icon_p,
+        on_member_updated=lambda: search_loans(),
+    )
 )
-sub_btn_member.grid(row=0, column=0, padx=(8, 4), pady=6)
 
+<<<<<<< HEAD
 filter_btn_member = create_icon_button(
     search_bar_frame_member, text=" فیلترها ", icon_name="filter", font=FONT_NORMAL, width=85
 )
@@ -3341,690 +3335,36 @@ users_tree["displaycolumns"] = rtl_display_order(
     user_columns, ["id", "username", "phone_number", "role", "telegram_chat_id", "is_active", "created_at"]
 )
 users_tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=4)
+=======
+
+# ==================== مدیریت کاربران سیستم (System Users) ====================
+def handle_user_updated(updated_user):
+    global current_user
+    if current_user and current_user.get("id") == updated_user.get("id"):
+        current_user = updated_user
+        u_role_str = tr(str(updated_user.get("role", "")))
+        u_name_str = str(updated_user.get("username", ""))
+        lbl_user_badge.configure(text=f"{u_name_str} ({u_role_str})")
+>>>>>>> 1290e4e2ce558e5522e33501b4449add53d5be68
 
 
-def update_user_filter_indicator():
-    is_custom = (
-        user_filter_settings["column"] != "all"
-        or user_filter_settings["match_mode"] != "contains"
-        or user_filter_settings["sort_col"] != "id"
-        or user_filter_settings["sort_dir"] != "ASC"
+users_tab_controllers.update(
+    build_users_tab(
+        parent=auth_users_frame,
+        root=root,
+        fonts=FONTS,
+        get_icon_fn=get_icon,
+        create_icon_button_fn=create_icon_button,
+        bind_table_delete_fn=bind_table_delete,
+        db_path=db_p,
+        get_current_user_fn=lambda: current_user,
+        on_user_updated=handle_user_updated,
+        icon_path=icon_p,
     )
-    if is_custom:
-        filter_btn_users.configure(text=" فیلترها (فعال) ", fg_color="#2563eb")
-    else:
-        filter_btn_users.configure(text=" فیلترها ", fg_color=ctk.ThemeManager.theme["CTkButton"]["fg_color"])
-
-
-def search_users(event=None):
-    search_value = entry_search_users.get().strip()
-    users_tree.delete(*users_tree.get_children())
-
-    temp_conn = get_db_connection(db_p)
-    try:
-        temp_cursor = temp_conn.cursor()
-
-        where_conditions: list[str] = []
-        params: list[str] = []
-
-        if search_value:
-            selected_col = user_filter_settings.get("column", "all")
-            match_mode = user_filter_settings.get("match_mode", "contains")
-
-            if match_mode == "exact":
-                pattern = search_value
-                op = "="
-            elif match_mode == "startswith":
-                pattern = f"{search_value}%"
-                op = "LIKE"
-            else:
-                pattern = f"%{search_value}%"
-                op = "LIKE"
-
-            searchable_cols = ["username", "phone_number", "role", "telegram_chat_id"]
-            if selected_col == "all":
-                sub_conds = [f"{col} {op} ?" for col in searchable_cols]
-                where_conditions.append("(" + " OR ".join(sub_conds) + ")")
-                params.extend([pattern] * len(searchable_cols))
-            elif selected_col in user_columns:
-                where_conditions.append(f"{selected_col} {op} ?")
-                params.append(pattern)
-
-        query = f"SELECT {', '.join(user_columns)} FROM {user_tabel_name}"
-        if where_conditions:
-            query += " WHERE " + " AND ".join(where_conditions)
-
-        sort_col = user_filter_settings.get("sort_col", "id")
-        if sort_col not in user_columns:
-            sort_col = "id"
-        sort_dir = user_filter_settings.get("sort_dir", "ASC")
-        if sort_dir not in ("ASC", "DESC"):
-            sort_dir = "ASC"
-        query += f" ORDER BY {sort_col} {sort_dir}"
-
-        temp_cursor.execute(query, tuple(params))
-        results = temp_cursor.fetchall()
-
-        if results:
-            for row in results:
-                row_list = list(row)
-                role_idx = user_columns.index("role")
-                if role_idx < len(row_list) and row_list[role_idx]:
-                    row_list[role_idx] = tr(row_list[role_idx])
-                active_idx = user_columns.index("is_active")
-                if active_idx < len(row_list):
-                    row_list[active_idx] = "فعال" if row_list[active_idx] in (1, "1", True) else "غیرفعال"
-                users_tree.insert("", "end", values=tuple(row_list))
-        else:
-            users_tree.insert("", "end", values=("❌ نتیجه‌ای یافت نشد!",) + ("",) * (len(user_columns) - 1))
-
-    except Exception as e:
-        messagebox.showerror("خطا", f"خطا در جستجوی کاربران: {str(e)}")
-    finally:
-        temp_conn.close()
-
-
-sub_btn_users.configure(command=search_users)
-
-
-def open_users_filter_popup():
-    popup = ctk.CTkToplevel(root)
-    popup.title("فیلترهای کاربران سامانه")
-    popup.geometry("420x420")
-    popup.resizable(False, False)
-    if os.path.exists(icon_p):
-        try:
-            popup.iconbitmap(icon_p)
-        except Exception:
-            pass
-
-    popup.transient(root)
-    popup.grab_set()
-
-    root.update_idletasks()
-    rx = root.winfo_rootx()
-    ry = root.winfo_rooty()
-    rw = root.winfo_width()
-    rh = root.winfo_height()
-    px = max(50, rx + (rw - 420) // 2)
-    py = max(50, ry + (rh - 420) // 2)
-    popup.geometry(f"+{px}+{py}")
-
-    col_var = tk.StringVar(value=user_filter_settings["column"])
-    match_var = tk.StringVar(value=user_filter_settings["match_mode"])
-    sort_col_var = tk.StringVar(value=user_filter_settings["sort_col"])
-    sort_dir_var = tk.StringVar(value=user_filter_settings["sort_dir"])
-
-    group_col = ctk.CTkFrame(popup, corner_radius=8)
-    group_col.pack(fill=tk.X, padx=15, pady=(10, 4))
-    ctk.CTkLabel(group_col, text="جستجو در ستون", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
-    col_frame = ctk.CTkFrame(group_col, fg_color="transparent")
-    col_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
-    rb_all = ctk.CTkRadioButton(col_frame, text="همه ستون‌ها", variable=col_var, value="all", font=FONT_NORMAL)
-    rb_all.pack(side=tk.RIGHT, padx=4)
-    for col in ["username", "phone_number", "role"]:
-        rb = ctk.CTkRadioButton(col_frame, text=tr(col), variable=col_var, value=col, font=FONT_NORMAL)
-        rb.pack(side=tk.RIGHT, padx=4)
-
-    group_mode = ctk.CTkFrame(popup, corner_radius=8)
-    group_mode.pack(fill=tk.X, padx=15, pady=4)
-    ctk.CTkLabel(group_mode, text="نوع تطابق جستجو", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
-    mode_frame = ctk.CTkFrame(group_mode, fg_color="transparent")
-    mode_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
-    rb_contains = ctk.CTkRadioButton(
-        mode_frame, text="شامل عبارت", variable=match_var, value="contains", font=FONT_NORMAL
-    )
-    rb_contains.pack(side=tk.RIGHT, padx=8)
-    rb_starts = ctk.CTkRadioButton(
-        mode_frame, text="شروع با عبارت", variable=match_var, value="startswith", font=FONT_NORMAL
-    )
-    rb_starts.pack(side=tk.RIGHT, padx=8)
-    rb_exact = ctk.CTkRadioButton(mode_frame, text="مطابقت دقیق", variable=match_var, value="exact", font=FONT_NORMAL)
-    rb_exact.pack(side=tk.RIGHT, padx=8)
-
-    group_sort = ctk.CTkFrame(popup, corner_radius=8)
-    group_sort.pack(fill=tk.X, padx=15, pady=4)
-    ctk.CTkLabel(group_sort, text="مرتب‌سازی نتایج", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
-    sort_frame = ctk.CTkFrame(group_sort, fg_color="transparent")
-    sort_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
-
-    ctk.CTkLabel(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
-    sort_cols_avail = ["id", "username", "role"]
-    sort_col_cb = ctk.CTkOptionMenu(
-        sort_frame,
-        width=130,
-        font=FONT_NORMAL,
-        values=[tr(c) for c in sort_cols_avail],
-    )
-    sort_col_cb.set(tr(sort_col_var.get()))
-    sort_col_cb.pack(side=tk.RIGHT, padx=5)
-
-    ctk.CTkLabel(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
-    sort_dir_cb = ctk.CTkOptionMenu(sort_frame, width=100, font=FONT_NORMAL, values=["صعودی", "نزولی"])
-    sort_dir_cb.set("صعودی" if sort_dir_var.get() == "ASC" else "نزولی")
-    sort_dir_cb.pack(side=tk.RIGHT, padx=5)
-
-    action_frame = ctk.CTkFrame(popup, fg_color="transparent")
-    action_frame.pack(fill=tk.X, padx=15, pady=(15, 10))
-
-    def apply_user_filters():
-        user_filter_settings["column"] = col_var.get()
-        user_filter_settings["match_mode"] = match_var.get()
-
-        disp_col = sort_col_cb.get()
-        disp_map = {tr(c): c for c in user_columns}
-        user_filter_settings["sort_col"] = disp_map.get(disp_col, "id")
-        user_filter_settings["sort_dir"] = "ASC" if sort_dir_cb.get() == "صعودی" else "DESC"
-
-        update_user_filter_indicator()
-        popup.destroy()
-        search_users()
-
-    def reset_user_filters():
-        user_filter_settings["column"] = "all"
-        user_filter_settings["match_mode"] = "contains"
-        user_filter_settings["sort_col"] = "id"
-        user_filter_settings["sort_dir"] = "ASC"
-
-        update_user_filter_indicator()
-        popup.destroy()
-        search_users()
-
-    btn_apply = create_icon_button(
-        action_frame,
-        text=" اعمال فیلتر ",
-        icon_name="check",
-        font=FONT_BOLD,
-        fg_color="#2563eb",
-        hover_color="#1d4ed8",
-        command=apply_user_filters,
-    )
-    btn_apply.pack(side=tk.RIGHT, padx=4)
-
-    btn_reset = create_icon_button(
-        action_frame,
-        text=" تنظیم مجدد ",
-        icon_name="rotate-ccw",
-        font=FONT_NORMAL,
-        fg_color="transparent",
-        hover_color=("#e2e8f0", "#1e293b"),
-        command=reset_user_filters,
-    )
-    btn_reset.pack(side=tk.RIGHT, padx=4)
-
-    btn_cancel = create_icon_button(
-        action_frame,
-        text=" انصراف ",
-        icon_name="x",
-        font=FONT_NORMAL,
-        fg_color="transparent",
-        hover_color=("#e2e8f0", "#1e293b"),
-        command=popup.destroy,
-    )
-    btn_cancel.pack(side=tk.LEFT, padx=4)
-
-
-filter_btn_users.configure(command=open_users_filter_popup)
-
-
-def open_create_user_popup():
-    if not current_user or str(current_user.get("role", "")).strip().lower() not in (
-        "super admin",
-        "superadmin",
-        "admin",
-    ):
-        messagebox.showerror("عدم دسترسی", "فقط نقش مدیر یا سرپرست مجاز به ایجاد کاربر جدید است.", parent=root)
-        return
-
-    popup = ctk.CTkToplevel(root)
-    popup.title("ثبت کاربر جدید در سامانه")
-    popup.geometry("420x500")
-    popup.resizable(False, False)
-    if os.path.exists(icon_p):
-        try:
-            popup.iconbitmap(icon_p)
-        except Exception:
-            pass
-
-    popup.transient(root)
-    popup.grab_set()
-
-    root.update_idletasks()
-    rx = root.winfo_rootx()
-    ry = root.winfo_rooty()
-    rw = root.winfo_width()
-    rh = root.winfo_height()
-    px = max(50, rx + (rw - 420) // 2)
-    py = max(50, ry + (rh - 500) // 2)
-    popup.geometry(f"+{px}+{py}")
-
-    ctk.CTkLabel(popup, text="ثبت کاربر جدید (سامانه)", font=FONT_TITLE).pack(pady=(15, 10))
-
-    r1 = ctk.CTkFrame(popup, fg_color="transparent")
-    r1.pack(fill=tk.X, padx=25, pady=4)
-    ctk.CTkLabel(r1, text="نام کاربری:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
-    u_name_ent = ctk.CTkEntry(r1, font=FONT_NORMAL, justify="right", height=32)
-    u_name_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    r2 = ctk.CTkFrame(popup, fg_color="transparent")
-    r2.pack(fill=tk.X, padx=25, pady=4)
-    ctk.CTkLabel(r2, text="شماره تلفن:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
-    u_phone_ent = ctk.CTkEntry(r2, font=FONT_NORMAL, justify="right", height=32)
-    u_phone_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    r3 = ctk.CTkFrame(popup, fg_color="transparent")
-    r3.pack(fill=tk.X, padx=25, pady=4)
-    ctk.CTkLabel(r3, text="شناسه چت تلگرام (اختیاری):", font=FONT_NORMAL, width=130, anchor="e").pack(
-        side=tk.RIGHT, padx=(5, 0)
-    )
-    u_tg_ent = ctk.CTkEntry(r3, font=FONT_NORMAL, justify="right", height=32)
-    u_tg_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    r4 = ctk.CTkFrame(popup, fg_color="transparent")
-    r4.pack(fill=tk.X, padx=25, pady=4)
-    ctk.CTkLabel(r4, text="نقش کاربر:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
-    u_role_combo = ctk.CTkOptionMenu(
-        r4,
-        font=FONT_NORMAL,
-        values=["super admin", "admin", "librarian", "user"],
-        height=32,
-    )
-    u_role_combo.set("librarian")
-    u_role_combo.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    r5 = ctk.CTkFrame(popup, fg_color="transparent")
-    r5.pack(fill=tk.X, padx=25, pady=4)
-    ctk.CTkLabel(r5, text="رمز عبور:", font=FONT_NORMAL, width=130, anchor="e").pack(side=tk.RIGHT, padx=(5, 0))
-    u_pwd_ent = ctk.CTkEntry(r5, font=FONT_NORMAL, justify="right", height=32, show="*")
-    u_pwd_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    def do_create_user():
-        uname = u_name_ent.get().strip()
-        phone = u_phone_ent.get().strip()
-        tg = u_tg_ent.get().strip() or None
-        role_val = u_role_combo.get().strip() or "librarian"
-        pwd = u_pwd_ent.get().strip() or None
-
-        if not uname:
-            messagebox.showwarning("خطا", "لطفاً نام کاربری را وارد کنید!", parent=popup)
-            u_name_ent.focus()
-            return
-        if not phone:
-            messagebox.showwarning("خطا", "لطفاً شماره تلفن را وارد کنید!", parent=popup)
-            u_phone_ent.focus()
-            return
-
-        norm_phone = normalize_phone_number(phone)
-        if len(norm_phone) != 11 or not norm_phone.startswith("09"):
-            messagebox.showerror("خطا", "فرمت شماره تلفن نامعتبر است!\nمثال: 09123456789", parent=popup)
-            u_phone_ent.focus()
-            return
-
-        success, msg, _ = create_user(
-            username=uname,
-            phone_number=norm_phone,
-            password=pwd,
-            role=role_val,
-            telegram_chat_id=tg,
-            is_active=True,
-            database_path=db_p,
-        )
-
-        if success:
-            messagebox.showinfo("موفق", msg, parent=popup)
-            popup.destroy()
-            search_users()
-        else:
-            messagebox.showerror("خطا", msg, parent=popup)
-
-    btn_f = ctk.CTkFrame(popup, fg_color="transparent")
-    btn_f.pack(pady=20, padx=20, fill=tk.X)
-    btn_save = create_icon_button(
-        btn_f,
-        text=" ثبت کاربر ",
-        icon_name="check",
-        command=do_create_user,
-        font=FONT_BOLD,
-        fg_color="#16a34a",
-        hover_color="#15803d",
-        width=120,
-    )
-    btn_save.pack(side=tk.RIGHT, padx=5)
-    btn_cancel = create_icon_button(
-        btn_f,
-        text=" انصراف ",
-        icon_name="x",
-        command=popup.destroy,
-        font=FONT_NORMAL,
-        fg_color="transparent",
-        hover_color=("#e2e8f0", "#1e293b"),
-        width=90,
-    )
-    btn_cancel.pack(side=tk.LEFT, padx=5)
-
-
-def open_edit_user_popup(user_id: int | None = None):
-    if not current_user or str(current_user.get("role", "")).strip().lower() not in (
-        "super admin",
-        "superadmin",
-        "admin",
-    ):
-        messagebox.showerror("عدم دسترسی", "فقط نقش مدیر یا سرپرست مجاز به ویرایش کاربران است.", parent=root)
-        return
-
-    if user_id is None:
-        selected = users_tree.selection()
-        if not selected:
-            messagebox.showinfo("راهنما", "لطفاً ابتدا یک کاربر را از جدول انتخاب کنید.", parent=root)
-            return
-        vals = users_tree.item(selected[0], "values")
-        if not vals or str(vals[0]).startswith("❌"):
-            return
-        id_idx = user_columns.index("id") if "id" in user_columns else 0
-        try:
-            user_id = int(vals[id_idx])
-        except (ValueError, IndexError):
-            return
-
-    conn = get_db_connection(db_p)
-    try:
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM auth_users WHERE id = ?", (user_id,))
-        row = cur.fetchone()
-        if not row:
-            messagebox.showerror("خطا", "کاربر در سامانه یافت نشد.", parent=root)
-            return
-        u_data = dict(row)
-    finally:
-        conn.close()
-
-    popup = ctk.CTkToplevel(root)
-    curr_uname = str(u_data.get("username", ""))
-    popup.title(f"ویرایش کاربر ({curr_uname})")
-    popup.geometry("450x570")
-    popup.resizable(False, False)
-    if os.path.exists(icon_p):
-        try:
-            popup.iconbitmap(icon_p)
-        except Exception:
-            pass
-
-    popup.transient(root)
-    popup.grab_set()
-
-    root.update_idletasks()
-    rx = root.winfo_rootx()
-    ry = root.winfo_rooty()
-    rw = root.winfo_width()
-    rh = root.winfo_height()
-    px = max(50, rx + (rw - 450) // 2)
-    py = max(50, ry + (rh - 570) // 2)
-    popup.geometry(f"+{px}+{py}")
-
-    header_f = ctk.CTkFrame(popup, fg_color="transparent")
-    header_f.pack(fill=tk.X, padx=20, pady=(15, 6))
-    ctk.CTkLabel(header_f, text="ویرایش مشخصات کاربر سامانه", font=FONT_TITLE, anchor="center").pack(fill=tk.X)
-    ctk.CTkLabel(
-        header_f,
-        text=f"شناسه کاربری: #{user_id}",
-        font=FONT_SMALL,
-        text_color="#94a3b8",
-        anchor="center",
-    ).pack(fill=tk.X, pady=(2, 0))
-
-    card_f = ctk.CTkFrame(
-        popup,
-        corner_radius=10,
-        border_width=1,
-        border_color=("#cbd5e1", "#334155"),
-        fg_color=("#ffffff", "#1e293b"),
-    )
-    card_f.pack(fill=tk.X, padx=20, pady=(4, 10))
-
-    can_edit_creds = is_super_admin(current_user)
-
-    # Row 1: Username
-    r1 = ctk.CTkFrame(card_f, fg_color="transparent")
-    r1.pack(fill=tk.X, padx=14, pady=(12, 4))
-    ctk.CTkLabel(r1, text="نام کاربری:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
-    u_name_ent = ctk.CTkEntry(r1, font=FONT_NORMAL, justify="right", height=32)
-    u_name_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-    u_name_ent.insert(0, curr_uname)
-    if not can_edit_creds:
-        u_name_ent.configure(state="disabled")
-
-    # Row 2: Phone
-    r2 = ctk.CTkFrame(card_f, fg_color="transparent")
-    r2.pack(fill=tk.X, padx=14, pady=4)
-    ctk.CTkLabel(r2, text="شماره تلفن:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
-    u_phone_ent = ctk.CTkEntry(r2, font=FONT_NORMAL, justify="right", height=32)
-    u_phone_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-    u_phone_ent.insert(0, str(u_data.get("phone_number", "")))
-    if not can_edit_creds:
-        u_phone_ent.configure(state="disabled")
-
-    if not can_edit_creds:
-        note_cred = ctk.CTkFrame(card_f, fg_color="transparent")
-        note_cred.pack(fill=tk.X, padx=14, pady=(0, 6))
-        ctk.CTkLabel(note_cred, text="", image=get_icon("lock", size=(13, 13)), width=16).pack(
-            side=tk.RIGHT, padx=(2, 0)
-        )
-        ctk.CTkLabel(
-            note_cred,
-            text="ویرایش نام کاربری و شماره همراه منحصراً با دسترسی مدیر ارشد امکان‌پذیر است.",
-            font=FONT_SMALL,
-            text_color=("#64748b", "#94a3b8"),
-            anchor="e",
-        ).pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    # Row 3: Role
-    r3 = ctk.CTkFrame(card_f, fg_color="transparent")
-    r3.pack(fill=tk.X, padx=14, pady=4)
-    ctk.CTkLabel(r3, text="نقش کاربر:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
-    available_roles = (
-        ["super admin", "admin", "librarian", "user"] if can_edit_creds else ["admin", "librarian", "user"]
-    )
-    u_role_combo = ctk.CTkOptionMenu(
-        r3,
-        font=FONT_NORMAL,
-        values=available_roles,
-        height=32,
-    )
-    curr_role = str(u_data.get("role", "librarian")).strip().lower()
-    u_role_combo.set(curr_role if curr_role in available_roles else "librarian")
-    u_role_combo.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    # Row 4: Telegram chat ID
-    r4 = ctk.CTkFrame(card_f, fg_color="transparent")
-    r4.pack(fill=tk.X, padx=14, pady=4)
-    ctk.CTkLabel(r4, text="شناسه تلگرام:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
-    u_tg_ent = ctk.CTkEntry(r4, font=FONT_NORMAL, justify="right", height=32, placeholder_text="اختیاری")
-    u_tg_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-    if u_data.get("telegram_chat_id"):
-        u_tg_ent.insert(0, str(u_data.get("telegram_chat_id", "")))
-
-    # Row 5: Active Status Switch
-    r5 = ctk.CTkFrame(card_f, fg_color="transparent")
-    r5.pack(fill=tk.X, padx=14, pady=4)
-    ctk.CTkLabel(r5, text="وضعیت حساب:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
-    var_active = tk.BooleanVar(value=bool(u_data.get("is_active", 1)))
-    sw_active = ctk.CTkSwitch(
-        r5,
-        text="حساب کاربری فعال است",
-        variable=var_active,
-        font=FONT_NORMAL,
-    )
-    sw_active.pack(side=tk.RIGHT, padx=4)
-
-    # Row 6: Password
-    r6 = ctk.CTkFrame(card_f, fg_color="transparent")
-    r6.pack(fill=tk.X, padx=14, pady=(4, 12))
-    ctk.CTkLabel(r6, text="رمز عبور جدید:", font=FONT_NORMAL, width=115, anchor="e").pack(side=tk.RIGHT, padx=(4, 0))
-    pwd_container = ctk.CTkFrame(r6, fg_color="transparent")
-    pwd_container.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    u_pwd_ent = ctk.CTkEntry(
-        pwd_container,
-        font=FONT_NORMAL,
-        justify="right",
-        height=32,
-        show="*",
-        placeholder_text="در صورت عدم تغییر خالی بگذارید",
-    )
-    u_pwd_ent.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(4, 0))
-
-    icon_eye = get_icon("eye", size=(16, 16))
-    icon_eye_off = get_icon("eye-off", size=(16, 16))
-
-    def toggle_user_pwd_visibility():
-        if u_pwd_ent.cget("show") == "*":
-            u_pwd_ent.configure(show="")
-            btn_pwd_eye.configure(image=icon_eye_off)
-        else:
-            u_pwd_ent.configure(show="*")
-            btn_pwd_eye.configure(image=icon_eye)
-
-    btn_pwd_eye = ctk.CTkButton(
-        pwd_container,
-        text="",
-        image=icon_eye,
-        width=34,
-        height=32,
-        fg_color=("#e2e8f0", "#334155"),
-        hover_color=("#cbd5e1", "#475569"),
-        command=toggle_user_pwd_visibility,
-    )
-    btn_pwd_eye.pack(side=tk.LEFT)
-
-    def do_update_user():
-        if can_edit_creds:
-            uname = u_name_ent.get().strip()
-            phone = u_phone_ent.get().strip()
-            if not uname:
-                messagebox.showwarning("خطا", "لطفاً نام کاربری را وارد کنید!", parent=popup)
-                u_name_ent.focus()
-                return
-            if not phone:
-                messagebox.showwarning("خطا", "لطفاً شماره تلفن را وارد کنید!", parent=popup)
-                u_phone_ent.focus()
-                return
-
-            norm_phone = normalize_phone_number(phone)
-            if len(norm_phone) != 11 or not norm_phone.startswith("09"):
-                messagebox.showerror("خطا", "فرمت شماره تلفن نامعتبر است!\nمثال: 09123456789", parent=popup)
-                u_phone_ent.focus()
-                return
-        else:
-            uname = str(u_data.get("username", ""))
-            phone = str(u_data.get("phone_number", ""))
-            norm_phone = normalize_phone_number(phone)
-
-        tg = u_tg_ent.get().strip() or None
-        role_val = u_role_combo.get().strip() or "librarian"
-        pwd = u_pwd_ent.get().strip() or None
-        act_val = var_active.get()
-
-        if pwd and len(pwd) < 4:
-            messagebox.showwarning("خطا", "رمز عبور جدید باید حداقل ۴ کاراکتر باشد!", parent=popup)
-            u_pwd_ent.focus()
-            return
-
-        success, msg, updated_user = update_user(
-            user_id=user_id,
-            username=uname,
-            phone_number=norm_phone,
-            password=pwd,
-            role=role_val,
-            telegram_chat_id=tg,
-            is_active=act_val,
-            database_path=db_p,
-        )
-
-        if success:
-            global current_user
-            if current_user and current_user.get("id") == user_id and updated_user:
-                current_user = updated_user
-                u_role_str = tr(str(current_user.get("role", "")))
-                u_name_str = str(current_user.get("username", ""))
-                lbl_user_badge.configure(text=f"{u_name_str} ({u_role_str})")
-
-            messagebox.showinfo("موفق", msg, parent=popup)
-            popup.destroy()
-            search_users()
-        else:
-            messagebox.showerror("خطا", msg, parent=popup)
-
-    btn_f = ctk.CTkFrame(popup, fg_color="transparent")
-    btn_f.pack(fill=tk.X, padx=20, pady=(6, 12))
-
-    btn_save = create_icon_button(
-        btn_f,
-        text=" ذخیره تغییرات ",
-        icon_name="check",
-        command=do_update_user,
-        font=FONT_BOLD,
-        fg_color="#16a34a",
-        hover_color="#15803d",
-        height=34,
-        width=130,
-    )
-    btn_save.pack(side=tk.RIGHT, padx=5)
-
-    btn_cancel = create_icon_button(
-        btn_f,
-        text=" انصراف ",
-        icon_name="x",
-        command=popup.destroy,
-        font=FONT_NORMAL,
-        fg_color="transparent",
-        hover_color=("#e2e8f0", "#1e293b"),
-        height=34,
-        width=90,
-    )
-    btn_cancel.pack(side=tk.LEFT, padx=5)
-
-
-add_user_btn.configure(command=open_create_user_popup)
-edit_user_btn.configure(command=open_edit_user_popup)
-users_tree.bind("<Double-Button-1>", lambda e: open_edit_user_popup())
-
-users_context_menu = tk.Menu(root, tearoff=0)
-users_context_menu.add_command(label="ویرایش مشخصات کاربر...", command=open_edit_user_popup)
-users_context_menu.add_separator()
-users_context_menu.add_command(label="حذف کاربر", command=lambda: users_tree.event_generate("<Delete>"))
-
-
-def show_users_context_menu(event):
-    row_id = users_tree.identify_row(event.y)
-    if row_id:
-        users_tree.selection_set(row_id)
-        users_context_menu.tk_popup(event.x_root, event.y_root)
-
-
-users_tree.bind("<Button-3>", show_users_context_menu)
-
-users_search_after_id = None
-
-
-def on_users_key_release(event):
-    global users_search_after_id
-    if users_search_after_id is not None:
-        root.after_cancel(users_search_after_id)
-    users_search_after_id = root.after(200, search_users)
-
-
-entry_search_users.bind("<KeyRelease>", on_users_key_release)
-entry_search_users.bind("<Return>", search_users)
-
-bind_table_delete(
-    users_tree,
-    "auth_users",
-    id_col_index=user_columns.index("id") if "id" in user_columns else 0,
-    on_deleted=search_users,
 )
 
 # ==================== جدول امانات (Loans Management) ====================
+<<<<<<< HEAD
 new_tabel_name = "loans"
 cursor_loan = sqlite3.connect(db_p).cursor()
 cursor_loan.execute(f'PRAGMA table_info("{new_tabel_name}")')
@@ -4420,1585 +3760,45 @@ def open_loans_filter_popup():
         date_frame,
         entry_widget=ent_from_date,
         title="انتخاب تاریخ شروع امانت",
+=======
+loans_tab_controllers.update(
+    build_loans_tab(
+        parent=tabel_frame,
+        root=root,
+        fonts=FONTS,
+        get_icon_fn=get_icon,
+        create_icon_button_fn=create_icon_button,
+        bind_table_delete_fn=bind_table_delete,
+        db_path=db_p,
+>>>>>>> 1290e4e2ce558e5522e33501b4449add53d5be68
         icon_path=icon_p,
-        width=30,
-        height=30,
+        notification_engine=notification_engine,
+        on_loan_changed=lambda: search(),
     )
-    btn_from_cal.pack(side=tk.RIGHT, padx=2)
-    ent_from_date.pack(side=tk.RIGHT, padx=(2, 10))
-
-    ctk.CTkLabel(date_frame, text="تا:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(4, 2))
-    ent_to_date = ctk.CTkEntry(
-        date_frame, width=110, height=30, font=FONT_NORMAL, justify="center", placeholder_text="YYYY-MM-DD"
-    )
-    ent_to_date.insert(0, loans_filter_settings.get("to_date", ""))
-    btn_to_cal = create_date_picker_button(
-        date_frame,
-        entry_widget=ent_to_date,
-        title="انتخاب تاریخ پایان امانت",
-        icon_path=icon_p,
-        width=30,
-        height=30,
-    )
-    btn_to_cal.pack(side=tk.RIGHT, padx=2)
-    ent_to_date.pack(side=tk.RIGHT, padx=2)
-
-    group_sort = ctk.CTkFrame(popup, corner_radius=8)
-    group_sort.pack(fill=tk.X, padx=15, pady=4)
-    ctk.CTkLabel(group_sort, text="مرتب‌سازی نتایج", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
-    sort_frame = ctk.CTkFrame(group_sort, fg_color="transparent")
-    sort_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
-
-    ctk.CTkLabel(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
-    sort_options = {
-        "مدت امانت": "duration",
-        "تاریخ بازگشت": "return_date",
-        "تاریخ امانت": "borrow_date",
-        "نام کاربر": mem_filter_col,
-        "نام کتاب": "book_id",
-        "شناسه": "id",
-    }
-    rev_sort_options = {v: k for k, v in sort_options.items()}
-
-    sort_col_cb = ctk.CTkOptionMenu(
-        sort_frame,
-        width=130,
-        font=FONT_NORMAL,
-        values=list(sort_options.keys()),
-    )
-    current_sort_label = rev_sort_options.get(sort_col_var.get(), "مدت امانت")
-    sort_col_cb.set(current_sort_label)
-    sort_col_cb.pack(side=tk.RIGHT, padx=5)
-
-    ctk.CTkLabel(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
-    sort_dir_cb = ctk.CTkOptionMenu(sort_frame, width=100, font=FONT_NORMAL, values=["صعودی", "نزولی"])
-    sort_dir_cb.set("صعودی" if sort_dir_var.get() == "ASC" else "نزولی")
-    sort_dir_cb.pack(side=tk.RIGHT, padx=5)
-
-    action_frame = ctk.CTkFrame(popup, fg_color="transparent")
-    action_frame.pack(fill=tk.X, padx=15, pady=(10, 8))
-
-    def apply_loans_filters():
-        loans_filter_settings["column"] = col_var.get()
-        loans_filter_settings["match_mode"] = match_var.get()
-        loans_filter_settings["status"] = status_var.get()
-        loans_filter_settings["sort_col"] = sort_options.get(sort_col_cb.get(), "duration")
-        loans_filter_settings["sort_dir"] = "ASC" if sort_dir_cb.get() == "صعودی" else "DESC"
-        loans_filter_settings["from_date"] = ent_from_date.get().strip()
-        loans_filter_settings["to_date"] = ent_to_date.get().strip()
-
-        update_loans_filter_indicator()
-        popup.destroy()
-        search_loans()
-
-    def reset_loans_filters():
-        loans_filter_settings["column"] = "all"
-        loans_filter_settings["match_mode"] = "contains"
-        loans_filter_settings["status"] = "all"
-        loans_filter_settings["sort_col"] = "duration"
-        loans_filter_settings["sort_dir"] = "ASC"
-        loans_filter_settings["from_date"] = ""
-        loans_filter_settings["to_date"] = ""
-
-        update_loans_filter_indicator()
-        popup.destroy()
-        search_loans()
-
-    btn_apply = create_icon_button(
-        action_frame,
-        text=" اعمال فیلتر ",
-        icon_name="check",
-        font=FONT_BOLD,
-        fg_color="#2563eb",
-        hover_color="#1d4ed8",
-        command=apply_loans_filters,
-    )
-    btn_apply.pack(side=tk.RIGHT, padx=4)
-
-    btn_reset = create_icon_button(
-        action_frame,
-        text=" تنظیم مجدد ",
-        icon_name="rotate-ccw",
-        font=FONT_NORMAL,
-        fg_color="transparent",
-        hover_color=("#e2e8f0", "#1e293b"),
-        command=reset_loans_filters,
-    )
-    btn_reset.pack(side=tk.RIGHT, padx=4)
-
-    btn_cancel = create_icon_button(
-        action_frame,
-        text=" انصراف ",
-        icon_name="x",
-        font=FONT_NORMAL,
-        fg_color="transparent",
-        hover_color=("#e2e8f0", "#1e293b"),
-        command=popup.destroy,
-    )
-    btn_cancel.pack(side=tk.LEFT, padx=4)
-
-
-filter_btn_loans.configure(command=open_loans_filter_popup)
-
-
-def open_add_loan_popup(initial_book_title=""):
-    popup = ctk.CTkToplevel(root)
-    popup.title("ثبت امانت کتاب")
-    popup.geometry("480x640")
-    popup.resizable(False, False)
-    if os.path.exists(icon_p):
-        try:
-            popup.iconbitmap(icon_p)
-        except Exception:
-            pass
-
-    popup.transient(root)
-    popup.grab_set()
-
-    root.update_idletasks()
-    rx = root.winfo_rootx()
-    ry = root.winfo_rooty()
-    rw = root.winfo_width()
-    rh = root.winfo_height()
-    px = max(50, rx + (rw - 480) // 2)
-    py = max(50, ry + (rh - 640) // 2)
-    popup.geometry(f"+{px}+{py}")
-
-    ctk.CTkLabel(popup, text="ثبت اطلاعات امانت کتاب", font=FONT_TITLE).pack(pady=(12, 6))
-
-    # 1. Member selection
-    ctk.CTkLabel(popup, text="نام کاربر (عضو):", font=FONT_NORMAL, anchor="e").pack(fill=tk.X, padx=25, pady=(2, 0))
-    member_entry = ctk.CTkEntry(popup, font=FONT_NORMAL, justify="right", height=32)
-    member_entry.pack(fill=tk.X, padx=25, pady=2)
-
-    mem_conn = get_db_connection(db_p)
-    try:
-        mem_cur = mem_conn.cursor()
-        try:
-            mem_cur.execute("SELECT username FROM members ORDER BY username ASC")
-        except sqlite3.OperationalError:
-            mem_cur.execute("SELECT member_id FROM members ORDER BY member_id ASC")
-        members_data = [row[0] for row in mem_cur.fetchall()]
-    finally:
-        mem_conn.close()
-
-    mem_listbox = tk.Listbox(
-        popup,
-        height=3,
-        font=(FONT_FAMILY, 9),
-        justify="right",
-        bg="#242424",
-        fg="#f8fafc",
-        selectbackground="#1f538d",
-        selectforeground="#ffffff",
-        relief="flat",
-        highlightthickness=1,
-        highlightbackground="#374151",
-    )
-    mem_listbox.pack(fill=tk.X, padx=25, pady=2)
-    for item in members_data[:10]:
-        mem_listbox.insert(tk.END, item)
-
-    lbl_mem_eligibility = ctk.CTkLabel(popup, text="", font=FONT_SMALL, anchor="e")
-    lbl_mem_eligibility.pack(fill=tk.X, padx=25, pady=(0, 2))
-
-    def update_member_eligibility(m_val: str):
-        if not m_val:
-            lbl_mem_eligibility.configure(text="")
-            return
-        try:
-            with get_db_connection(db_p) as conn:
-                cur = conn.cursor()
-                cur.execute("SELECT id FROM members WHERE username = ? OR CAST(id AS TEXT) = ?", (m_val, m_val))
-                row = cur.fetchone()
-                if row:
-                    from database import check_member_loan_eligibility
-
-                    ok, msg, stats = check_member_loan_eligibility(row[0], conn_or_path=conn)
-                    if not ok:
-                        lbl_mem_eligibility.configure(text=f"⚠️ {msg}", text_color="#ef4444")
-                    else:
-                        lbl_mem_eligibility.configure(
-                            text=f"✓ سهمیه امانت: {stats['active_loans']}/{stats['max_quota']}",
-                            text_color="#10b981",
-                        )
-                else:
-                    lbl_mem_eligibility.configure(text="")
-        except Exception:
-            pass
-
-    def search_member(e):
-        mem_listbox.delete(0, tk.END)
-        q = member_entry.get().strip().lower()
-        for item in members_data:
-            if q in item.lower():
-                mem_listbox.insert(tk.END, item)
-        update_member_eligibility(member_entry.get().strip())
-
-    def select_member(e):
-        if mem_listbox.curselection():
-            val = mem_listbox.get(mem_listbox.curselection()[0])
-            member_entry.delete(0, tk.END)
-            member_entry.insert(0, val)
-            mem_listbox.delete(0, tk.END)
-            update_member_eligibility(val)
-
-    member_entry.bind("<KeyRelease>", search_member)
-    mem_listbox.bind("<Double-Button-1>", select_member)
-
-    # 2. Book selection
-    ctk.CTkLabel(popup, text="عنوان کتاب:", font=FONT_NORMAL, anchor="e").pack(fill=tk.X, padx=25, pady=(4, 0))
-    book_entry = ctk.CTkEntry(popup, font=FONT_NORMAL, justify="right", height=32)
-    book_entry.pack(fill=tk.X, padx=25, pady=2)
-
-    if initial_book_title:
-        book_entry.insert(0, initial_book_title)
-        book_entry.configure(state="readonly")
-    else:
-        bk_conn = get_db_connection(db_p)
-        try:
-            bk_cur = bk_conn.cursor()
-            bk_cur.execute("""
-                SELECT title FROM books
-                WHERE title IS NOT NULL AND title != ''
-                  AND id NOT IN (SELECT book_id FROM loans WHERE (borrowed = 1 OR borrowed = '1') AND book_id IS NOT NULL)
-                  AND title NOT IN (SELECT book_id FROM loans WHERE (borrowed = 1 OR borrowed = '1') AND book_id IS NOT NULL)
-                ORDER BY title ASC
-            """)
-            books_data = [row[0] for row in bk_cur.fetchall() if row[0]]
-        finally:
-            bk_conn.close()
-
-        bk_listbox = tk.Listbox(
-            popup,
-            height=3,
-            font=(FONT_FAMILY, 9),
-            justify="right",
-            bg="#242424",
-            fg="#f8fafc",
-            selectbackground="#1f538d",
-            selectforeground="#ffffff",
-            relief="flat",
-            highlightthickness=1,
-            highlightbackground="#374151",
-        )
-        bk_listbox.pack(fill=tk.X, padx=25, pady=2)
-        for item in books_data[:10]:
-            bk_listbox.insert(tk.END, item)
-
-        def search_book(e):
-            bk_listbox.delete(0, tk.END)
-            q = book_entry.get().strip().lower()
-            for item in books_data:
-                if q in item.lower():
-                    bk_listbox.insert(tk.END, item)
-
-        def select_book(e):
-            if bk_listbox.curselection():
-                book_entry.delete(0, tk.END)
-                book_entry.insert(0, bk_listbox.get(bk_listbox.curselection()[0]))
-                bk_listbox.delete(0, tk.END)
-
-        book_entry.bind("<KeyRelease>", search_book)
-        bk_listbox.bind("<Double-Button-1>", select_book)
-
-    # 3. Borrow Date
-    cur_today = get_today_jalali()
-    c_days_10 = cur_today + jdatetime.timedelta(days=10)
-    c_days_20 = cur_today + jdatetime.timedelta(days=20)
-    c_days_30 = cur_today + jdatetime.timedelta(days=30)
-
-    ctk.CTkLabel(popup, text="تاریخ امانت کتاب (YYYY-MM-DD):", font=FONT_NORMAL, anchor="e").pack(
-        fill=tk.X, padx=25, pady=(4, 0)
-    )
-    row_borrow = ctk.CTkFrame(popup, fg_color="transparent")
-    row_borrow.pack(fill=tk.X, padx=25, pady=2)
-
-    borrow_entry = ctk.CTkEntry(row_borrow, font=FONT_NORMAL, justify="right", height=32)
-    btn_cal_borrow = create_date_picker_button(
-        row_borrow,
-        entry_widget=borrow_entry,
-        title="انتخاب تاریخ امانت (تقویم شمسی)",
-        icon_path=icon_p,
-    )
-    btn_cal_borrow.pack(side=tk.LEFT, padx=(0, 4))
-    borrow_entry.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    var_auto_date = tk.IntVar(value=1)
-    borrow_entry.insert(0, str(cur_today))
-
-    def toggle_borrow_date():
-        if var_auto_date.get() == 1:
-            borrow_entry.delete(0, tk.END)
-            borrow_entry.insert(0, str(cur_today))
-        else:
-            borrow_entry.delete(0, tk.END)
-
-    chk_f = ctk.CTkFrame(popup, fg_color="transparent")
-    chk_f.pack(fill=tk.X, padx=25, pady=2)
-    ctk.CTkCheckBox(
-        chk_f, text="ثبت خودکار تاریخ امروز", variable=var_auto_date, command=toggle_borrow_date, font=FONT_NORMAL
-    ).pack(side=tk.RIGHT)
-
-    # 4. Return Date
-    ctk.CTkLabel(popup, text="تاریخ بازگشت کتاب (YYYY-MM-DD):", font=FONT_NORMAL, anchor="e").pack(
-        fill=tk.X, padx=25, pady=(4, 0)
-    )
-    row_return = ctk.CTkFrame(popup, fg_color="transparent")
-    row_return.pack(fill=tk.X, padx=25, pady=2)
-
-    return_entry = ctk.CTkEntry(row_return, font=FONT_NORMAL, justify="right", height=32)
-    btn_cal_return = create_date_picker_button(
-        row_return,
-        entry_widget=return_entry,
-        title="انتخاب تاریخ بازگشت (تقویم شمسی)",
-        icon_path=icon_p,
-        on_select=lambda d: selected_days.set(""),
-    )
-    btn_cal_return.pack(side=tk.LEFT, padx=(0, 4))
-    return_entry.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    selected_days = tk.StringVar(value="option1")
-    return_entry.insert(0, str(c_days_10))
-
-    def on_select_days():
-        choice = selected_days.get()
-        return_entry.delete(0, tk.END)
-        if choice == "option1":
-            return_entry.insert(0, str(c_days_10))
-        elif choice == "option2":
-            return_entry.insert(0, str(c_days_20))
-        elif choice == "option3":
-            return_entry.insert(0, str(c_days_30))
-
-    days_frame = ctk.CTkFrame(popup, fg_color="transparent")
-    days_frame.pack(pady=4)
-
-    rb1 = ctk.CTkRadioButton(
-        days_frame, text="10 روز", variable=selected_days, value="option1", command=on_select_days, font=FONT_NORMAL
-    )
-    rb2 = ctk.CTkRadioButton(
-        days_frame, text="20 روز", variable=selected_days, value="option2", command=on_select_days, font=FONT_NORMAL
-    )
-    rb3 = ctk.CTkRadioButton(
-        days_frame, text="30 روز", variable=selected_days, value="option3", command=on_select_days, font=FONT_NORMAL
-    )
-    rb1.pack(side=tk.RIGHT, padx=10)
-    rb2.pack(side=tk.RIGHT, padx=10)
-    rb3.pack(side=tk.RIGHT, padx=10)
-
-    def do_insert_loan():
-        m_name = member_entry.get().strip()
-        b_title = book_entry.get().strip()
-        borrow_shamsi = borrow_entry.get().strip()
-        return_shamsi = return_entry.get().strip()
-
-        if not m_name:
-            messagebox.showwarning("هشدار", "لطفاً نام کاربر را وارد کنید!", parent=popup)
-            member_entry.focus()
-            return
-        if not b_title:
-            messagebox.showwarning("هشدار", "لطفاً عنوان کتاب را وارد کنید!", parent=popup)
-            book_entry.focus()
-            return
-        if not borrow_shamsi:
-            messagebox.showwarning("هشدار", "لطفاً تاریخ امانت را وارد کنید!", parent=popup)
-            borrow_entry.focus()
-            return
-        if not return_shamsi:
-            messagebox.showwarning("هشدار", "لطفاً تاریخ بازگشت را وارد کنید!", parent=popup)
-            return_entry.focus()
-            return
-
-        j_borrow = parse_jalali_date(borrow_shamsi)
-        if not j_borrow:
-            messagebox.showerror("خطا", "فرمت تاریخ امانت وارد شده صحیح نیست!\nمثال: 1403-06-20", parent=popup)
-            return
-        borrow_gregorian = j_borrow.togregorian().strftime("%Y-%m-%d")
-
-        j_return = parse_jalali_date(return_shamsi)
-        if not j_return:
-            messagebox.showerror("خطا", "فرمت تاریخ بازگشت وارد شده صحیح نیست!\nمثال: 1403-06-30", parent=popup)
-            return
-        return_gregorian = j_return.togregorian().strftime("%Y-%m-%d")
-
-        if return_gregorian < borrow_gregorian:
-            messagebox.showerror("خطا", "تاریخ بازگشت نمی‌تواند پیش از تاریخ امانت باشد!", parent=popup)
-            return
-
-        try:
-            with get_db_connection(db_p) as conn:
-                ins_cur = conn.cursor()
-
-                # 1. Resolve member_id
-                try:
-                    ins_cur.execute("SELECT id, username FROM members WHERE username = ?", (m_name,))
-                except sqlite3.OperationalError:
-                    ins_cur.execute("SELECT id, member_id FROM members WHERE member_id = ?", (m_name,))
-                m_row = ins_cur.fetchone()
-                if not m_row and m_name.isdigit():
-                    try:
-                        ins_cur.execute("SELECT id, username FROM members WHERE id = ?", (int(m_name),))
-                    except sqlite3.OperationalError:
-                        ins_cur.execute("SELECT id, member_id FROM members WHERE id = ?", (int(m_name),))
-                    m_row = ins_cur.fetchone()
-
-                if not m_row:
-                    messagebox.showerror(
-                        "خطا",
-                        f"عضوی با نام «{m_name}» در فهرست اعضای کتابخانه یافت نشد.\nلطفاً ابتدا از تب «اعضای کتابخانه» او را ثبت کنید.",
-                        parent=popup,
-                    )
-                    member_entry.focus()
-                    return
-
-                actual_member_id = m_row[0]
-                actual_member_name = m_row[1]
-
-                # 2. Check book_id is actual ID from books table
-                actual_book_id = None
-                actual_book_title = b_title
-
-                ins_cur.execute("SELECT id, title FROM books WHERE title = ?", (b_title,))
-                b_row = ins_cur.fetchone()
-                if b_row:
-                    actual_book_id = b_row[0]
-                    actual_book_title = b_row[1]
-                elif b_title.isdigit():
-                    ins_cur.execute("SELECT id, title FROM books WHERE id = ?", (int(b_title),))
-                    b_row = ins_cur.fetchone()
-                    if b_row:
-                        actual_book_id = b_row[0]
-                        actual_book_title = b_row[1]
-
-                if actual_book_id is None:
-                    messagebox.showerror(
-                        "خطا",
-                        f"کتابی با عنوان یا شناسه «{b_title}» در پایگاه داده کتاب‌ها یافت نشد.",
-                        parent=popup,
-                    )
-                    book_entry.focus()
-                    return
-
-                # 3. Check member loan eligibility (quota & overdue check)
-                from database import check_member_loan_eligibility
-
-                is_eligible, reason_msg, stats = check_member_loan_eligibility(
-                    actual_member_id, conn_or_path=conn, current_date=borrow_gregorian
-                )
-                if not is_eligible:
-                    messagebox.showerror(
-                        "عدم امکان امانت کتاب",
-                        f"کاربر «{actual_member_name}» شرایط دریافت امانت جدید را ندارد:\n\n{reason_msg}",
-                        parent=popup,
-                    )
-                    return
-
-                # 4. Check if book is already borrowed
-                ins_cur.execute(
-                    "SELECT COUNT(*) FROM loans WHERE (book_id = ? OR book_id = ?) AND (borrowed = 1 OR borrowed = '1')",
-                    (actual_book_id, str(actual_book_id)),
-                )
-                if ins_cur.fetchone()[0] > 0:
-                    messagebox.showwarning(
-                        "امانت کتاب",
-                        f"کتاب «{actual_book_title}» در حال حاضر در امانت است و امکان امانت مجدد آن وجود ندارد.",
-                        parent=popup,
-                    )
-                    return
-
-                # 5. Insert loan with actual member_id and actual book_id
-                ins_cur.execute(
-                    "INSERT INTO loans (member_id, book_id, return_date, borrow_date, borrowed) VALUES (?, ?, ?, ?, 1)",
-                    (actual_member_id, actual_book_id, return_gregorian, borrow_gregorian),
-                )
-                conn.commit()
-
-            notification_engine.show(
-                "ثبت موفق امانت", f"کتاب «{actual_book_title}» با موفقیت برای {actual_member_name} ثبت شد."
-            )
-
-            messagebox.showinfo("موفقیت", "اطلاعات امانت با موفقیت ذخیره شد!", parent=popup)
-            popup.destroy()
-            search_loans()
-            search()
-        except sqlite3.Error as e:
-            messagebox.showerror("خطا در پایگاه داده", f"خطا در ذخیره اطلاعات: {e}", parent=popup)
-
-    btn_f = ctk.CTkFrame(popup, fg_color="transparent")
-    btn_f.pack(pady=16, padx=25, fill=tk.X)
-    btn_save = create_icon_button(
-        btn_f,
-        text=" ثبت امانت ",
-        icon_name="arrow-right-left",
-        font=FONT_BOLD,
-        fg_color="#2563eb",
-        hover_color="#1d4ed8",
-        width=120,
-        command=do_insert_loan,
-    )
-    btn_save.pack(side=tk.RIGHT, padx=5)
-    btn_cancel = create_icon_button(
-        btn_f,
-        text=" انصراف ",
-        icon_name="x",
-        font=FONT_NORMAL,
-        fg_color="transparent",
-        hover_color=("#e2e8f0", "#1e293b"),
-        width=90,
-        command=popup.destroy,
-    )
-    btn_cancel.pack(side=tk.LEFT, padx=5)
-
-
-add_loan_btn.configure(command=open_add_loan_popup)
-
-
-def on_double_click(event):
-    selected = tree.selection()
-    if not selected:
-        return
-    item = selected[0]
-    values = tree.item(item, "values")
-    if not values or str(values[0]).startswith("❌"):
-        return
-
-    try:
-        title_index = columns.index("title")
-        title_value = values[title_index] if title_index < len(values) else ""
-    except ValueError:
-        title_value = ""
-
-    id_index = columns.index("id") if "id" in columns else -1
-    book_db_id = None
-    if id_index != -1 and id_index < len(values):
-        try:
-            book_db_id = int(values[id_index])
-        except (ValueError, TypeError):
-            pass
-
-    conn = get_db_connection(db_p)
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT COUNT(*) FROM loans WHERE (book_id = ? OR book_id = ?) AND (borrowed = 1 OR borrowed = '1')",
-            (book_db_id, title_value),
-        )
-        if cur.fetchone()[0] > 0:
-            messagebox.showwarning(
-                "امانت کتاب",
-                f"کتاب «{title_value}» در حال حاضر در امانت است و امکان امانت مجدد آن وجود ندارد.",
-                parent=root,
-            )
-            return
-    finally:
-        conn.close()
-
-    open_add_loan_popup(initial_book_title=title_value)
-
-
-loans_search_after_id = None
-
-
-def on_loans_key_release(event):
-    global loans_search_after_id
-    if loans_search_after_id is not None:
-        root.after_cancel(loans_search_after_id)
-    loans_search_after_id = root.after(200, search_loans)
-
-
-entry_search_loans.bind("<KeyRelease>", on_loans_key_release)
-entry_search_loans.bind("<Return>", search_loans)
-
-loans_tree.bind("<Double-Button-1>", lambda event: do_return_selected_loan())
-
-
-def open_extend_loan_popup():
-    selected = loans_tree.selection()
-    if not selected:
-        messagebox.showwarning("هشدار", "لطفاً ابتدا یک رکورد امانت را از جدول انتخاب کنید!", parent=root)
-        return
-
-    item_id = selected[0]
-    values = loans_tree.item(item_id, "values")
-    if not values or str(values[0]).startswith("❌"):
-        return
-
-    id_idx = loan_column.index("id") if "id" in loan_column else 0
-    loan_id = values[id_idx]
-
-    b_idx = loan_column.index("book_id") if "book_id" in loan_column else -1
-    book_title = values[b_idx] if b_idx != -1 and b_idx < len(values) else ""
-
-    m_idx = (
-        loan_column.index("member_id")
-        if "member_id" in loan_column
-        else (loan_column.index("member_name") if "member_name" in loan_column else -1)
-    )
-    member_name = values[m_idx] if m_idx != -1 and m_idx < len(values) else ""
-
-    r_idx = loan_column.index("return_date") if "return_date" in loan_column else -1
-    cur_return_shamsi = values[r_idx] if r_idx != -1 and r_idx < len(values) else ""
-
-    borrowed_idx = loan_column.index("borrowed") if "borrowed" in loan_column else -1
-    current_status = values[borrowed_idx] if borrowed_idx != -1 and borrowed_idx < len(values) else ""
-
-    if current_status == "بازگردانده شده":
-        messagebox.showinfo("اطلاع", "این کتاب قبلاً بازگردانده شده است و امکان تمدید ندارد.", parent=root)
-        return
-
-    popup = ctk.CTkToplevel(root)
-    popup.title("تمدید و تغییر تاریخ بازگشت امانت")
-    popup.geometry("420x360")
-    popup.resizable(False, False)
-    if os.path.exists(icon_p):
-        try:
-            popup.iconbitmap(icon_p)
-        except Exception:
-            pass
-
-    popup.transient(root)
-    popup.grab_set()
-
-    root.update_idletasks()
-    rx = root.winfo_rootx()
-    ry = root.winfo_rooty()
-    rw = root.winfo_width()
-    rh = root.winfo_height()
-    popup.geometry(f"+{max(50, rx + (rw - 420) // 2)}+{max(50, ry + (rh - 360) // 2)}")
-
-    ctk.CTkLabel(popup, text="تمدید یا تغییر تاریخ بازگشت", font=FONT_TITLE).pack(pady=(14, 8))
-
-    info_card = ctk.CTkFrame(popup, corner_radius=8, fg_color=("#f1f5f9", "#1e293b"))
-    info_card.pack(fill=tk.X, padx=20, pady=(0, 10))
-
-    ctk.CTkLabel(
-        info_card,
-        text=f"کتاب: {book_title}   |   عضو: {member_name}",
-        font=FONT_NORMAL,
-        anchor="e",
-    ).pack(fill=tk.X, padx=10, pady=(6, 2))
-
-    ctk.CTkLabel(
-        info_card,
-        text=f"تاریخ بازگشت فعلی: {cur_return_shamsi or 'نامشخص'}",
-        font=FONT_SMALL,
-        text_color=("#64748b", "#94a3b8"),
-        anchor="e",
-    ).pack(fill=tk.X, padx=10, pady=(0, 6))
-
-    ctk.CTkLabel(popup, text="تاریخ بازگشت جدید (YYYY-MM-DD):", font=FONT_NORMAL, anchor="e").pack(
-        fill=tk.X, padx=20, pady=(4, 2)
-    )
-
-    row_new_date = ctk.CTkFrame(popup, fg_color="transparent")
-    row_new_date.pack(fill=tk.X, padx=20, pady=2)
-
-    cur_jdate = parse_jalali_date(cur_return_shamsi) or get_today_jalali()
-    default_new_date = format_jalali_date(cur_jdate + jdatetime.timedelta(days=7))
-
-    ent_new_date = ctk.CTkEntry(row_new_date, font=FONT_NORMAL, justify="right", height=32)
-    ent_new_date.insert(0, default_new_date)
-
-    btn_cal = create_date_picker_button(
-        row_new_date,
-        entry_widget=ent_new_date,
-        title="انتخاب تاریخ بازگشت جدید (تقویم شمسی)",
-        icon_path=icon_p,
-    )
-    btn_cal.pack(side=tk.LEFT, padx=(0, 4))
-    ent_new_date.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    quick_frame = ctk.CTkFrame(popup, fg_color="transparent")
-    quick_frame.pack(fill=tk.X, padx=20, pady=6)
-
-    def _add_days(d_cnt: int):
-        base = parse_jalali_date(ent_new_date.get()) or get_today_jalali()
-        new_d = base + jdatetime.timedelta(days=d_cnt)
-        ent_new_date.delete(0, tk.END)
-        ent_new_date.insert(0, format_jalali_date(new_d))
-
-    btn_q7 = ctk.CTkButton(
-        quick_frame,
-        text="+۷ روز",
-        font=FONT_SMALL,
-        width=65,
-        height=26,
-        fg_color=("#cbd5e1", "#334155"),
-        text_color=("#0f172a", "#f8fafc"),
-        command=lambda: _add_days(7),
-    )
-    btn_q7.pack(side=tk.RIGHT, padx=2)
-
-    btn_q14 = ctk.CTkButton(
-        quick_frame,
-        text="+۱۴ روز",
-        font=FONT_SMALL,
-        width=65,
-        height=26,
-        fg_color=("#cbd5e1", "#334155"),
-        text_color=("#0f172a", "#f8fafc"),
-        command=lambda: _add_days(14),
-    )
-    btn_q14.pack(side=tk.RIGHT, padx=2)
-
-    btn_q30 = ctk.CTkButton(
-        quick_frame,
-        text="+۳۰ روز",
-        font=FONT_SMALL,
-        width=65,
-        height=26,
-        fg_color=("#cbd5e1", "#334155"),
-        text_color=("#0f172a", "#f8fafc"),
-        command=lambda: _add_days(30),
-    )
-    btn_q30.pack(side=tk.RIGHT, padx=2)
-
-    btn_save = create_icon_button(
-        popup,
-        text=" ثبت تمدید امانت ",
-        icon_name="check",
-        font=FONT_BOLD,
-        fg_color="#16a34a",
-        hover_color="#15803d",
-        height=34,
-    )
-    btn_save.pack(fill=tk.X, padx=20, pady=(12, 6))
-
-    def _do_save_extend():
-        val = ent_new_date.get().strip()
-        parsed = parse_jalali_date(val)
-        if not parsed:
-            messagebox.showerror("خطا", "فرمت تاریخ بازگشت معتبر نیست!\nمثال: 1403-07-15", parent=popup)
-            return
-
-        greg_str = parsed.togregorian().strftime("%Y-%m-%d")
-        conn = get_db_connection(db_p)
-        try:
-            cur = conn.cursor()
-            cur.execute("UPDATE loans SET return_date = ? WHERE id = ?", (greg_str, loan_id))
-            conn.commit()
-            popup.destroy()
-            notification_engine.show(
-                "تمدید امانت",
-                f"مهلت بازگشت کتاب «{book_title}» تا تاریخ {format_jalali_date(parsed)} تمدید شد.",
-            )
-            messagebox.showinfo(
-                "موفقیت",
-                f"تاریخ بازگشت کتاب با موفقیت به {format_jalali_date(parsed)} تغییر یافت.",
-                parent=root,
-            )
-            search_loans()
-        except sqlite3.Error as ex:
-            messagebox.showerror("خطا", f"خطا در ثبت تمدید: {ex}", parent=popup)
-        finally:
-            conn.close()
-
-    btn_save.configure(command=_do_save_extend)
-
-
-loans_menu = tk.Menu(root, tearoff=0)
-loans_menu.add_command(label="تمدید یا ویرایش تاریخ بازگشت", command=open_extend_loan_popup)
-loans_menu.add_command(label="ثبت بازگشت کتاب", command=do_return_selected_loan)
-loans_menu.add_separator()
-loans_menu.add_command(label="حذف رکورد امانت", command=lambda: loans_tree.event_generate("<Delete>"))
-
-
-def show_loans_context_menu(event):
-    row_id = loans_tree.identify_row(event.y)
-    if row_id:
-        loans_tree.selection_set(row_id)
-        loans_menu.post(event.x_root, event.y_root)
-
-
-loans_tree.bind("<Button-3>", show_loans_context_menu)
-
-bind_table_delete(
-    loans_tree,
-    new_tabel_name,
-    id_col_index=loan_column.index("id") if "id" in loan_column else 0,
-    on_deleted=search_loans,
 )
 
 # ==================== راهنما و درباره نرم‌افزار (Help & About) ====================
-help_scroll = ctk.CTkScrollableFrame(help_frame, corner_radius=10, fg_color="transparent")
-help_scroll.pack(fill=tk.BOTH, expand=True, padx=12, pady=(8, 8))
-
-
-def open_url(url: str):
-    try:
-        webbrowser.open(url)
-    except Exception as e:
-        messagebox.showerror("خطا", f"امکان باز کردن پیوند در مرورگر وجود ندارد:\n{e}", parent=root)
-
-
-app_info = load_app_info()
-app_version = app_info.get("version", "0.1.0")
-update_checker = UpdateChecker(
-    repo=app_info.get("github_repo", "amirkabir18/bager_library"),
-    current_version=app_version,
+help_tab_controllers = build_help_tab(
+    parent=help_frame,
+    root=root,
+    fonts={
+        "family": FONT_FAMILY,
+        "header": FONT_HEADER,
+        "normal": FONT_NORMAL,
+        "bold": FONT_BOLD,
+        "small": FONT_SMALL,
+    },
+    get_icon_fn=get_icon,
+    create_icon_button_fn=create_icon_button,
+    is_internet_access_enabled_fn=is_internet_access_enabled,
+    db_path=db_p,
 )
-download_manager = DownloadManager()
-latest_update_info: dict = {}
-
-# --- 1. Hero Identity Banner ---
-hero_banner = ctk.CTkFrame(
-    help_scroll,
-    corner_radius=12,
-    border_width=1,
-    border_color=("#e2e8f0", "#334155"),
-    fg_color=("#f8fafc", "#1e293b"),
-)
-hero_banner.pack(fill=tk.X, pady=(0, 12), padx=2)
-
-hero_content = ctk.CTkFrame(hero_banner, fg_color="transparent")
-hero_content.pack(fill=tk.X, padx=20, pady=16)
-
-ctk.CTkLabel(
-    hero_content,
-    text="کتابخانه باقر العلوم (ع)",
-    font=ctk.CTkFont(family=FONT_FAMILY, size=18, weight="bold"),
-    text_color=("#0f172a", "#f8fafc"),
-    anchor="e",
-).pack(fill=tk.X)
-
-ctk.CTkLabel(
-    hero_content,
-    text="سامانه یکپارچه مدیریت مخزن کتاب، رده‌بندی دهدهی دیویی (DDC)، گردش امانات و اعلان‌های رومیزی",
-    font=FONT_NORMAL,
-    text_color=("#475569", "#94a3b8"),
-    anchor="e",
-).pack(fill=tk.X, pady=(4, 12))
-
-badges_row = ctk.CTkFrame(hero_content, fg_color="transparent")
-badges_row.pack(fill=tk.X)
-
-
-def make_badge(parent, text, bg_color, text_color):
-    return ctk.CTkLabel(
-        parent,
-        text=f"  {text}  ",
-        font=FONT_SMALL,
-        fg_color=bg_color,
-        text_color=text_color,
-        corner_radius=6,
-        height=24,
-    )
-
-
-make_badge(badges_row, f"نسخه {app_version}", ("#dbeafe", "#1e3a8a"), ("#1d4ed8", "#93c5fd")).pack(
-    side=tk.RIGHT, padx=(0, 6)
-)
-make_badge(badges_row, "🟢 سیستم آماده به کار", ("#dcfce7", "#064e3b"), ("#15803d", "#6ee7b7")).pack(
-    side=tk.RIGHT, padx=6
-)
-make_badge(badges_row, "⚡ پایگاه داده محلی SQLite", ("#f3e8ff", "#581c87"), ("#7e22ce", "#d8b4fe")).pack(
-    side=tk.RIGHT, padx=6
-)
-make_badge(badges_row, "🔔 موتور اعلان ویندوز", ("#fef3c7", "#78350f"), ("#b45309", "#fde68a")).pack(
-    side=tk.RIGHT, padx=6
-)
-
-# --- 2. Guide Cards Section ---
-guide_box = ctk.CTkFrame(
-    help_scroll,
-    corner_radius=12,
-    border_width=1,
-    border_color=("#e2e8f0", "#334155"),
-    fg_color=("#ffffff", "#1e293b"),
-)
-guide_box.pack(fill=tk.X, pady=(0, 12), padx=2)
-
-guide_header = ctk.CTkFrame(guide_box, fg_color="transparent")
-guide_header.pack(fill=tk.X, padx=18, pady=(12, 6))
-ctk.CTkLabel(
-    guide_header,
-    text=" راهنمای بخش‌های سامانه ",
-    font=FONT_HEADER,
-    text_color=("#0f172a", "#f8fafc"),
-    anchor="e",
-).pack(side=tk.RIGHT)
-
-cards_container = ctk.CTkFrame(guide_box, fg_color="transparent")
-cards_container.pack(fill=tk.X, padx=12, pady=(0, 12))
-cards_container.columnconfigure((0, 1), weight=1, uniform="guide")
-
-guide_features = [
-    (
-        "📚 مخزن کتاب و رده‌بندی دیویی (DDC)",
-        "• استعلام برخط شابک (ISBN) از پایگاه‌های Open Library و Google Books.\n"
-        "• طبقه‌بندی خودکار در رده‌های ده‌گانه دیویی (۰۰۰ تا ۹۰۰) با خط لوله هوشمند.\n"
-        "• پشتیبانی از رده دستی (Manual) بدون تغییر در رده‌بندی خودکار دسته‌ای.\n"
-        "• محاسبه خودکار و پیشنهاد دقیق محل فیزیکی کتاب در قفسه‌های کتابخانه.",
-        0,
-        0,
-    ),
-    (
-        "🔄 میز امانت و گردش کتاب (Circulation)",
-        "• ثبت سریع امانت با جستجوی هوشمند و تکمیل خودکار نام عضو و عنوان کتاب.\n"
-        "• پشتیبانی کامل از تقویم خورشیدی (جلالی) و محاسبه موعد بازگشت و دیرکرد.\n"
-        "• تسویه و ثبت بازگشت فوری کتاب تنها با دابل‌کلیک روی ردیف در جدول امانات.\n"
-        "• قابلیت تمدید امانت، ثبت یادداشت و فیلتر کتاب‌های در امانت یا موجود.",
-        0,
-        1,
-    ),
-    (
-        "👥 مدیریت اعضا و کاربران سامانه",
-        "• تشکیل پرونده اعضا با شناسه یکتا و نرمال‌سازی شماره همراه ایران (+98 / 09).\n"
-        "• کنترل سطح دسترسی با نقش‌های: سرپرست کل (Super Admin)، مدیر و کتابدار.\n"
-        "• رمزنگاری امن کلمات عبور با استاندارد PBKDF2 با ۱۰۰٬۰۰۰ دور تکرار.\n"
-        "• احراز هویت دومرحله‌ای با رمز عبور و ارسال کد یکبار مصرف (OTP) با تلگرام.",
-        1,
-        0,
-    ),
-    (
-        "🔔 سامانه اعلان‌ها و هشدارهای رومیزی",
-        "• موتور اعلان ۱۰۰٪ محلی و بدون نیاز به اینترنت برای ویندوز ۱۰ و ۱۱.\n"
-        "• پایش خودکار با دیمن پس‌زمینه در بازه‌های ۱۵، ۳۰، ۶۰ یا ۱۲۰ دقیقه‌ای.\n"
-        "• تفکیک هشدارهای پیش از موعد (Due Soon) و تاخیر (Overdue) با صدای زنگ.\n"
-        "• پنجره شناور اختصاصی (Toast) و ثبت دقیق تاریخچه در دفتر لاگ اعلان‌ها.",
-        1,
-        1,
-    ),
-]
-
-for title, desc, r, c in guide_features:
-    f_card = ctk.CTkFrame(
-        cards_container,
-        corner_radius=10,
-        fg_color=("#f8fafc", "#0f172a"),
-        border_width=1,
-        border_color=("#e2e8f0", "#334155"),
-    )
-    f_card.grid(row=r, column=c, padx=6, pady=6, sticky="nsew")
-
-    ctk.CTkLabel(
-        f_card,
-        text=title,
-        font=FONT_BOLD,
-        text_color=("#2563eb", "#38bdf8"),
-        anchor="e",
-    ).pack(fill=tk.X, padx=12, pady=(10, 4))
-
-    ctk.CTkLabel(
-        f_card,
-        text=desc,
-        font=FONT_SMALL,
-        text_color=("#334155", "#cbd5e1"),
-        justify="right",
-        anchor="e",
-    ).pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 10))
-
-# --- 3. Keyboard Shortcuts Ribbon ---
-shortcut_box = ctk.CTkFrame(
-    help_scroll,
-    corner_radius=12,
-    border_width=1,
-    border_color=("#e2e8f0", "#334155"),
-    fg_color=("#ffffff", "#1e293b"),
-)
-shortcut_box.pack(fill=tk.X, pady=(0, 12), padx=2)
-
-shortcut_header = ctk.CTkFrame(shortcut_box, fg_color="transparent")
-shortcut_header.pack(fill=tk.X, padx=18, pady=(12, 6))
-ctk.CTkLabel(
-    shortcut_header,
-    text=" کلیدهای میانبر و ترفندهای کاربری سریع ",
-    font=FONT_HEADER,
-    text_color=("#0f172a", "#f8fafc"),
-    anchor="e",
-).pack(side=tk.RIGHT)
-
-shortcuts_row = ctk.CTkFrame(shortcut_box, fg_color="transparent")
-shortcuts_row.pack(fill=tk.X, padx=12, pady=(0, 12))
-shortcuts_row.columnconfigure((0, 1, 2, 3, 4), weight=1, uniform="sc")
-
-shortcut_items = [
-    ("Enter", "جستجوی فوری در جدول"),
-    ("Delete", "حذف ردیف انتخاب‌شده"),
-    ("دابل‌کلیک", "امانت / ثبت برگشت"),
-    ("کلیک راست", "منوی عملیات ویژه"),
-    ("Esc", "بستن پنجره‌ها و دیالوگ‌ها"),
-]
-
-for idx, (key_label, desc_label) in enumerate(shortcut_items):
-    sc_item = ctk.CTkFrame(
-        shortcuts_row,
-        corner_radius=8,
-        fg_color=("#f8fafc", "#0f172a"),
-        border_width=1,
-        border_color=("#e2e8f0", "#334155"),
-    )
-    sc_item.grid(row=0, column=idx, padx=4, pady=4, sticky="nsew")
-
-    key_badge = ctk.CTkLabel(
-        sc_item,
-        text=f" {key_label} ",
-        font=FONT_BOLD,
-        fg_color=("#e2e8f0", "#334155"),
-        text_color=("#0f172a", "#f8fafc"),
-        corner_radius=6,
-        height=26,
-    )
-    key_badge.pack(pady=(8, 4), padx=6)
-
-    ctk.CTkLabel(
-        sc_item,
-        text=desc_label,
-        font=FONT_SMALL,
-        text_color=("#475569", "#94a3b8"),
-        justify="center",
-    ).pack(pady=(0, 8), padx=4)
-
-# --- 4. Software Update Center ---
-update_group = ctk.CTkFrame(
-    help_scroll,
-    corner_radius=12,
-    border_width=1,
-    border_color=("#e2e8f0", "#334155"),
-    fg_color=("#ffffff", "#1e293b"),
-)
-update_group.pack(fill=tk.X, pady=(0, 12), padx=2)
-
-update_title = ctk.CTkLabel(
-    update_group,
-    text=" مرکز بروزرسانی نرم‌افزار ",
-    font=FONT_HEADER,
-    text_color=("#0f172a", "#f8fafc"),
-    anchor="e",
-)
-update_title.pack(fill=tk.X, padx=18, pady=(12, 6))
-
-info_row = ctk.CTkFrame(update_group, fg_color="transparent")
-info_row.pack(fill=tk.X, padx=18, pady=4)
-
-lbl_current_ver = ctk.CTkLabel(
-    info_row,
-    text=f"نسخه فعلی: {app_version}",
-    font=FONT_BOLD,
-    text_color=("#2563eb", "#38bdf8"),
-    anchor="e",
-)
-lbl_current_ver.pack(side=tk.RIGHT, padx=(0, 15))
-
-lbl_update_status = ctk.CTkLabel(
-    info_row,
-    text="وضعیت: در حال بررسی...",
-    font=FONT_NORMAL,
-    text_color="#38bdf8",
-    anchor="e",
-)
-lbl_update_status.pack(side=tk.RIGHT, padx=5)
-
-progress_row = ctk.CTkFrame(update_group, fg_color="transparent")
-
-update_progress = ctk.CTkProgressBar(progress_row, mode="determinate", height=10, corner_radius=5)
-update_progress.set(0.0)
-update_progress.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
-
-lbl_progress_text = ctk.CTkLabel(
-    progress_row,
-    text="",
-    font=FONT_SMALL,
-    text_color="#94a3b8",
-    width=180,
-    anchor="w",
-)
-lbl_progress_text.pack(side=tk.LEFT, padx=(0, 5))
-
-actions_row = ctk.CTkFrame(update_group, fg_color="transparent")
-actions_row.pack(fill=tk.X, padx=18, pady=(6, 12))
-
-
-def on_check_finished(res: dict, interactive: bool):
-    latest_update_info.clear()
-    latest_update_info.update(res)
-
-    if res.get("update_available"):
-        latest_ver = res.get("latest_version", "")
-        lbl_update_status.configure(
-            text=f"وضعیت: نسخه جدید {latest_ver} موجود است!",
-            text_color="#16a34a",
-        )
-        btn_update_action.configure(
-            state="normal",
-            text=f" دریافت و نصب نسخه {latest_ver} ",
-            command=start_update_download,
-        )
-        btn_update_action.pack(side=tk.RIGHT, padx=5)
-        if interactive:
-            messagebox.showinfo(
-                "بروزرسانی جدید",
-                f"نسخه جدید «{latest_ver}» در دسترس است.\nبرای دریافت و نصب، روی دکمه «دریافت و نصب» کلیک کنید.",
-                parent=root,
-            )
-    else:
-        lbl_update_status.configure(
-            text="وضعیت: نرم‌افزار به‌روز است.",
-            text_color="#16a34a",
-        )
-        progress_row.pack_forget()
-        btn_update_action.pack_forget()
-        btn_cancel_update.pack_forget()
-        if interactive:
-            messagebox.showinfo("بروزرسانی", "نرم‌افزار شما به‌روز است.", parent=root)
-
-
-def on_check_failed(error_msg: str, interactive: bool):
-    progress_row.pack_forget()
-    btn_cancel_update.pack_forget()
-    if interactive:
-        btn_update_action.configure(
-            state="normal",
-            text=" تلاش مجدد برای بررسی ",
-            command=lambda: perform_check(interactive=True),
-        )
-        btn_update_action.pack(side=tk.RIGHT, padx=5)
-        lbl_update_status.configure(text="وضعیت: خطا در بررسی بروزرسانی", text_color="#dc2626")
-        messagebox.showerror("خطا در بررسی بروزرسانی", f"خطا در ارتباط با سرور بروزرسانی:\n{error_msg}", parent=root)
-    else:
-        btn_update_action.pack_forget()
-        lbl_update_status.configure(text="وضعیت: نرم‌افزار به‌روز است.", text_color="#16a34a")
-
-
-def perform_check(interactive: bool = True):
-    if not is_internet_access_enabled(db_p):
-        if interactive:
-            messagebox.showwarning(
-                "دسترسی به اینترنت",
-                "دسترسی به اینترنت در تنظیمات برنامه غیرفعال شده است.",
-                parent=root,
-            )
-        lbl_update_status.configure(text="وضعیت: دسترسی به اینترنت در تنظیمات غیرفعال است.", text_color="#dc2626")
-        return
-
-    lbl_update_status.configure(text="وضعیت: در حال بررسی آخرین نسخه...", text_color="#38bdf8")
-    btn_update_action.configure(state="disabled")
-
-    def _worker():
-        try:
-            res = update_checker.check()
-            root.after(0, lambda: on_check_finished(res, interactive))
-        except Exception as ex:
-            err_str = str(ex)
-            root.after(0, lambda: on_check_failed(err_str, interactive))
-
-    threading.Thread(target=_worker, daemon=True).start()
-
-
-def start_update_download():
-    download_url = latest_update_info.get("download_url")
-    if not download_url:
-        messagebox.showerror("خطا", "آدرس دانلود فایل بروزرسانی یافت نشد.", parent=root)
-        return
-
-    dest_path = os.path.join(tempfile.gettempdir(), "bager_library_new.exe")
-    btn_update_action.configure(state="disabled")
-    btn_cancel_update.pack(side=tk.RIGHT, padx=5)
-    lbl_update_status.configure(text="وضعیت: در حال دانلود فایل بروزرسانی...", text_color="#38bdf8")
-    progress_row.pack(fill=tk.X, padx=18, pady=4, before=actions_row)
-    update_progress.set(0.0)
-
-    def _update_prog_ui(downloaded, total, pct, speed):
-        update_progress.set(min(1.0, max(0.0, pct / 100.0)))
-        speed_str = format_speed(speed)
-        down_str = format_size(downloaded)
-        total_str = format_size(total) if total > 0 else "نامشخص"
-        lbl_progress_text.configure(text=f"{pct:.0f}% ({down_str} / {total_str}) {speed_str}")
-
-    def _prompt_install(path):
-        confirm = messagebox.askyesno(
-            "نصب بروزرسانی", "دانلود نسخه جدید کامل شد.\nآیا مایلید برنامه بسته شده و نسخه جدید اجرا شود؟", parent=root
-        )
-        if confirm:
-            try:
-                applied = apply_update(path)
-                if applied:
-                    root.destroy()
-                    sys.exit(0)
-                else:
-                    messagebox.showinfo(
-                        "اطلاع",
-                        f"برنامه در محیط توسعه پایتون در حال اجراست.\nفایل نصبی جدید در مسیر زیر ذخیره شد:\n{path}",
-                        parent=root,
-                    )
-            except Exception as e:
-                messagebox.showerror("خطا در نصب بروزرسانی", f"خطا در جایگزینی فایل:\n{e}", parent=root)
-
-    def _finish_download_ui(path):
-        btn_cancel_update.pack_forget()
-        btn_update_action.configure(
-            state="normal",
-            text=" نصب بروزرسانی ",
-            command=lambda: _prompt_install(path),
-        )
-        btn_update_action.pack(side=tk.RIGHT, padx=5)
-        update_progress.set(1.0)
-        lbl_update_status.configure(text="وضعیت: دانلود با موفقیت انجام شد.", text_color="#16a34a")
-        lbl_progress_text.configure(text="دانلود کامل شد")
-        _prompt_install(path)
-
-    def _error_download_ui(err):
-        btn_cancel_update.pack_forget()
-        btn_update_action.configure(
-            state="normal",
-            text=" تلاش مجدد برای دریافت ",
-            command=start_update_download,
-        )
-        btn_update_action.pack(side=tk.RIGHT, padx=5)
-        lbl_update_status.configure(text="وضعیت: خطا در دانلود بروزرسانی", text_color="#dc2626")
-        messagebox.showerror("خطا در دانلود", f"خطا در حین دانلود فایل بروزرسانی:\n{err}", parent=root)
-
-    def _cancelled_download_ui():
-        btn_cancel_update.pack_forget()
-        btn_update_action.configure(
-            state="normal",
-            text=" دریافت و نصب نسخه جدید ",
-            command=start_update_download,
-        )
-        btn_update_action.pack(side=tk.RIGHT, padx=5)
-        progress_row.pack_forget()
-        update_progress.set(0.0)
-        lbl_progress_text.configure(text="")
-        lbl_update_status.configure(text="وضعیت: دانلود لغو شد.", text_color="#64748b")
-
-    download_manager.download_async(
-        url=download_url,
-        dest_path=dest_path,
-        on_progress=lambda d, t, p, s: root.after(0, lambda: _update_prog_ui(d, t, p, s)),
-        on_finished=lambda p: root.after(0, lambda: _finish_download_ui(p)),
-        on_error=lambda err: root.after(0, lambda: _error_download_ui(err)),
-        on_cancelled=lambda: root.after(0, _cancelled_download_ui),
-    )
-
-
-btn_update_action = create_icon_button(
-    actions_row,
-    text=" بررسی بروزرسانی ",
-    icon_name="refresh-cw",
-    font=FONT_BOLD,
-    fg_color="#2563eb",
-    hover_color="#1d4ed8",
-    command=lambda: perform_check(interactive=True),
-    width=150,
-    height=34,
-)
-btn_update_action.pack(side=tk.RIGHT, padx=5)
-
-btn_cancel_update = create_icon_button(
-    actions_row,
-    text=" لغو دانلود ",
-    icon_name="x",
-    font=FONT_NORMAL,
-    fg_color="transparent",
-    hover_color=("#e2e8f0", "#1e293b"),
-    command=download_manager.cancel,
-    width=110,
-    height=34,
-)
-
-# --- 5. Team & Community Section ---
-dev_box = ctk.CTkFrame(
-    help_scroll,
-    corner_radius=12,
-    border_width=1,
-    border_color=("#e2e8f0", "#334155"),
-    fg_color=("#ffffff", "#1e293b"),
-)
-dev_box.pack(fill=tk.X, pady=(0, 10), padx=2)
-
-dev_box_header = ctk.CTkFrame(dev_box, fg_color="transparent")
-dev_box_header.pack(fill=tk.X, padx=18, pady=(12, 6))
-ctk.CTkLabel(
-    dev_box_header,
-    text=" تیم توسعه و مشارکت‌کنندگان متن‌باز ",
-    font=FONT_HEADER,
-    text_color=("#0f172a", "#f8fafc"),
-    anchor="e",
-).pack(side=tk.RIGHT)
-
-devs_container = ctk.CTkFrame(dev_box, fg_color="transparent")
-devs_container.pack(fill=tk.X, padx=14, pady=(2, 10))
-
-
-def render_contributor_cards(contributors: list[dict]):
-    for child in devs_container.winfo_children():
-        child.destroy()
-
-    if not contributors:
-        return
-
-    devs_container.columnconfigure(0, weight=1, uniform="dev_boxes")
-    devs_container.columnconfigure(1, weight=1, uniform="dev_boxes")
-
-    box_style = {
-        "corner_radius": 8,
-        "fg_color": ("#f8fafc", "#0f172a"),
-        "border_width": 1,
-        "border_color": ("#e2e8f0", "#334155"),
-    }
-
-    # Left box: ordered contributor list
-    left_box = ctk.CTkFrame(devs_container, **box_style)
-    left_box.grid(row=0, column=0, padx=(0, 6), pady=4, sticky="nsew")
-
-    left_header = ctk.CTkFrame(left_box, fg_color="transparent")
-    left_header.pack(fill=tk.X, padx=14, pady=(10, 8))
-    ctk.CTkLabel(
-        left_header,
-        text=" فهرست مشارکت‌کنندگان ",
-        font=FONT_BOLD,
-        text_color=("#0f172a", "#f8fafc"),
-        image=get_icon("user", size=(15, 15)),
-        compound="right",
-    ).pack(side=tk.RIGHT)
-
-    # Right box: single progress bar and detailed contribution stats
-    right_box = ctk.CTkFrame(devs_container, **box_style)
-    right_box.grid(row=0, column=1, padx=(6, 0), pady=4, sticky="nsew")
-
-    right_header = ctk.CTkFrame(right_box, fg_color="transparent")
-    right_header.pack(fill=tk.X, padx=14, pady=(10, 8))
-    ctk.CTkLabel(
-        right_header,
-        text=" سهم مشارکت در کد پروژه ",
-        font=FONT_BOLD,
-        text_color=("#0f172a", "#f8fafc"),
-        image=get_icon("bookmark", size=(15, 15)),
-        compound="right",
-    ).pack(side=tk.RIGHT)
-
-    stat_content = ctk.CTkFrame(right_box, fg_color="transparent")
-    stat_content.pack(fill=tk.BOTH, expand=True, padx=14, pady=(0, 10))
-
-    top_row = ctk.CTkFrame(stat_content, fg_color="transparent")
-    top_row.pack(fill=tk.X, pady=(2, 6))
-
-    lbl_percent = ctk.CTkLabel(
-        top_row,
-        text="",
-        font=ctk.CTkFont(family=FONT_FAMILY, size=24, weight="bold"),
-        text_color=("#16a34a", "#22c55e"),
-        anchor="w",
-    )
-    lbl_percent.pack(side=tk.LEFT)
-
-    name_col = ctk.CTkFrame(top_row, fg_color="transparent")
-    name_col.pack(side=tk.RIGHT, fill=tk.X, expand=True)
-
-    lbl_name = ctk.CTkLabel(
-        name_col,
-        text="",
-        font=FONT_BOLD,
-        text_color=("#0f172a", "#f8fafc"),
-        anchor="e",
-    )
-    lbl_name.pack(fill=tk.X)
-
-    lbl_role = ctk.CTkLabel(
-        name_col,
-        text="",
-        font=FONT_SMALL,
-        text_color=("#64748b", "#94a3b8"),
-        anchor="e",
-    )
-    lbl_role.pack(fill=tk.X)
-
-    # The single progress bar on the right
-    progress_bar = ctk.CTkProgressBar(
-        stat_content,
-        height=12,
-        corner_radius=6,
-        progress_color=("#16a34a", "#22c55e"),
-        fg_color=("#e2e8f0", "#334155"),
-    )
-    progress_bar.pack(fill=tk.X, pady=(6, 8))
-
-    meta_row = ctk.CTkFrame(stat_content, fg_color="transparent")
-    meta_row.pack(fill=tk.X, pady=(2, 4))
-
-    lbl_lines = ctk.CTkLabel(
-        meta_row,
-        text="",
-        font=FONT_SMALL,
-        text_color=("#0f172a", "#f8fafc"),
-        anchor="e",
-    )
-    lbl_lines.pack(side=tk.RIGHT)
-
-    lbl_rank = ctk.CTkLabel(
-        meta_row,
-        text="",
-        font=FONT_SMALL,
-        text_color=("#2563eb", "#38bdf8"),
-        anchor="w",
-    )
-    lbl_rank.pack(side=tk.LEFT)
-
-    lbl_hint = ctk.CTkLabel(
-        stat_content,
-        text="جهت مشاهده سهم هر توسعه‌دهنده، روی ردیف او در فهرست کلیک کنید.",
-        font=FONT_SMALL,
-        text_color=("#64748b", "#94a3b8"),
-        anchor="center",
-    )
-    lbl_hint.pack(fill=tk.X, pady=(6, 2))
-
-    item_frames = []
-
-    def select_contributor(target_idx: int):
-        if target_idx < 0 or target_idx >= len(contributors):
-            return
-        c_item = contributors[target_idx]
-        c_name = c_item.get("name") or c_item.get("login") or "توسعه‌دهنده"
-        c_login = c_item.get("login", "")
-        c_percent = float(c_item.get("percent", 0.0) or 0.0)
-        c_lines = int(c_item.get("lines_added", 0) or 0)
-        p_str = f"{to_persian_digits(f'{c_percent:.1f}')}٪"
-        r_str = to_persian_digits(target_idx + 1)
-
-        lbl_percent.configure(text=p_str)
-        lbl_name.configure(text=c_name)
-        lbl_role.configure(text=f"@{c_login} • سهم از کل کد مخزن")
-        progress_bar.set(max(0.0, min(1.0, c_percent / 100.0)))
-
-        if c_lines > 0:
-            lines_str = to_persian_digits(f"{c_lines:,}")
-            lbl_lines.configure(text=f"سطرهای افزوده: {lines_str} سطر")
-        else:
-            lbl_lines.configure(text="ثبت در آمار مشارکت‌کنندگان")
-
-        lbl_rank.configure(text=f"رتبه {r_str} در مشارکت")
-
-        for i, f in enumerate(item_frames):
-            if i == target_idx:
-                f.configure(
-                    fg_color=("#e2e8f0", "#1e293b"),
-                    border_color=("#2563eb", "#38bdf8"),
-                )
-            else:
-                f.configure(
-                    fg_color=("#ffffff", "#1e293b"),
-                    border_color=("#e2e8f0", "#334155"),
-                )
-
-    for idx, c in enumerate(contributors):
-        row_card = ctk.CTkFrame(
-            left_box,
-            corner_radius=6,
-            fg_color=("#ffffff", "#1e293b"),
-            border_width=1,
-            border_color=("#e2e8f0", "#334155"),
-            cursor="hand2",
-        )
-        row_card.pack(fill=tk.X, padx=10, pady=3)
-        item_frames.append(row_card)
-
-        rank_str = to_persian_digits(idx + 1)
-        name = c.get("name") or c.get("login") or "توسعه‌دهنده"
-        handle = f"@{c.get('login', '')}"
-        percent = float(c.get("percent", 0.0) or 0.0)
-        percent_str = f"{to_persian_digits(f'{percent:.1f}')}٪"
-        profile_url = c.get("html_url") or f"https://github.com/{c.get('login', '')}"
-
-        ctk.CTkButton(
-            row_card,
-            text=handle,
-            font=FONT_SMALL,
-            fg_color="transparent",
-            text_color=("#2563eb", "#38bdf8"),
-            hover_color=("#e2e8f0", "#334155"),
-            height=24,
-            width=75,
-            command=lambda u=profile_url: open_url(u),
-        ).pack(side=tk.LEFT, padx=(6, 2), pady=4)
-
-        ctk.CTkLabel(
-            row_card,
-            text=percent_str,
-            font=FONT_BOLD,
-            text_color=("#16a34a", "#4ade80") if percent > 0 else ("#64748b", "#94a3b8"),
-            width=46,
-            anchor="center",
-        ).pack(side=tk.LEFT, padx=2)
-
-        name_lbl = ctk.CTkLabel(
-            row_card,
-            text=name,
-            font=FONT_NORMAL,
-            text_color=("#0f172a", "#f8fafc"),
-            anchor="e",
-        )
-        name_lbl.pack(side=tk.RIGHT, padx=(0, 6), fill=tk.X, expand=True)
-
-        rank_badge = ctk.CTkLabel(
-            row_card,
-            text=f" {rank_str} ",
-            font=FONT_SMALL,
-            fg_color=("#e2e8f0", "#334155"),
-            text_color=("#0f172a", "#f8fafc"),
-            corner_radius=4,
-            height=20,
-            width=22,
-        )
-        rank_badge.pack(side=tk.RIGHT, padx=(6, 2))
-
-        def _make_handler(target=idx):
-            return lambda e: select_contributor(target)
-
-        row_card.bind("<Button-1>", _make_handler(idx))
-        name_lbl.bind("<Button-1>", _make_handler(idx))
-        rank_badge.bind("<Button-1>", _make_handler(idx))
-
-    select_contributor(0)
-
-
-def load_contributors_async():
-    initial_data = get_contributors_stats(cache_ttl=86400)
-    render_contributor_cards(initial_data)
-
-    if not is_internet_access_enabled(db_p):
-        return
-
-    def _worker():
-        try:
-            data = get_contributors_stats(force_refresh=False)
-            if data:
-                root.after(0, lambda: render_contributor_cards(data))
-        except Exception:
-            pass
-
-    threading.Thread(target=_worker, daemon=True).start()
-
-
-load_contributors_async()
-
-links_row = ctk.CTkFrame(dev_box, fg_color="transparent")
-links_row.pack(fill=tk.X, padx=18, pady=(4, 14))
-
-btn_repo = create_icon_button(
-    links_row,
-    text=" مشاهده مخزن گیت‌هاب ",
-    icon_name="bookmark",
-    font=FONT_NORMAL,
-    command=lambda: open_url("https://github.com/amirkabir18/bager_library"),
-    width=175,
-    height=32,
-)
-btn_repo.pack(side=tk.RIGHT, padx=5)
-
-btn_issue = create_icon_button(
-    links_row,
-    text=" ثبت باگ یا پیشنهاد (Issue) ",
-    icon_name="filter",
-    font=FONT_NORMAL,
-    command=lambda: open_url("https://github.com/amirkabir18/bager_library/issues/new"),
-    width=185,
-    height=32,
-)
-btn_issue.pack(side=tk.RIGHT, padx=5)
+update_checker = help_tab_controllers["update_checker"]
+on_check_finished = help_tab_controllers["on_check_finished"]
+on_check_failed = help_tab_controllers["on_check_failed"]
 
 # ==================== تنظیمات و اعلان‌ها (Settings & Notifications) ====================
+<<<<<<< HEAD
 title_label_settings = ctk.CTkLabel(settings_frame, text="تنظیمات سیستم و اعلان‌ها", font=FONT_TITLE)
 title_label_settings.pack(pady=(16, 4))
 
@@ -7101,253 +4901,24 @@ def open_audit_log_filter_popup():
         date_log_frame,
         entry_widget=ent_log_start,
         title="انتخاب تاریخ شروع ارسال",
+=======
+settings_tab_controllers.update(
+    build_settings_tab(
+        parent=settings_frame,
+        root=root,
+        fonts=FONTS,
+        get_icon_fn=get_icon,
+        create_icon_button_fn=create_icon_button,
+        apply_treeview_styling_fn=apply_treeview_styling,
+        notification_engine=notification_engine,
+        reminder_manager=reminder_manager,
+        otp_cleanup_manager=otp_cleanup_manager,
+        db_path=db_p,
+>>>>>>> 1290e4e2ce558e5522e33501b4449add53d5be68
         icon_path=icon_p,
-        width=30,
-        height=30,
+        on_data_restored=[search, search_members, search_loans, load_notification_logs_ui],
     )
-    btn_start_cal.pack(side=tk.RIGHT, padx=2)
-    ent_log_start.pack(side=tk.RIGHT, padx=(2, 10))
-
-    ctk.CTkLabel(date_log_frame, text="تا:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(4, 2))
-    ent_log_end = ctk.CTkEntry(
-        date_log_frame, width=110, height=30, font=FONT_NORMAL, justify="center", placeholder_text="YYYY-MM-DD"
-    )
-    ent_log_end.insert(0, audit_log_filter_settings.get("end_date", ""))
-    btn_end_cal = create_date_picker_button(
-        date_log_frame,
-        entry_widget=ent_log_end,
-        title="انتخاب تاریخ پایان ارسال",
-        icon_path=icon_p,
-        width=30,
-        height=30,
-    )
-    btn_end_cal.pack(side=tk.RIGHT, padx=2)
-    ent_log_end.pack(side=tk.RIGHT, padx=2)
-
-    group_sort = ctk.CTkFrame(popup, corner_radius=8)
-    group_sort.pack(fill=tk.X, padx=15, pady=4)
-    ctk.CTkLabel(group_sort, text="مرتب‌سازی نتایج", font=FONT_BOLD, anchor="e").pack(fill=tk.X, padx=10, pady=(6, 2))
-    sort_frame = ctk.CTkFrame(group_sort, fg_color="transparent")
-    sort_frame.pack(fill=tk.X, padx=6, pady=(0, 6))
-
-    ctk.CTkLabel(sort_frame, text="بر اساس:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(5, 0))
-    sort_options = {
-        "شناسه": "id",
-        "تاریخ ارسال": "sent_date",
-        "تاریخ ثبت": "created_at",
-        "عنوان کتاب": "book_title",
-        "نام کاربر": "member_name",
-        "شناسه امانت": "loan_id",
-    }
-    rev_sort_options = {v: k for k, v in sort_options.items()}
-
-    sort_col_cb = ctk.CTkOptionMenu(
-        sort_frame,
-        width=130,
-        font=FONT_NORMAL,
-        dropdown_font=FONT_NORMAL,
-        values=list(sort_options.keys()),
-    )
-    current_sort_label = rev_sort_options.get(sort_col_var.get(), "شناسه")
-    sort_col_cb.set(current_sort_label)
-    sort_col_cb.pack(side=tk.RIGHT, padx=5)
-
-    ctk.CTkLabel(sort_frame, text="ترتیب:", font=FONT_NORMAL).pack(side=tk.RIGHT, padx=(12, 0))
-    sort_dir_cb = ctk.CTkOptionMenu(
-        sort_frame,
-        width=140,
-        font=FONT_NORMAL,
-        dropdown_font=FONT_NORMAL,
-        values=["نزولی (جدیدترین)", "صعودی (قدیمی‌ترین)"],
-    )
-    sort_dir_cb.set("نزولی (جدیدترین)" if sort_dir_var.get() == "DESC" else "صعودی (قدیمی‌ترین)")
-    sort_dir_cb.pack(side=tk.RIGHT, padx=5)
-
-    action_frame = ctk.CTkFrame(popup, fg_color="transparent")
-    action_frame.pack(fill=tk.X, padx=15, pady=(15, 10))
-
-    def apply_audit_log_filters():
-        audit_log_filter_settings["column"] = col_var.get()
-        audit_log_filter_settings["match_mode"] = match_var.get()
-        audit_log_filter_settings["notification_type"] = type_var.get()
-        audit_log_filter_settings["sort_col"] = sort_options.get(sort_col_cb.get(), "id")
-        audit_log_filter_settings["sort_dir"] = "DESC" if "نزولی" in sort_dir_cb.get() else "ASC"
-        audit_log_filter_settings["start_date"] = ent_log_start.get().strip()
-        audit_log_filter_settings["end_date"] = ent_log_end.get().strip()
-
-        type_display_map = {
-            "all": "همه",
-            "due_reminder": "یادآوری سررسید",
-            "overdue": "هشدار دیرکرد",
-            "test": "اعلان آزمایشی",
-        }
-        combo_log_type.set(type_display_map.get(audit_log_filter_settings["notification_type"], "همه"))
-
-        update_audit_log_filter_indicator()
-        popup.destroy()
-        load_notification_logs_ui()
-
-    def reset_audit_log_filters():
-        audit_log_filter_settings["column"] = "all"
-        audit_log_filter_settings["match_mode"] = "contains"
-        audit_log_filter_settings["notification_type"] = "all"
-        audit_log_filter_settings["sort_col"] = "id"
-        audit_log_filter_settings["sort_dir"] = "DESC"
-        audit_log_filter_settings["start_date"] = ""
-        audit_log_filter_settings["end_date"] = ""
-
-        combo_log_type.set("همه")
-        update_audit_log_filter_indicator()
-        popup.destroy()
-        load_notification_logs_ui()
-
-    btn_apply = create_icon_button(
-        action_frame,
-        text=" اعمال فیلتر ",
-        icon_name="check",
-        font=FONT_BOLD,
-        fg_color="#2563eb",
-        hover_color="#1d4ed8",
-        command=apply_audit_log_filters,
-    )
-    btn_apply.pack(side=tk.RIGHT, padx=4)
-
-    btn_reset = create_icon_button(
-        action_frame,
-        text=" تنظیم مجدد ",
-        icon_name="rotate-ccw",
-        font=FONT_NORMAL,
-        fg_color="transparent",
-        hover_color=("#e2e8f0", "#1e293b"),
-        command=reset_audit_log_filters,
-    )
-    btn_reset.pack(side=tk.RIGHT, padx=4)
-
-    btn_cancel = create_icon_button(
-        action_frame,
-        text=" انصراف ",
-        icon_name="x",
-        font=FONT_NORMAL,
-        fg_color="transparent",
-        hover_color=("#e2e8f0", "#1e293b"),
-        command=popup.destroy,
-    )
-    btn_cancel.pack(side=tk.LEFT, padx=4)
-
-
-def refresh_notification_logs():
-    entry_log_search.delete(0, tk.END)
-    combo_log_type.set("همه")
-    audit_log_filter_settings["column"] = "all"
-    audit_log_filter_settings["match_mode"] = "contains"
-    audit_log_filter_settings["notification_type"] = "all"
-    audit_log_filter_settings["sort_col"] = "id"
-    audit_log_filter_settings["sort_dir"] = "DESC"
-    audit_log_filter_settings["start_date"] = ""
-    audit_log_filter_settings["end_date"] = ""
-    update_audit_log_filter_indicator()
-    load_notification_logs_ui()
-
-
-def clear_logs_ui():
-    confirm = messagebox.askyesno(
-        "تأیید پاک‌سازی",
-        "آیا از پاک‌سازی تمام تاریخچه اعلان‌ها اطمینان دارید؟ این عملیات غیرقابل بازگشت است.",
-        parent=root,
-    )
-    if not confirm:
-        return
-    try:
-        deleted = clear_notification_logs(db_p)
-        refresh_notification_logs()
-        messagebox.showinfo("موفقیت", f"تعداد {deleted} رکورد از تاریخچه اعلان‌ها پاک شد.", parent=root)
-    except Exception as e:
-        messagebox.showerror("خطا", f"خطا در پاک‌سازی تاریخچه:\n{e}", parent=root)
-
-
-audit_log_search_after_id = None
-
-
-def on_log_search_key_release(event=None):
-    global audit_log_search_after_id
-    if event and event.keysym in ("Up", "Down", "Left", "Right", "Return", "Escape"):
-        return
-    if audit_log_search_after_id is not None:
-        try:
-            root.after_cancel(audit_log_search_after_id)
-        except Exception:
-            pass
-    audit_log_search_after_id = root.after(200, load_notification_logs_ui)
-
-
-entry_log_search.bind("<KeyRelease>", on_log_search_key_release)
-entry_log_search.bind("<Return>", lambda e: load_notification_logs_ui())
-btn_filter_logs.configure(command=open_audit_log_filter_popup)
-
-
-def load_settings_into_ui():
-    try:
-        with get_db_connection(db_p) as conn:
-            settings = get_all_settings(conn)
-
-        n_en = settings.get("notifications_enabled", "true").lower() == "true"
-        s_en = settings.get("notification_sound", "true").lower() == "true"
-        net_en = settings.get("internet_access_enabled", "true").lower() == "true"
-        ai_en = settings.get("ai_features_enabled", "true").lower() == "true"
-        adv = settings.get("notification_advance_days", "2")
-        inv = settings.get("notification_check_interval_mins", "30")
-        mln = int(settings.get("max_loans", "2"))
-        combo_max_loans.set(str(mln))
-
-        var_notif_enabled.set(n_en)
-        var_notif_sound.set(s_en)
-        var_internet_enabled.set(net_en)
-        if not net_en:
-            var_ai_enabled.set(False)
-            chk_enable_ai.configure(state="disabled")
-        else:
-            var_ai_enabled.set(ai_en)
-            chk_enable_ai.configure(state="normal")
-
-        otp_en = settings.get("otp_cleanup_enabled", "true").lower() == "true"
-        otp_int = settings.get("otp_cleanup_interval_hours", "12")
-        var_otp_cleanup_enabled.set(otp_en)
-        if otp_int in ["1", "3", "6", "12", "24", "48"]:
-            combo_otp_interval.set(otp_int)
-        else:
-            combo_otp_interval.set("12")
-
-        update_boot_net_status_label()
-        update_ai_card_inputs_state(enabled=(net_en and ai_en))
-
-        if adv in ["1", "2", "3", "5", "7"]:
-            combo_advance_days.set(adv)
-        else:
-            combo_advance_days.set("2")
-
-        if inv in ["15", "30", "60", "120", "360"]:
-            combo_interval.set(inv)
-        else:
-            combo_interval.set("30")
-
-        r_url = settings.get("openai_url") or "http://localhost:20128"
-        r_key = settings.get("openai_key") or ""
-        r_model = settings.get("openai_model") or "gemini-3.8-flash"
-
-        entry_ai_url.delete(0, tk.END)
-        entry_ai_url.insert(0, r_url)
-
-        entry_ai_key.delete(0, tk.END)
-        entry_ai_key.insert(0, r_key)
-
-        entry_ai_model.delete(0, tk.END)
-        entry_ai_model.insert(0, r_model)
-    except Exception:
-        pass
-
-
-load_settings_into_ui()
-load_notification_logs_ui()
+)
 
 
 def on_startup_update_detected(res: dict):
@@ -7382,9 +4953,6 @@ def check_startup_updates():
 threading.Thread(target=check_startup_updates, daemon=True).start()
 
 root.bind("<Escape>", lambda event: root.destroy())
-entry_serch.bind("<KeyRelease>", on_key_release)
-entry_serch.bind("<Return>", search)
-tree.bind("<Double-Button-1>", on_double_click)
 
 show_login_view()
 root.geometry("1080x720")
