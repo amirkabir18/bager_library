@@ -88,16 +88,6 @@ def build_books_tab(
 
     tree.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=4)
 
-    export_books_btn = create_icon_button_fn(
-        search_bar_frame,
-        text=" خروجی اکسل ",
-        icon_name="file-spreadsheet",
-        font=font_normal,
-        width=100,
-        command=lambda: export_tree_to_csv_ui(tree, "books_export"),
-    )
-    export_books_btn.grid(row=0, column=2, padx=4, pady=6)
-
     reclassify_all_btn = create_icon_button_fn(
         search_bar_frame,
         text=" رده‌بندی دسته‌ای ",

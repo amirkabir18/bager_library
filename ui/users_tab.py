@@ -52,16 +52,6 @@ def build_users_tab(
     )
     filter_btn_users.grid(row=0, column=1, padx=4, pady=6)
 
-    export_users_btn = create_icon_button_fn(
-        search_bar_frame_users,
-        text=" خروجی اکسل ",
-        icon_name="file-spreadsheet",
-        font=font_normal,
-        width=100,
-        command=lambda: export_tree_to_csv_ui(users_tree, "users_export", root=root),
-    )
-    export_users_btn.grid(row=0, column=2, padx=4, pady=6)
-
     edit_user_btn = create_icon_button_fn(
         search_bar_frame_users,
         text=" ویرایش کاربر ",
